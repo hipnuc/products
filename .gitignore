@@ -1,0 +1,11 @@
+output
+settings
+*.sfr
+*.dep
+*.ini
+rel_*
+*log
+rel.py
+find_new_firwamre.py
+copy_um.py
+__pycache__
