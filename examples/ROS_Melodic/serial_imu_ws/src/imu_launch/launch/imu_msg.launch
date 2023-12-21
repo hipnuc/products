@@ -1,0 +1,6 @@
+<launch>
+	<arg name="imu_package" default="spec" doc="package type [spec]"/>
+	
+	<include file="$(find imu_launch)/launch/imu_$(arg imu_package)_msg.launch"/>
+	
+</launch>

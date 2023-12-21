@@ -1,0 +1,5 @@
+<launch>
+	<node pkg="serial_port" name="imu_sonser_spec" type="serial_imu"/>
+	<node pkg="serial_port" name="sub_spec" type="sub_spec" output="screen"/>
+
+</launch>
