@@ -25,6 +25,7 @@
 更多内容请访问：
 
 > * 网站：www.hipnuc.com
+> * 资料包git仓库: https://github.com/hipnuc/products.git
 
 ## 欢迎关注我们
 
