@@ -1,16 +1,16 @@
 # ROS串口例程
 
-本文档介绍如何在ROS下来读取超核惯导产品的数据，并提供了c++语言例程代码，通过执行ROS命令，运行相应的节点，就可以看到打印到终端上的信息。
+​	本文档介绍如何在ROS下来读取超核惯导产品的数据，并提供了c++语言例程代码，通过执行ROS命令，运行相应的节点，就可以看到打印到终端上的信息。
 
 * 测试环境：Ubuntu18.04   
 
 * ROS版本：ROS Melodic Morenia
 
-* 测试设备：HI226 HI229  CH100  CH110(USB) CH10X(M) CH0X0(M)
+* 测试设备：HI226 HI229  CH100  CH110(USB) CH10X(M) CH0X0(M) HI13系列 HI14系列
 
 ## 安装USB-UART驱动
 
-Ubuntu 系统自带CP210x的驱动，默认不需要安装串口驱动。将调试版连接到电脑上时，会自动识别设备。识别成功后，会在dev目录下出现一个对应的设备:ttyUSBx
+​	Ubuntu 系统自带CP210x的驱动，默认不需要安装串口驱动。将调试版连接到电脑上时，会自动识别设备。识别成功后，会在dev目录下出现一个对应的设备:ttyUSBx
 
 检查USB-UART设备是否被Ubuntu识别：
 
@@ -99,7 +99,7 @@ linear_acceleration_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 ​	1、打开终端，执行`roslaunch imu_launch imu_rviz.launch`命令，执行成功后，rviz工具被打开。
 
-​	3、先点击左下角的Add标签，然后在弹出窗口中，选择 By display type标签，查找rviz_imu_plugin；找到之后，选择它下面的imu标签，点击OK, 这时，我们可以看到rviz的左侧的展示窗口中已经成功添加上了Imu的标签。在FixedFrame中填入**base_link** 。topic中添加 **/IMU_data**。这时，可以看到坐标系随传感器改变而改变。
+​	2、先点击左下角的Add标签，然后在弹出窗口中，选择 By display type标签，查找rviz_imu_plugin；找到之后，选择它下面的imu标签，点击OK, 这时，我们可以看到rviz的左侧的展示窗口中已经成功添加上了Imu的标签。在FixedFrame中填入**base_link** 。topic中添加 **/IMU_data**。这时，可以看到坐标系随传感器改变而改变。
 
 <img src="https://raw.githubusercontent.com/hipnuc/products/master/examples/ROS_Kinetic/img/4.png">
 
