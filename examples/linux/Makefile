@@ -1,16 +1,25 @@
-all:main config_imu
-.PHONY:all
+CC=gcc
 
-main:ch_serial.o main.o
-	gcc -o main $^ -lpthread
+# Include directory for header files
+INCLUDE_DIRS=../lib
 
-config_imu:config_imu.o
-	gcc -o config_imu $^
+SOURCES=main.c serial_port.c ../lib/ch_serial.c
+OBJECTS=$(SOURCES:.c=.o)
+EXECUTABLE=main
 
-%.o:%.c
-	gcc -c -o $@ $<
+# Add the include directory flag
+CFLAGS=-I$(INCLUDE_DIRS)
 
-.PHONY:clean
+all: $(EXECUTABLE)
+
+$(EXECUTABLE): $(OBJECTS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@
+	@echo "Cleaning up..."
+	@rm -f $(OBJECTS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+.PHONY: clean
 clean:
-	rm *.o main config_imu
-
+	rm -f $(OBJECTS) $(EXECUTABLE)
