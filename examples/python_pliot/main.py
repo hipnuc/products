@@ -12,14 +12,14 @@ def clear_screen():
 
 def print_imu_data(imu_data):
     """Format and print IMU data"""
-    print(f"Temperature  : {imu_data.temp:>6} C")
-    print(f"Pressure     : {imu_data.prs:>9.3f} Pa")
-    print(f"Acceleration : X={imu_data.acc[0]:>9.3f}, Y={imu_data.acc[1]:>9.3f}, Z={imu_data.acc[2]:>9.3f} m/s^2")
-    print(f"Gyroscope    : X={imu_data.gyr[0]:>9.3f}, Y={imu_data.gyr[1]:>9.3f}, Z={imu_data.gyr[2]:>9.3f} dps")
-    print(f"Magnetometer : X={imu_data.mag[0]:>9.3f}, Y={imu_data.mag[1]:>9.3f}, Z={imu_data.mag[2]:>9.3f} uT")
-    print(f"Euler Angles : Roll={imu_data.eul[0]:>9.3f}, Pitch={imu_data.eul[1]:>9.3f}, Yaw={imu_data.eul[2]:>9.3f} deg")
-    print(f"Quaternion   : W={imu_data.quat[0]:>9.3f}, X={imu_data.quat[1]:>9.3f}, Y={imu_data.quat[2]:>9.3f}, Z={imu_data.quat[3]:>9.3f}")
-    print(f"Timestamp    : {imu_data.ts:>6} ms")
+    print("Temperature  : {:>6} C".format(imu_data.temp))
+    print("Pressure     : {:>9.3f} Pa".format(imu_data.prs))
+    print("Acceleration : X={:>9.3f}, Y={:>9.3f}, Z={:>9.3f} m/s^2".format(imu_data.acc[0], imu_data.acc[1], imu_data.acc[2]))
+    print("Gyroscope    : X={:>9.3f}, Y={:>9.3f}, Z={:>9.3f} dps".format(imu_data.gyr[0], imu_data.gyr[1], imu_data.gyr[2]))
+    print("Magnetometer : X={:>9.3f}, Y={:>9.3f}, Z={:>9.3f} uT".format(imu_data.mag[0], imu_data.mag[1], imu_data.mag[2]))
+    print("Euler Angles : Roll={:>9.3f}, Pitch={:>9.3f}, Yaw={:>9.3f} deg".format(imu_data.eul[0], imu_data.eul[1], imu_data.eul[2]))
+    print("Quaternion   : W={:>9.3f}, X={:>9.3f}, Y={:>9.3f}, Z={:>9.3f}".format(imu_data.quat[0], imu_data.quat[1], imu_data.quat[2], imu_data.quat[3]))
+    print("Timestamp    : {:>6} ms".format(imu_data.ts))
 
 # Get the system platform (Linux or Windows)
 system_platform = platform.system()
@@ -66,7 +66,7 @@ try:
 except KeyboardInterrupt:
     print("Program interrupted by user")
 except serial.SerialException as e:
-    print(f"Error: {e}")
+    print("Error: {e}")
     if system_platform == "Linux":
         # List available ports on Linux
         print("Available ports on Linux:")
