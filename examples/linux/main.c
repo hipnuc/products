@@ -80,7 +80,6 @@ int main(int argc, char *argv[])
 		/* stop data output */
 		serial_send_then_recv(fd, "AT+EOUT=0\r\n", "OK\r\n", recv_buf, sizeof(recv_buf), 200);
 
-		char command[256];
 		printf("Enter command(example: AT+INFO) or Press CTRL+C to exit:\n");
 
 		/* clear buffer */
@@ -88,9 +87,9 @@ int main(int argc, char *argv[])
 		while ((ch = getchar()) != '\n' && ch != EOF)
 			;
 
-		fgets(command, sizeof(command), stdin);
+		fgets(log, sizeof(log), stdin);
 
-		len = serial_send_then_recv(fd, command, "", recv_buf, sizeof(recv_buf), 500);
+		len = serial_send_then_recv(fd, log, "", recv_buf, sizeof(recv_buf), 500);
 		if (len > 0)
 		{
 			printf("Received %d bytes: \n\n", len);

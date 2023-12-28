@@ -7,8 +7,11 @@
 
 ## 文件说明
 
-* serial_port.c, serial_port.h: linux C串口驱动封装
-* main.c 主文件
+| 文件                          | 位置 | 说明                             |
+| ----------------------------- | ---- | -------------------------------- |
+| serial_port.c / serial_port.h | .    | linux C串口驱动封装              |
+| ch_serial.c / ch_serial.h     | ../  | 公共驱动文件，解析超核二进制协议 |
+| main                          | .    | example示例文件                  |
 
 ## 使用
 
