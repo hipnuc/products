@@ -20,6 +20,7 @@
 * [ROS(Melodic)](examples/ROS_Melodic)
 * [ROS2](examples/ROS2)
 * [Linux](examples/linux)
+* [Linux下固件升级](examples/linux_ota)
 
 
 更多内容请访问：
