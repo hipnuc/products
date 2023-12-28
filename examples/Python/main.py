@@ -66,7 +66,13 @@ try:
 except KeyboardInterrupt:
     print("Program interrupted by user")
 except serial.SerialException as e:
-    print("Error: {e}")
+    if "Permission" in str(e):
+        print("Error: Insufficient permissions to access the serial port.")
+        print("To run this script with superuser privileges, use the 'sudo' command:")
+        print("Example: sudo python main.py COM3 115200")
+    else:
+        print("Serial Error: {}".format(e))
+
     if system_platform == "Linux":
         # List available ports on Linux
         print("Available ports on Linux:")
@@ -78,6 +84,11 @@ except serial.SerialException as e:
         print("Available ports on Windows:")
         for port_info in list_ports.comports():
             print(port_info.device)
+except PermissionError as e:
+    print("Error: {}".format(e))
+    print("To run this script with superuser privileges, use the 'sudo' command:")
+    print("Example: sudo python main.py COM3 115200")
+    sys.exit(1)
 finally:
     if ser.is_open:
         ser.close()
