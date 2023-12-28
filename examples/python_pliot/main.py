@@ -25,8 +25,8 @@ def print_imu_data(imu_data):
 system_platform = platform.system()
 
 if len(sys.argv) == 1:
-    print("Usage: python script.py <port> [baudrate]")
-    print("Example: python script.py COM3 115200")
+    print("Usage: python main.py <port> [baudrate]")
+    print("Example: python main.py COM3 115200")
     sys.exit(1)
 
 port = sys.argv[1]
