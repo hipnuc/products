@@ -3,6 +3,7 @@ Project/**/MDK/Listing
 Project/**/MDK/Objects
 DebugConfig
 
+OBJ
 # Object files
 *.o
 *.ko
