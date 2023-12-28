@@ -11,9 +11,9 @@
 
 1. 安装usb_uart_drivers下的USB转串口驱动程序。
 2. 下载Windows上位机软件: [CHCenter](http://download.hipnuc.com/internal/pc_host/CHCenter.7z)
-3. 连接硬件(如评估板的USB口到PC)，打开上位机，连接串口(COM口)，开始评估产品.
+3. 连接硬件(如评估板的USB口到PC)，打开CHCenter，连接串口(COM口)，开始评估产品.
 
-## example
+## 示例代码
 
 * [Python](examples/Python)
 * [C/STM32](examples/STM32)

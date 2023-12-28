@@ -56,18 +56,37 @@ static void crc16_update(uint16_t *currect_crc, const uint8_t *src, uint32_t len
     *currect_crc = crc;
 }
 
-/* dump data packet*/
-static void ch_dump_imu_data(hipnuc_raw_t *raw)
+int ch_imu_data2str(hipnuc_raw_t *raw, char *buf, size_t buf_size)
 {
-    CH_TRACE("%-16s%d\r\n", "temperature", raw->imu.temperature);
-    CH_TRACE("%-16s%.3f %.3f %.3f\r\n", "acc(G):", raw->imu.acc[0], raw->imu.acc[1], raw->imu.acc[2]);
-    CH_TRACE("%-16s%.3f %.3f %.3f\r\n", "gyr(deg/s):", raw->imu.gyr[0], raw->imu.gyr[1], raw->imu.gyr[2]);
-    CH_TRACE("%-16s%.3f %.3f %.3f\r\n", "mag(uT):", raw->imu.mag[0], raw->imu.mag[1], raw->imu.mag[2]);
-    CH_TRACE("%-16s%.3f %.3f %.3f\r\n", "eul(deg):", raw->imu.eul[0], raw->imu.eul[1], raw->imu.eul[2]);
-    CH_TRACE("%-16s%.3f %.3f %.3f %.3f\r\n", "quat:", raw->imu.quat[0], raw->imu.quat[1], raw->imu.quat[2], raw->imu.quat[3]);
-    CH_TRACE("%-16s%.3f\r\n", "presure(pa):", raw->imu.pressure);
-    CH_TRACE("%-16s%d\r\n", "timestamp(ms):", raw->imu.timestamp);
+    int written = 0;
+    int ret;
+
+    ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "temperature", raw->imu.temp);
+    if (ret > 0) written += ret;
+
+    ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "acc(G):", raw->imu.acc[0], raw->imu.acc[1], raw->imu.acc[2]);
+    if (ret > 0) written += ret;
+
+    ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "gyr(deg/s):", raw->imu.gyr[0], raw->imu.gyr[1], raw->imu.gyr[2]);
+    if (ret > 0) written += ret;
+
+    ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "mag(uT):", raw->imu.mag[0], raw->imu.mag[1], raw->imu.mag[2]);
+    if (ret > 0) written += ret;
+
+    ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "eul(deg):", raw->imu.eul[0], raw->imu.eul[1], raw->imu.eul[2]);
+    if (ret > 0) written += ret;
+
+    ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f %.3f\r\n", "quat:", raw->imu.quat[0], raw->imu.quat[1], raw->imu.quat[2], raw->imu.quat[3]);
+    if (ret > 0) written += ret;
+
+    ret = snprintf(buf + written, buf_size - written, "%-16s%.3f\r\n", "presure(pa):", raw->imu.prs);
+    if (ret > 0) written += ret;
+
+    ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "timestamp(ms):", raw->imu.ts);
+    if (ret > 0) written += ret;
+    return written;
 }
+
 
 /* parse the payload of a frame and feed into data section */
 static int parse_data(hipnuc_raw_t *raw)

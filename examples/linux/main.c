@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
 	hipnuc_raw_t hipnuc_raw = {0};
 	int baud_rate = 115200;
 	uint8_t recv_buf[2048];
+	char log[512];
 	int len;
 
 	if (argc < 2)
@@ -65,8 +66,9 @@ int main(int argc, char *argv[])
 				printf("%02X ", recv_buf[i]);
 				if (ch_serial_input(&hipnuc_raw, recv_buf[i]))
 				{
+				    ch_imu_data2str(&hipnuc_raw, log, sizeof(log));
 					printf("\033[H\033[J");
-					dump_data_packet(&hipnuc_raw);
+					printf("%s", log);
 				}
 			}
 			usleep(REFRESH_INTERVAL);
@@ -118,13 +120,3 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-static void dump_data_packet(hipnuc_raw_t *raw)
-{
-	printf("%-16s%8.3f %8.3f %8.3f\n", "acc(G):", raw->imu.acc[0], raw->imu.acc[1], raw->imu.acc[2]);
-	printf("%-16s%8.3f %8.3f %8.3f\n", "gyr(deg/s):", raw->imu.gyr[0], raw->imu.gyr[1], raw->imu.gyr[2]);
-	printf("%-16s%8.3f %8.3f %8.3f\n", "mag(uT):", raw->imu.mag[0], raw->imu.mag[1], raw->imu.mag[2]);
-	printf("%-16s%8.3f %8.3f %8.3f\n", "eul(deg):", raw->imu.eul[0], raw->imu.eul[1], raw->imu.eul[2]);
-	printf("%-16s%8.3f %8.3f %8.3f %8.3f\n", "quat;", raw->imu.quat[0], raw->imu.quat[1], raw->imu.quat[2], raw->imu.quat[3]);
-	printf("%-16s%8.3f\n", "presure(pa):", raw->imu.prs);
-	printf("%-16s%8d\n", "timestamp(ms):", raw->imu.ts);
-}

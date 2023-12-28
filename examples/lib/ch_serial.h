@@ -2,6 +2,7 @@
 #define __CH_SERIAL_H_
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 /* dump logs */
@@ -43,5 +44,6 @@ typedef struct
 } hipnuc_raw_t;
 
 int ch_serial_input(hipnuc_raw_t *raw, uint8_t data);
+int ch_imu_data2str(hipnuc_raw_t *raw, char *buf, size_t buf_size);
 
 #endif
