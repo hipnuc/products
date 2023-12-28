@@ -1,9 +1,12 @@
 # python示例 #
 
-基本配置
-
-* Python > 3.6
-* pyserial >=3.4
+* Python需求：
+  * Python > 3.6
+  * pyserial >=3.4
+* 测试平台
+  * Windows 11
+  * Ubuntu 20.04
+  * 树莓派4B
 
 ## 使用方法 ##
 
