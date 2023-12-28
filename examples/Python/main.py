@@ -14,7 +14,7 @@ def print_imu_data(imu_data):
     """Format and print IMU data"""
     print("Temperature  : {:>6} C".format(imu_data.temp))
     print("Pressure     : {:>9.3f} Pa".format(imu_data.prs))
-    print("Acceleration : X={:>9.3f}, Y={:>9.3f}, Z={:>9.3f} m/s^2".format(imu_data.acc[0], imu_data.acc[1], imu_data.acc[2]))
+    print("Acceleration : X={:>9.3f}, Y={:>9.3f}, Z={:>9.3f} G".format(imu_data.acc[0], imu_data.acc[1], imu_data.acc[2]))
     print("Gyroscope    : X={:>9.3f}, Y={:>9.3f}, Z={:>9.3f} dps".format(imu_data.gyr[0], imu_data.gyr[1], imu_data.gyr[2]))
     print("Magnetometer : X={:>9.3f}, Y={:>9.3f}, Z={:>9.3f} uT".format(imu_data.mag[0], imu_data.mag[1], imu_data.mag[2]))
     print("Euler Angles : Roll={:>9.3f}, Pitch={:>9.3f}, Yaw={:>9.3f} deg".format(imu_data.eul[0], imu_data.eul[1], imu_data.eul[2]))
