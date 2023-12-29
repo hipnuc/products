@@ -21,6 +21,7 @@ Usage: ./firmware_update.sh <file> <tty> [baudrate] [blhost_path]
 例:
 
 ```shell
+$ chmod +x firmware_update.sh
 $ sudo ./firmware_update.sh ./imu_image.hex /dev/ttyUSB0 115200
 ```
 
