@@ -35,4 +35,4 @@
 
 欢迎通过以下方式关注我们和获取最新信息：
 
-![QR Code](img/qrcode_for_gh_1d8b6b51409d_258.jpg)
+![QR Code](img/qr_qqq.jpg)
