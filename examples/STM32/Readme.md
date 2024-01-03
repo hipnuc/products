@@ -1,30 +1,27 @@
 # STM32例程
 
-​    本例程提供了C 语言例程代码
+## 简介
 
-​	测试环境：Windows10_x64 操作系统
+* 本例程提供了C 语言例程代码
+* 测试环境：Win10/Win11
+* 编译器：keil_V5.38
+* 开发板：正点原子-战舰V3 STM32F103ZET6
+* 测试设备：HiPNUC IMU产品
 
-​	编译器：keil_V5.28
+## 硬件连接
 
-​	开发板：正点原子-战舰V3 STM32F103ZET6
+1. 在使用之前确认你已经对开发板硬件有初步了解，可以正常下载Keil程序，开发板烧写HelloWorld可以正常在串口输出信息。
+2. 将IMU模块正确插入到模块评估板上，用杜邦线将上表相对应的引脚连接起来.连接如下:
 
-​	测试设备：HI226/HI229/CH100/CH020/CH040
+| 超核IMU | 正点原子开发板 |
+| ------- | -------------- |
+| RXD     | PA2(TXD)       |
+| TXD     | PA3(RXD)       |
+| 3.3V    | 3V3            |
+| GND     | GND            |
+3. 用USB线插到开发板的调试串口(USART1: PA9/PA10)上，另一端插到电脑上（调试，输出信息串口）
 
-### 硬件连接
-
-1. 将Hi226/Hi229 正确插入到模块评估板上。
-
-| 超核调试板 | 正点原子开发板 |
-| ---------- | -------------- |
-| RXD        | PA2(TXD)       |
-| TXD        | PA3(RXD)       |
-| 3.3V       | 3V3            |
-| GND        | GND            |
-
-2. 用杜邦线将上表相对应的引脚连接起来。*
-3. 用USB线插到开发板的 __USB_232__ 插口上，另一端插到电脑上。
-
-### 观察输出
+## 观察输出
 
 ​	打开串口调试助手，打开开发板对应的串口号，观察数据输出
 
@@ -40,52 +37,4 @@ presure(pa):    0.000
 timestamp(ms):  8452
 item: 0x91(IMUSOL)
 ```
-
-### 代码结构
-
-解码程序部分: 
-
-* ch_serial.c文件用于解析模块输出的数据协议。
-
-使用说明:
-
-1. 先确硬件连接正确，并且有基本的MCU串口操作知识，使用过串口中断接收
-
-2. 初始化串口
-
-   ```c
-       uart_init(115200);	
-   ```
-
-3. 在对应的串口中断中调用解析函数接口ch_serial_input（）
-
-    ```c
-    void USART2_IRQHandler(void)
-    {
-    	uint8_t ch;
-    	if(USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)
-        {
-            ch = USART_ReceiveData(USART2);	
-        }
-        
-        /* decode each byte */
-        decode_succ = ch_serial_input(&raw, ch);
-    } 
-    ```
-
-4. 在main函数中(while(1)) 中调用打印函数，打印接收到的数据
-
-   ```c
-   	while(1)
-       {
-           if(decode_succ)
-           {
-               decode_succ = 0;
-               delay_ms(800);
-               dump_imu_data(&raw);  /* 打印函数 */
-           }
-   	}
-   ```
-   
-   
 
