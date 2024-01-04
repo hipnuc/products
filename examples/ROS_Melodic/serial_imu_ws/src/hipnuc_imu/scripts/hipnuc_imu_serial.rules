@@ -1,0 +1,4 @@
+# ll /dev/ttyUSB*
+# udevadm info --attribute-walk --name=/dev/ttyUSB0
+
+KERNEL=="ttyUSB*", ATTRS{serial}=="b61f4e6812f0ec118eba30f90f611b40", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE:="0777",SYMLINK+="HIPNUC_IMU"

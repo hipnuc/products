@@ -16,8 +16,6 @@ extern "C"{
 
 #include "ch_serial.h"
 
-#define IMU_SERIAL   "/dev/ttyUSB0"
-#define BAUD         (B115200)
 #define GRA_ACC      (9.8)
 #define DEG_TO_RAD   (0.01745329)
 #define BUF_SIZE     1024
@@ -28,6 +26,9 @@ void publish_imu_data(raw_t *data, sensor_msgs::Imu *imu_data);
 }
 #endif
 
+
+int baud_rate;
+std::string imu_serial;
 static raw_t raw;
 ros::Publisher IMU_pub;
 sensor_msgs::Imu imu_data;
@@ -57,10 +58,10 @@ void read_imu(void)
 	}
 }
 
-int open_port(char *port_device)
+int open_port(std::string port_device, int baud)
 {
-	int fd = open(port_device, O_RDWR | O_NOCTTY | O_NDELAY);
-
+	const char* port_device1 = port_device.c_str();
+	int fd = open(port_device1, O_RDWR | O_NOCTTY | O_NDELAY);
 
 	if (fd == -1)
 	{
@@ -81,9 +82,25 @@ int open_port(char *port_device)
 
 	struct termios options;
 	tcgetattr(fd, &options);
+	
+	switch(baud)
+	{
+		case 115200:
+			cfsetispeed(&options, B115200);
+			cfsetospeed(&options, B115200);
+		break;
+		case 460800:
+			cfsetispeed(&options, B460800);
+			cfsetospeed(&options, B460800);
+		break;
+		case 921600:
+			cfsetispeed(&options, B921600);
+			cfsetospeed(&options, B921600);
+		break;
+		default:
+		ROS_ERROR("SERIAL PORT BAUD RATE ERROR");
+	}
 
-	cfsetispeed(&options, BAUD);
-	cfsetospeed(&options, BAUD);
 
 	options.c_cflag &= ~PARENB; 
 	options.c_cflag &= ~CSTOPB; 
@@ -110,12 +127,15 @@ int open_port(char *port_device)
 
 int main(int argc, char** argv)
 {
-	ros::init(argc, argv, "serial_port");
+	ros::init(argc, argv, "hipnuc_imu");
 	ros::NodeHandle n;
+
+	ros::param::param<std::string>("/imu_serial", imu_serial, "/dev/ttyUSB1");
+	ros::param::param<int>("/baud_rate", baud_rate, 921600);
 
     IMU_pub = n.advertise<sensor_msgs::Imu>("/IMU_data", 5);
 
-	fd = open_port(IMU_SERIAL);
+	fd = open_port(imu_serial, baud_rate);
 	
 	imu_data.header.frame_id = "base_link";
 

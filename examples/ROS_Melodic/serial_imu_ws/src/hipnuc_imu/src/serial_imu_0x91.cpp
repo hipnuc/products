@@ -3,8 +3,8 @@
 #include <iostream>
 #include <stdio.h>
 #include <sensor_msgs/Imu.h>
-#include <serial_port/Imu_0x91_msg.h>
-#include <serial_port/Imu_data_package.h>
+#include <hipnuc_imu/Imu_0x91_msg.h>
+#include <hipnuc_imu/Imu_data_package.h>
 
 #ifdef __cplusplus 
 extern "C"{
@@ -25,13 +25,13 @@ extern "C"{
 #define DEG_TO_RAD   (0.01745329)
 #define BUF_SIZE     1024
 
-void publish_0x91_data(raw_t *data, serial_port::Imu_0x91_msg *data_imu);
+void publish_0x91_data(raw_t *data, hipnuc_imu::Imu_0x91_msg *data_imu);
 
 #ifdef __cplusplus
 }
 #endif
 
-serial_port::Imu_0x91_msg imu_0x91_msg;
+hipnuc_imu::Imu_0x91_msg imu_0x91_msg;
 ros::Publisher Imu_0x91_pub;
 
 static raw_t raw;
@@ -51,9 +51,10 @@ void timer(int sig)
 	}
 }
 
-int open_port(char *port_device)
+int open_port(std::string port_device, int baud)
 {
-	int fd = open(port_device, O_RDWR | O_NOCTTY | O_NDELAY);
+	const char* port_device1 = port_device.c_str();
+	int fd = open(port_device1, O_RDWR | O_NOCTTY | O_NDELAY);
 
 	if (fd == -1)
 	{
@@ -74,9 +75,25 @@ int open_port(char *port_device)
 
 	struct termios options;
 	tcgetattr(fd, &options);
+	
+	switch(baud)
+	{
+		case 115200:
+			cfsetispeed(&options, B115200);
+			cfsetospeed(&options, B115200);
+		break;
+		case 460800:
+			cfsetispeed(&options, B460800);
+			cfsetospeed(&options, B460800);
+		break;
+		case 921600:
+			cfsetispeed(&options, B921600);
+			cfsetospeed(&options, B921600);
+		break;
+		default:
+		ROS_ERROR("SERIAL PORT BAUD RATE ERROR");
+	}
 
-	cfsetispeed(&options, BAUD);
-	cfsetospeed(&options, BAUD);
 
 	options.c_cflag &= ~PARENB; 
 	options.c_cflag &= ~CSTOPB; 
@@ -84,7 +101,7 @@ int open_port(char *port_device)
 	options.c_cflag |= HUPCL;   
 	options.c_cflag |= CS8;     
 	options.c_cflag &= ~CRTSCTS; 
-	options.c_cflag |= CREAD | CLOCAL;
+	options.c_cflag |= CREAD | CLOCAL; 
 
 	options.c_iflag &= ~(IXON | IXOFF | IXANY); 
 	options.c_iflag &= ~(INLCR|ICRNL); 
@@ -126,16 +143,20 @@ void read_imu(void)
 	}
 }
 
-
+std::string imu_port;
+int serial_baud;
 int main(int argc, char** argv)
 {
 	int rev = 0;
-	ros::init(argc, argv, "serial_imu_0x91");
+	ros::init(argc, argv, "hipnuc_imu_0x91");
 	ros::NodeHandle n;
 
-	Imu_0x91_pub = n.advertise<serial_port::Imu_0x91_msg>("/imu_0x91_package", 10);
+	ros::param::param<std::string>("/imu_serial", imu_port, "/dev/ttyUSB1");
+	ros::param::param<int>("/baud_rate", serial_baud, 921600);
 
-	fd = open_port(IMU_SERIAL);
+	Imu_0x91_pub = n.advertise<hipnuc_imu::Imu_0x91_msg>("/imu_0x91_package", 10);
+
+	fd = open_port(imu_port, serial_baud);
 
 	imu_0x91_msg.header.frame_id = "base_0x91_link";
 
@@ -151,7 +172,7 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-void imu_data_package(raw_t *data, serial_port::Imu_data_package *data_imu, int num)
+void imu_data_package(raw_t *data, hipnuc_imu::Imu_data_package *data_imu, int num)
 {
 	data_imu->tag = data->item_code[num];
 
@@ -185,7 +206,7 @@ void imu_data_package(raw_t *data, serial_port::Imu_data_package *data_imu, int 
 	data_imu->quat_z = data->imu.quat[3];
 }
 
-void publish_0x91_data(raw_t *data, serial_port::Imu_0x91_msg *data_imu)
+void publish_0x91_data(raw_t *data, hipnuc_imu::Imu_0x91_msg *data_imu)
 {
 	imu_data_package(data, &(data_imu->imu_data),1);
 }

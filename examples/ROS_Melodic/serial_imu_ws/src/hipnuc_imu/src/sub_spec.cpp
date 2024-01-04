@@ -6,7 +6,7 @@
 
 int main(int argc, char **argv)
 {
-	ros::init(argc,argv,"sub_spec");
+	ros::init(argc, argv, "sub_spec");
 	ros::NodeHandle n;
 	execlp("rostopic", "rostopic", "echo", "/IMU_data",NULL);
 

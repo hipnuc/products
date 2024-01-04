@@ -1,0 +1,3 @@
+#hipnuc config
+imu_serial: "/dev/ttyUSB0"
+baud_rate: 115200

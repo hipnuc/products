@@ -1,4 +1,0 @@
-<launch>
-	<node pkg="serial_port" name="imu_sonser_0x91" type="serial_imu_0x91"/>
-	<node pkg="serial_port" name="sub_0x91" type="sub_0x91" output="screen"/>
-</launch>

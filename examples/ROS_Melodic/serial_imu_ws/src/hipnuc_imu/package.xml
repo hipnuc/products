@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>serial_port</name>
+  <name>hipnuc_imu</name>
   <version>0.0.0</version>
-  <description>The serial_port package</description>
+  <description>The hipnuc_imu package</description>
 
   <maintainer email="linux@todo.todo">linux</maintainer>
 

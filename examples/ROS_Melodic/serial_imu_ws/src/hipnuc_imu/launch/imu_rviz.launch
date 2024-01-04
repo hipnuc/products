@@ -1,0 +1,6 @@
+<launch>
+    <rosparam file="$(find hipnuc_imu)/config/hipnuc_config.yaml" command="load"	/>
+	<node pkg="hipnuc_imu" name="serial_imu" type="serial_imu" />
+	<node pkg="rviz" name="rviz_chaohe_imu" type="rviz" />
+
+</launch>

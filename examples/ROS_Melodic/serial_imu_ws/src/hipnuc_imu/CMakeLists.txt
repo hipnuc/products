@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(serial_port)
+project(hipnuc_imu)
 
 
 find_package(catkin REQUIRED COMPONENTS
@@ -49,24 +49,24 @@ include_directories(
   ${catkin_INCLUDE_DIRS} 
 )
 
-add_executable(serial_imu_0x91 src/serial_imu_0x91.cpp src/ch_serial.c)
-target_link_libraries(serial_imu_0x91 ${catkin_LIBRARIES})
-add_dependencies(serial_imu_0x91 ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(serial_imu_0x91 ${PROJECT_NAME}_generate_messages_cpp)
+ add_executable(serial_imu_0x91 src/serial_imu_0x91.cpp src/ch_serial.c)
+ target_link_libraries(serial_imu_0x91 ${catkin_LIBRARIES})
+ add_dependencies(serial_imu_0x91 ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+ add_dependencies(serial_imu_0x91 ${PROJECT_NAME}_generate_messages_cpp)
 
-add_executable(sub_0x91 src/sub_0x91.cpp)
-target_link_libraries(sub_0x91 ${catkin_LIBRARIES})
-add_dependencies(sub_0x91 ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(sub_0x91 ${PROJECT_NAME}_generate_messages_cpp)
+ add_executable(sub_0x91 src/sub_0x91.cpp)
+ target_link_libraries(sub_0x91 ${catkin_LIBRARIES})
+ add_dependencies(sub_0x91 ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+ add_dependencies(sub_0x91 ${PROJECT_NAME}_generate_messages_cpp)
 
 add_executable(serial_imu src/serial_imu.cpp src/ch_serial.c)
 target_link_libraries(serial_imu ${catkin_LIBRARIES}) 
 
-add_executable(sub_spec src/sub_spec.cpp)
-add_dependencies(sub_spec ${${PROJECT_NAME}_EXPORTED_TARGETS} 
-                          ${catkin_EXPORTED_TARGETS} 
-                          ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(sub_spec ${catkin_LIBRARIES})
+ add_executable(sub_spec src/sub_spec.cpp)
+ add_dependencies(sub_spec ${${PROJECT_NAME}_EXPORTED_TARGETS} 
+                           ${catkin_EXPORTED_TARGETS} 
+                           ${PROJECT_NAME}_generate_messages_cpp)
+ target_link_libraries(sub_spec ${catkin_LIBRARIES})
 
 
 #############

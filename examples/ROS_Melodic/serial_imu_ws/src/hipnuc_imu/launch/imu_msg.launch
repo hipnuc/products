@@ -1,0 +1,7 @@
+<launch>
+	<rosparam command="load" file="$(find hipnuc_imu)/config/hipnuc_config.yaml" />
+	<node pkg="hipnuc_imu" name="chaohe_imu" type="serial_imu" />
+
+	<node pkg="hipnuc_imu" name="sub_spec" type="sub_spec" output="screen" />
+
+</launch>

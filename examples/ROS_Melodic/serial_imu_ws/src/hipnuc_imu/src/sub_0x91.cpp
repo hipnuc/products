@@ -3,10 +3,10 @@
 #include <ros/ros.h>
 #include <iostream>
 #include <unistd.h>
-#include <serial_port/Imu_0x91_msg.h>
+#include <hipnuc_imu/Imu_0x91_msg.h>
 #include "ch_serial.h"
 
-void imu_0x91_callback(const serial_port::Imu_0x91_msg imu_0x91_msg);
+void imu_0x91_callback(const hipnuc_imu::Imu_0x91_msg imu_0x91_msg);
 
 int main(int argc,char **argv)
 {
@@ -20,7 +20,7 @@ int main(int argc,char **argv)
 }
 
 
-void imu_0x91_callback(const serial_port::Imu_0x91_msg imu_0x91_msg)
+void imu_0x91_callback(const hipnuc_imu::Imu_0x91_msg imu_0x91_msg)
 {
 	printf("\033c");
 
