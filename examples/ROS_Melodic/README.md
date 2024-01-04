@@ -1,4 +1,4 @@
-# ROS串口例程
+# ROS1串口例程
 
 ​	本文档介绍如何在ROS下来读取超核惯导产品的数据，并提供了c++语言例程代码，通过执行ROS命令，运行相应的节点，就可以看到打印到终端上的信息。
 
@@ -6,7 +6,7 @@
 
 * ROS版本：ROS Melodic Morenia
 
-* 测试设备：HI226 HI229  CH100  CH110(USB) CH10X(M) CH0X0(M) HI13系列 HI14系列
+* 测试设备：HI13系列 HI14系列 CH10x系列
 
 ## 安装USB-UART驱动
 
@@ -20,8 +20,6 @@
 
 <img src="https://raw.githubusercontent.com/hipnuc/products/master/examples/ROS_Melodic/img/2.png">
 
-**ttyUSB0** 文件就是调试版在ubuntu系统中生成的设备(后面的数字是不固定的，有可能为 ttyUSB1  或 ttyUSB2)
-
 ​	4.打开USB设备的可执行权限：
 
 ```shell
@@ -31,21 +29,21 @@
 ##  编译serial_imu_ws工作空间
 
 1. 打开终端进入serial_imu_ws 目录
-
 2. 执行`catkin_make`命令，编译成功后出现完成度100%的信息。
+3. 如果是其他的ROS1系统，只需要把`serial_imu_ws/src/`下的`hipnuc_imu`文件夹移动到其他ROS1的工作空间下，直接编译就可以了。
 
 ##  修改串口波特率和设备号
 
 1. 在Ubuntu环境中，支持的波特率为115200, 460800, 921600。本例程使用的默认波特率是115200，默认打开的串口名称是/dev/ttyUSB0。	
 
-2. 如果您需要更高的输出频率，请编辑serial_imu.cpp文件，修改serial_imu.cpp文件中的宏定义，改为其他波特率。
+2. 如果您需要更高的输出频率，请编辑`hipnuc_imu/config/hipnuc_config.yaml`文件，修改如下两个参数：
 
 ```c
-#define IMU_SERIAL ("/dev/ttyUSB0")
-#define BAUD       (B115200)
+imu_serial: "/dev/ttyUSB0"
+baud_rate: 115200
 ```
 
-注意修改后需要回到serial_imu_ws目录下，重新执行`catkin_make`命令
+修改完之后，保存，使新配置生效。
 
 ## 显示数据
 本例程提供了两种查看数据方式：
@@ -58,13 +56,13 @@
 ​	1.打开一个终端，执行：
 
 ```shell
-$ roslaunch imu_launch imu_msg.launch
+linux@ubuntu:~$ roslaunch hipinuc_imu imu_msg.launch
 ```
 
 ​	2.如果执行失败，提示找不到相应的launch文件，则需要配置环境，在当前终端执行：
 
 ```shell
-$source <serial_imu_ws_dir>/devel/setup.bash
+linux@ubuntu:~$source <serial_imu_ws_dir>/devel/setup.bash
 ```
 
 ​	3.执行成功后，就可以看到所有的信息：
@@ -97,11 +95,15 @@ linear_acceleration_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 ### rviz可视化
 
-​	1、打开终端，执行`roslaunch imu_launch imu_rviz.launch`命令，执行成功后，rviz工具被打开。
+​	1、打开终端，执行:
 
-​	2、先点击左下角的Add标签，然后在弹出窗口中，选择 By display type标签，查找rviz_imu_plugin；找到之后，选择它下面的imu标签，点击OK, 这时，我们可以看到rviz的左侧的展示窗口中已经成功添加上了Imu的标签。在FixedFrame中填入**base_link** 。topic中添加 **/IMU_data**。这时，可以看到坐标系随传感器改变而改变。
+```shell
+linux@ubuntu:~$roslaunch hipnuc_imu imu_rviz.launch
+```
 
-<img src="https://raw.githubusercontent.com/hipnuc/products/master/examples/ROS_Kinetic/img/4.png">
+​	2、先点击左下角的`Add`标签，然后在弹出窗口中，选择 `By display type`标签，查找`rviz_imu_plugin`；找到之后，选择它下面的`imu`标签，点击OK, 这时，我们可以看到rviz的左侧的展示窗口中已经成功添加上了Imu的标签。在`FixedFrame`中填入**base_link** 。`topic`中添加 **/IMU_data**。这时，可以看到坐标系随传感器改变而改变。
+
+<img src="img/4.png">
 
 ##  FAQ
 
