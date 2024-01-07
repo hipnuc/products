@@ -29,7 +29,7 @@ def print_imu_data(imu_data):
     print("Euler Angles : Roll={:>9.3f}, Pitch={:>9.3f}, Yaw={:>9.3f} deg".format(imu_data.eul[0], imu_data.eul[1], imu_data.eul[2]))
     print("Quaternion   : W={:>9.3f}, X={:>9.3f}, Y={:>9.3f}, Z={:>9.3f}".format(imu_data.quat[0], imu_data.quat[1], imu_data.quat[2], imu_data.quat[3]))
     print("Timestamp    : {:>6} ms".format(imu_data.ts))
-
+    print("PPS Sync Time: {:>6} ms".format(imu_data.pps_sync_time))
 
 def list_available_ports():
     print("Available ports:")

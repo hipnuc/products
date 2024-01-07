@@ -26,7 +26,7 @@ class IMUData:
         self.mag = [0, 0, 0]
         self.eul = [0, 0, 0]
         self.quat = [0, 0, 0, 0]
-
+        self.pps_sync_time = 0
 class CHSerialDecoder:
     def __init__(self):
         self.CHSYNC1 = CHSYNC1
@@ -92,7 +92,7 @@ class CHSerialDecoder:
                 self.imu_data.prs = struct.unpack('<f', data[ofs + 1:ofs + 5])[0]
                 ofs += 5
             elif item_type == K_ITEM_IMUSOL:
-                self.imu_data.rev = data[ofs + 1]
+                self.imu_data.pps_sync_time = struct.unpack('<H', data[ofs + 1:ofs + 3])[0]  # 解析 pps_sync_ms
                 self.imu_data.temp = data[ofs + 3]
                 self.imu_data.prs = struct.unpack('<f', data[ofs + 4:ofs + 8])[0]
                 self.imu_data.ts = struct.unpack('<I', data[ofs + 8:ofs + 12])[0]
