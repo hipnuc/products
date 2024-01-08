@@ -13,6 +13,7 @@ extern "C"{
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <poll.h>
 
 #include "ch_serial.h"
 
@@ -29,6 +30,8 @@ void publish_imu_data(raw_t *data, sensor_msgs::Imu *imu_data);
 
 int baud_rate;
 std::string imu_serial;
+std::string frame_id;
+std::string imu_topic;
 static raw_t raw;
 ros::Publisher IMU_pub;
 sensor_msgs::Imu imu_data;
@@ -39,6 +42,14 @@ void read_imu(void)
 {
 	int n = 0;
 	int rev = 0;
+	struct pollfd p;
+	p.fd = fd;
+	p.events = POLLIN;
+	double time_sec;
+	int rpoll = poll(&p, 1, 5);
+
+	if(rpoll == 0)
+		return ;
 	n = read(fd, buf, sizeof(buf));
 
 	if(n > 0)
@@ -49,6 +60,7 @@ void read_imu(void)
 			if(rev)
 			{
 				imu_data.header.stamp = ros::Time::now();
+
 				publish_imu_data(&raw, &imu_data);
 				IMU_pub.publish(imu_data);
 				rev = 0;
@@ -61,7 +73,7 @@ void read_imu(void)
 int open_port(std::string port_device, int baud)
 {
 	const char* port_device1 = port_device.c_str();
-	int fd = open(port_device1, O_RDWR | O_NOCTTY | O_NDELAY);
+	int fd = open(port_device1, O_RDWR | O_NOCTTY | O_NONBLOCK);
 
 	if (fd == -1)
 	{
@@ -73,7 +85,7 @@ int open_port(std::string port_device, int baud)
 	if(fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 		printf("fcntl failed\n");
 	else
-		fcntl(fd, F_SETFL, O_NONBLOCK);
+		fcntl(fd, F_SETFL,  O_NONBLOCK);
   
 	if(isatty(STDIN_FILENO) == 0)
 		printf("standard input is not a terminal device\n");
@@ -130,14 +142,16 @@ int main(int argc, char** argv)
 	ros::init(argc, argv, "hipnuc_imu");
 	ros::NodeHandle n;
 
-	ros::param::param<std::string>("/imu_serial", imu_serial, "/dev/ttyUSB1");
-	ros::param::param<int>("/baud_rate", baud_rate, 921600);
+	ros::param::param<std::string>("/imu_serial", imu_serial, "/dev/ttyUSB0");
+	ros::param::param<int>("/baud_rate", baud_rate, 115200 );
+	ros::param::param<std::string>("/frame_id", frame_id, "base_link");
+	ros::param::param<std::string>("/imu_topic", imu_topic, "/IMU_data");
 
-    IMU_pub = n.advertise<sensor_msgs::Imu>("/IMU_data", 5);
+    IMU_pub = n.advertise<sensor_msgs::Imu>(imu_topic, 5);
 
 	fd = open_port(imu_serial, baud_rate);
 	
-	imu_data.header.frame_id = "base_link";
+	imu_data.header.frame_id = frame_id;
 
 	while(ros::ok())
 	{

@@ -16,7 +16,7 @@ extern "C"{
 #include <unistd.h> 
 #include <fcntl.h>
 #include <termios.h> /* POSIX terminal control definitions */
-
+#include <poll.h>
 #include "ch_serial.h"
 
 #define IMU_SERIAL   "/dev/ttyUSB0"
@@ -30,6 +30,11 @@ void publish_0x91_data(raw_t *data, hipnuc_imu::Imu_0x91_msg *data_imu);
 #ifdef __cplusplus
 }
 #endif
+
+std::string imu_port;
+int serial_baud;
+std::string frame_id;
+std::string imu_topic;
 
 hipnuc_imu::Imu_0x91_msg imu_0x91_msg;
 ros::Publisher Imu_0x91_pub;
@@ -122,6 +127,15 @@ void read_imu(void)
 {
 	int n = 0; 
 	int rev = 0;
+	struct pollfd p;
+	p.fd = fd;
+	p.events = POLLIN;
+	double time_sec;
+
+	int rpoll = poll(&p, 1, 5);
+
+	if(rpoll == 0)
+		return ;
 	n = read(fd, buf, sizeof(buf));
 
 	if(n > 0)
@@ -143,8 +157,7 @@ void read_imu(void)
 	}
 }
 
-std::string imu_port;
-int serial_baud;
+
 int main(int argc, char** argv)
 {
 	int rev = 0;
@@ -153,12 +166,14 @@ int main(int argc, char** argv)
 
 	ros::param::param<std::string>("/imu_serial", imu_port, "/dev/ttyUSB1");
 	ros::param::param<int>("/baud_rate", serial_baud, 921600);
+	ros::param::param<std::string>("/frame_id_costom", frame_id, "base_0x91_link");
+	ros::param::param<std::string>("/imu_topic_costom", imu_topic, "/imu_0x91_package");
 
-	Imu_0x91_pub = n.advertise<hipnuc_imu::Imu_0x91_msg>("/imu_0x91_package", 10);
+	Imu_0x91_pub = n.advertise<hipnuc_imu::Imu_0x91_msg>(imu_topic, 10);
 
 	fd = open_port(imu_port, serial_baud);
 
-	imu_0x91_msg.header.frame_id = "base_0x91_link";
+	imu_0x91_msg.header.frame_id = frame_id;
 
 	signal(SIGALRM,timer);
 
