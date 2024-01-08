@@ -22,17 +22,16 @@
 
 typedef struct __attribute__((packed))
 {
-    uint8_t tag; /* data packet tag, shoue be 0x91 */
-    uint8_t rev; /* data packet tag, shoue be 0x91 */
-    uint8_t stat;
-    int8_t temp;   /* temperature */
-    float prs;     /* pressure */
-    uint32_t ts;   /* timestamp, ms */
-    float acc[3];  /* acceleratmer (G, 1G= 9.8m/^(2)) */
-    float gyr[3];  /* gyroscople (dps, degree per second) */
-    float mag[3];  /* megnormator (uT) */
-    float eul[3];  /* eular angles:Roll/Pitch/Yaw*/
-    float quat[4]; /* quaternion */
+    uint8_t tag;            /* data packet tag, shoue be 0x91 */
+    uint16_t pps_sync_ms;   /* "The time elapsed from the last synchronization input transition signal to the moment this frame is sent, in ms.*/
+    int8_t temp;            /* temperature */
+    float prs;              /* pressure */
+    uint32_t ts;            /* device time in ms */
+    float acc[3];           /* acceleratmer (G, 1G= 9.8m/^(2)) */
+    float gyr[3];           /* gyroscople (dps, degree per second) */
+    float mag[3];           /* megnormator (uT) */
+    float eul[3];           /* eular angles:Roll/Pitch/Yaw*/
+    float quat[4];          /* quaternion */
 } id0x91_t;
 
 typedef struct

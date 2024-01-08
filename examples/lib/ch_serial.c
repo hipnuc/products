@@ -84,6 +84,10 @@ int ch_imu_data2str(hipnuc_raw_t *raw, char *buf, size_t buf_size)
 
     ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "timestamp(ms):", raw->imu.ts);
     if (ret > 0) written += ret;
+
+    ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "pps_sync_time(ms):", raw->imu.pps_sync_ms);
+    if (ret > 0) written += ret;
+    
     return written;
 }
 
@@ -99,7 +103,6 @@ static int parse_data(hipnuc_raw_t *raw)
         switch (p[ofs])
         {
         case kItemID:
-            raw->imu.rev = U1(p + ofs + 1);
             ofs += 2;
             break;
         case kItemAccRaw:
@@ -139,7 +142,7 @@ static int parse_data(hipnuc_raw_t *raw)
             break;
 
         case KItemIMUSOL:
-            raw->imu.rev = U1(p + ofs + 1);
+            raw->imu.pps_sync_ms = U2(p + ofs + 1);
             raw->imu.temp = U1(p + ofs + 3);
             raw->imu.prs = R4(p + ofs + 4);
             raw->imu.ts = U4(p + ofs + 8);
