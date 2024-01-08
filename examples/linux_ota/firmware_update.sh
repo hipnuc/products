@@ -89,3 +89,12 @@ fi
 $blhost_cmd -p $tty,$baudrate get-property 1 || exit 1
 $blhost_cmd -p $tty,$baudrate -- flash-image $file erase || exit 1
 $blhost_cmd -p $tty,$baudrate reset || exit 1
+
+# 等待 1 秒以确保设备重置完成
+sleep 1
+
+# 在固件升级后发送 FRESET 命令
+echo -ne "FRESET\r\n" > $tty
+sleep 0.03  # 等待设备处理命令
+
+echo "Firmware updated and device reset to factory settings."

@@ -16,9 +16,15 @@
 
 1. 打开终端，输入`ls /dev`,先查看已经存在的串口设备。
 2. 查看是否已经存在  ttyUSBx 这个设备文件，便于确认对应的端口号。x表示USB设备号，由于Ubuntu USB设备号为从零开始依次累加，所以多个设备每次开机后设备号是不固定的，需要确定设备的设备号。
-4. 接下来插入USB线，连接调试板，然后再次执行`ls /dev`。 dev目录下多了一个设备, 如图：
+4. 接下来插入USB线，连接调试板，然后再次执行`ls /dev`。 dev目录下多了一个设备`ttyUSB0`：
 
-<img src="https://raw.githubusercontent.com/hipnuc/products/master/examples/ROS_Melodic/img/2.png">
+```shell
+linux@ubuntu:~$ ls /dev
+.....
+hpet             net           tty11     tty4   ttyS0      ttyUSB0    vhost-vsock
+hugepages        null          tty12     tty40  ttyS1      udmabuf  vmci
+......
+```
 
 ​	4.打开USB设备的可执行权限：
 
@@ -38,9 +44,20 @@
 
 2. 如果您需要更高的输出频率，请编辑`hipnuc_imu/config/hipnuc_config.yaml`文件，修改如下两个参数：
 
+   imu_serial:IMU对应的设备文件名称
+
+   baud_rate:IMU的波特率
+
 ```c
+#hipnuc config
 imu_serial: "/dev/ttyUSB0"
 baud_rate: 115200
+frame_id: "base_link"
+imu_topic: "/IMU_data"
+
+#hipnuc data package ---> 0x91 
+frame_id_costom: "base_0x91_link"
+imu_topic_costom: "/imu_0x91_package"
 ```
 
 修改完之后，保存，使新配置生效。
@@ -211,7 +228,7 @@ linux@ubuntu：~$ sudo vi defined_serial.rules
 
 然后在这个文件中输入如下内容：
 
-<img src="https://raw.githubusercontent.com/hipnuc/products/master/examples/ROS_Melodic/img/6.png">
+<img src="./img/6.png">
 
 格式如下：
 
