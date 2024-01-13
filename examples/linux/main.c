@@ -12,7 +12,6 @@
 
 #define REFRESH_INTERVAL 20000 // 以微秒为单位，对应于50Hz
 
-static void dump_data_packet(hipnuc_raw_t *raw);
 
 int main(int argc, char *argv[])
 {
@@ -63,7 +62,6 @@ int main(int argc, char *argv[])
 
 			for (int i = 0; i < len; i++)
 			{
-				printf("%02X ", recv_buf[i]);
 				if (ch_serial_input(&hipnuc_raw, recv_buf[i]))
 				{
 				    ch_imu_data2str(&hipnuc_raw, log, sizeof(log));

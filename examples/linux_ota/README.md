@@ -8,7 +8,7 @@
 ## 升级步骤
 
 1. 确认模块可以正常工作，确认模块串口, 如ttyUSB0等。
-2.  将固件升级文件(.hex)放到本目录下.
+2.  将固件升级文件(.hex)放到本目录下, 先给firmware_update.sh加可执行权限: `sudo chmod +x firmware_update.sh`
 3. 固件升级脚本用法
 
 ```shell

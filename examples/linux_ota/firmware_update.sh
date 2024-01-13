@@ -54,10 +54,13 @@ if [ ! -c "$tty" ]; then
     exit 1
 fi
 
-# 检查 blhost 命令是否可执行
+# 检查 blhost 命令是否可执行，如果不是则尝试添加执行权限
 if [ ! -x "$blhost_cmd" ]; then
-    echo "Error: blhost command not executable or not found at '$blhost_cmd'!"
-    exit 1
+    echo "blhost command not executable. Trying to set execute permission..."
+    chmod +x "$blhost_cmd" || {
+        echo "Failed to set execute permission on $blhost_cmd. Please run 'sudo chmod +x $blhost_cmd' manually."
+        exit 1
+    }
 fi
 
 # 配置串口
