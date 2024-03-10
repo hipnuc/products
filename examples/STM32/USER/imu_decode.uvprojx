@@ -465,9 +465,9 @@
           <GroupName>imu_driver</GroupName>
           <Files>
             <File>
-              <FileName>ch_serial.c</FileName>
+              <FileName>hipnuc_dec.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\lib\ch_serial.c</FilePath>
+              <FilePath>..\..\lib\hipnuc_dec.c</FilePath>
             </File>
           </Files>
         </Group>

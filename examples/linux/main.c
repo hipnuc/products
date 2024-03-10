@@ -8,7 +8,7 @@
 #include <errno.h>
 
 #include "serial_port.h"
-#include "ch_serial.h"
+#include "hipnuc.h"
 
 #define REFRESH_INTERVAL 20000 // 以微秒为单位，对应于50Hz
 
@@ -62,9 +62,9 @@ int main(int argc, char *argv[])
 
 			for (int i = 0; i < len; i++)
 			{
-				if (ch_serial_input(&hipnuc_raw, recv_buf[i]))
+				if (hipnuc_input(&hipnuc_raw, recv_buf[i]))
 				{
-				    ch_imu_data2str(&hipnuc_raw, log, sizeof(log));
+				    hipnuc_dump_packet(&hipnuc_raw, log, sizeof(log));
 					printf("\033[H\033[J");
 					printf("%s", log);
 				}

@@ -3,7 +3,7 @@ CC=gcc
 # Include directory for header files
 INCLUDE_DIRS=../lib
 
-SOURCES=main.c serial_port.c ../lib/ch_serial.c
+SOURCES=main.c serial_port.c ../lib/hipnuc_dec.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=main
 

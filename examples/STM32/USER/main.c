@@ -1,6 +1,6 @@
 #include "delay.h"
 #include "usart.h"
-#include "ch_serial.h"
+#include "hipnuc.h"
 
 
 /**********************************************************
@@ -41,11 +41,17 @@ int main(void)
             decode_succ = 0;
             
             /* convert result to strings */
-            ch_imu_data2str(&hipnuc_raw, log_buf, sizeof(log_buf));
+            hipnuc_dump_packet(&hipnuc_raw, log_buf, sizeof(log_buf));
             
             /* display result */
             printf("Decode one frame success, frame len:%d\r\n", hipnuc_raw.len);
             printf("%s\r\n", log_buf);
+            
+            /*
+            you can use data as for example:
+            
+            printf("acc:%.3f, %.3f, %.3f\r\n", hipnuc_raw.hi91.acc[0], hipnuc_raw.hi91.acc[1], hipnuc_raw.hi91.acc[2]);
+            */
             
             delay_ms(200);
         }
@@ -61,6 +67,6 @@ void USART2_IRQHandler(void)
         ch = USART_ReceiveData(USART2); 
         
         /* put each recevied byte into decoder */
-        decode_succ = ch_serial_input(&hipnuc_raw, ch);
+        decode_succ = hipnuc_input(&hipnuc_raw, ch);
     }
 }
