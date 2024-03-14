@@ -4,7 +4,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <hipnuc_imu/Imu_0x91_msg.h>
-#include "ch_serial.h"
+#include "hipnuc.h"
 
 void imu_0x91_callback(const hipnuc_imu::Imu_0x91_msg imu_0x91_msg);
 
@@ -24,7 +24,7 @@ void imu_0x91_callback(const hipnuc_imu::Imu_0x91_msg imu_0x91_msg)
 {
 	printf("\033c");
 
-	printf("     Devie ID:%6d\n",imu_0x91_msg.imu_data.id);
+	printf("     Devie Tag:%6d\n",imu_0x91_msg.imu_data.tag);
 
 	printf("     Prs(hPa): %6f\n", imu_0x91_msg.imu_data.prs);
 

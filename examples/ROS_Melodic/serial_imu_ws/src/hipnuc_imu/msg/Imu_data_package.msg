@@ -1,6 +1,5 @@
 uint8 tag
 uint8 bitmap
-uint8 id
 float32 prs
 uint32 time
 uint32 frame_rate

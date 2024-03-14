@@ -17,15 +17,15 @@ extern "C"{
 #include <fcntl.h>
 #include <termios.h> /* POSIX terminal control definitions */
 #include <poll.h>
-#include "ch_serial.h"
+#include "hipnuc.h"
 
-#define IMU_SERIAL   "/dev/ttyUSB0"
-#define BAUD         (B115200)
+// #define IMU_SERIAL   "/dev/ttyUSB0"
+// #define BAUD         (B115200)
 #define GRA_ACC      (9.8)
 #define DEG_TO_RAD   (0.01745329)
 #define BUF_SIZE     1024
 
-void publish_0x91_data(raw_t *data, hipnuc_imu::Imu_0x91_msg *data_imu);
+void publish_0x91_data(hipnuc_raw_t *data, hipnuc_imu::Imu_0x91_msg *data_imu);
 
 #ifdef __cplusplus
 }
@@ -39,7 +39,7 @@ std::string imu_topic;
 hipnuc_imu::Imu_0x91_msg imu_0x91_msg;
 ros::Publisher Imu_0x91_pub;
 
-static raw_t raw;
+static hipnuc_raw_t raw;
 
 static int frame_rate;
 static int frame_count;
@@ -142,7 +142,7 @@ void read_imu(void)
 	{
 		for (int i = 0; i < n; i++)
 		{
-			rev = ch_serial_input(&raw, buf[i]);
+			rev = hipnuc_input(&raw, buf[i]);
 
 			if(rev)
 			{
@@ -187,41 +187,39 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-void imu_data_package(raw_t *data, hipnuc_imu::Imu_data_package *data_imu, int num)
+void imu_data_package(hipnuc_raw_t *data, hipnuc_imu::Imu_data_package *data_imu, int num)
 {
-	data_imu->tag = data->item_code[num];
-
 	data_imu->frame_rate = frame_rate;
 
-	data_imu->id = data->imu.id;
+	data_imu->tag = data->hi91.tag;
 
-	data_imu->time = data->imu.timestamp;
+	data_imu->time = data->hi91.ts;
 
-	data_imu->prs = data->imu.pressure;
+	data_imu->prs = data->hi91.prs;
 
-	data_imu->acc_x = data->imu.acc[0];
-	data_imu->acc_y = data->imu.acc[1];
-	data_imu->acc_z = data->imu.acc[2];
+	data_imu->acc_x = data->hi91.acc[0];
+	data_imu->acc_y = data->hi91.acc[1];
+	data_imu->acc_z = data->hi91.acc[2];
 
-	data_imu->gyr_x = data->imu.gyr[0];
-	data_imu->gyr_y = data->imu.gyr[1];
-	data_imu->gyr_z = data->imu.gyr[2];
+	data_imu->gyr_x = data->hi91.gyr[0];
+	data_imu->gyr_y = data->hi91.gyr[1];
+	data_imu->gyr_z = data->hi91.gyr[2];
 
-	data_imu->mag_x = data->imu.mag[0];
-	data_imu->mag_y = data->imu.mag[1];
-	data_imu->mag_z = data->imu.mag[2];
+	data_imu->mag_x = data->hi91.mag[0];
+	data_imu->mag_y = data->hi91.mag[1];
+	data_imu->mag_z = data->hi91.mag[2];
 
-	data_imu->eul_r = data->imu.eul[0];
-	data_imu->eul_p = data->imu.eul[1];
-	data_imu->eul_y = data->imu.eul[2];
+	data_imu->eul_r = data->hi91.roll;
+	data_imu->eul_p = data->hi91.pitch;
+	data_imu->eul_y = data->hi91.yaw;
 
-	data_imu->quat_w = data->imu.quat[0];
-	data_imu->quat_x = data->imu.quat[1];
-	data_imu->quat_y = data->imu.quat[2];
-	data_imu->quat_z = data->imu.quat[3];
+	data_imu->quat_w = data->hi91.quat[0];
+	data_imu->quat_x = data->hi91.quat[1];
+	data_imu->quat_y = data->hi91.quat[2];
+	data_imu->quat_z = data->hi91.quat[3];
 }
 
-void publish_0x91_data(raw_t *data, hipnuc_imu::Imu_0x91_msg *data_imu)
+void publish_0x91_data(hipnuc_raw_t *data, hipnuc_imu::Imu_0x91_msg *data_imu)
 {
 	imu_data_package(data, &(data_imu->imu_data),1);
 }
