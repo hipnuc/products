@@ -97,6 +97,11 @@ static int parse_data(hipnuc_raw_t *raw)
             ofs += 7;
             break;
         case HIPNUC_ID_QUAT:
+            raw->hi91.tag = HIPNUC_ID_IMUSOL;
+            raw->hi91.quat[0] = R4(p + ofs + 1);
+            raw->hi91.quat[1] = R4(p + ofs + 5);
+            raw->hi91.quat[2] = R4(p + ofs + 9);
+            raw->hi91.quat[3] = R4(p + ofs + 13);
             ofs += 17;
             break;
         case HIPNUC_ID_PRS:
