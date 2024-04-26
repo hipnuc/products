@@ -4,7 +4,7 @@ baud_rate: 115200
 frame_id: "base_link"
 imu_topic: "/IMU_data"
 
-#hipnuc data package ---> 0x91 0x92
-frame_id_costom: "base_0x91_link"
-imu_topic_costom_91: "/imu_0x91_package"
-imu_topic_costom_92: "/imu_0x92_package"
+#hipnuc data package 
+frame_id_costom: "base_link_hipnuc"
+imu_topic_costom: "/imu_package_hipnuc"
+
