@@ -3,9 +3,6 @@
 #include <iostream>
 #include <stdio.h>
 #include <sensor_msgs/Imu.h>
-#include <tf2/LinearMath/Quaternion.h>
-#include <geometry_msgs/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #ifdef __cplusplus 
 extern "C"{
@@ -28,6 +25,7 @@ extern "C"{
 #define ACC_FACTOR   (0.0048828)
 #define GYR_FACTOR	 (0.001)
 #define EUL_FACTOR	 (0.001)
+#define QUA_FACTOR   (0.0001)
 
 
 void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data);
@@ -36,29 +34,18 @@ void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data);
 }
 #endif
 
-tf2::Quaternion q;
-geometry_msgs::Quaternion quaternion_msg;
-
-
-int baud_rate;
-std::string imu_serial;
-std::string frame_id;
-std::string imu_topic;
-static hipnuc_raw_t raw;
 ros::Publisher IMU_pub;
 sensor_msgs::Imu imu_data;
-int fd = 0;
-static uint8_t buf[BUF_SIZE];
 
 int n = 0;
 int rev = 0;
 struct pollfd p;
-
-double time_sec;
 int rpoll;
 
-void read_imu(void)
+void read_imu(int fd)
 {
+	static hipnuc_raw_t raw;
+	static uint8_t buf[BUF_SIZE];
 	rpoll = poll(&p, 1, 5);
 
 	if(rpoll == 0)
@@ -154,6 +141,12 @@ int main(int argc, char** argv)
 	ros::init(argc, argv, "hipnuc_imu");
 	ros::NodeHandle n;
 
+	int baud_rate;
+	std::string imu_serial;
+	std::string frame_id;
+	std::string imu_topic;
+	int fd = 0;
+
 	ros::param::param<std::string>("/imu_serial", imu_serial, "/dev/ttyUSB0");
 	ros::param::param<int>("/baud_rate", baud_rate, 115200 );
 	ros::param::param<std::string>("/frame_id", frame_id, "base_link");
@@ -170,7 +163,7 @@ int main(int argc, char** argv)
 
 	while(ros::ok())
 	{
-		read_imu();
+		read_imu(fd);
 	}
 	
 	return 0;
@@ -193,15 +186,13 @@ void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data)
 	}  
 	if(data->hi92.tag == 0x92)
 	{
-		q.setRPY(data->hi92.pitch * EUL_FACTOR * DEG_TO_RAD, data->hi92.roll * EUL_FACTOR * DEG_TO_RAD, data->hi92.yaw * EUL_FACTOR * DEG_TO_RAD);
-		quaternion_msg = tf2::toMsg(q);
-		imu_data->orientation.x = quaternion_msg.x;
-		imu_data->orientation.y = quaternion_msg.y;
-		imu_data->orientation.z = quaternion_msg.z;
-		imu_data->orientation.w = quaternion_msg.w;
-		imu_data->angular_velocity.x = (float)data->hi92.gyr_b[0] * DEG_TO_RAD * GYR_FACTOR;
-		imu_data->angular_velocity.y = (float)data->hi92.gyr_b[1] * DEG_TO_RAD * GYR_FACTOR;
-		imu_data->angular_velocity.z = (float)data->hi92.gyr_b[2] * DEG_TO_RAD * GYR_FACTOR;
+		imu_data->orientation.x = (float)data->hi92.quat[1] * QUA_FACTOR;
+		imu_data->orientation.y = (float)data->hi92.quat[2] * QUA_FACTOR;
+		imu_data->orientation.z = (float)data->hi92.quat[3] * QUA_FACTOR;
+		imu_data->orientation.w = (float)data->hi92.quat[0] * QUA_FACTOR;
+		imu_data->angular_velocity.x = (float)data->hi92.gyr_b[0] * GYR_FACTOR;
+		imu_data->angular_velocity.y = (float)data->hi92.gyr_b[1] * GYR_FACTOR;
+		imu_data->angular_velocity.z = (float)data->hi92.gyr_b[2] * GYR_FACTOR;
 		imu_data->linear_acceleration.x = (float)data->hi92.acc_b[0] * ACC_FACTOR;
 		imu_data->linear_acceleration.y = (float)data->hi92.acc_b[1] * ACC_FACTOR;
 		imu_data->linear_acceleration.z = (float)data->hi92.acc_b[2] * ACC_FACTOR;

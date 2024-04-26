@@ -1,8 +1,9 @@
-uint8 tag
-uint8 bitmap
-float32 prs
-uint32 time
 uint32 frame_rate
+uint8 tag
+uint16 pps_sync_stamp
+int8 temperature
+float32 air_pressure
+uint32 system_time
 float32 acc_x
 float32 acc_y
 float32 acc_z

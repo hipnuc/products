@@ -11,9 +11,9 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 
-add_message_files(FILES Imu_0x91_msg.msg Imu_data_package.msg)
+add_message_files(FILES Ins_0x81_package.msg Imu_0x92_package.msg  Imu_0x91_package.msg hipnuc_imu_msg.msg)
 
-generate_messages(DEPENDENCIES std_msgs)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs)
 
 
 ################################################
@@ -49,15 +49,15 @@ include_directories(
   ${catkin_INCLUDE_DIRS} 
 )
 
- add_executable(serial_imu_0x91 src/serial_imu_0x91.cpp src/hipnuc_dec.c)
- target_link_libraries(serial_imu_0x91 ${catkin_LIBRARIES})
- add_dependencies(serial_imu_0x91 ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
- add_dependencies(serial_imu_0x91 ${PROJECT_NAME}_generate_messages_cpp)
+ add_executable(serial_hipnuc_msg src/serial_hipnuc_msg.cpp src/hipnuc_dec.c)
+ target_link_libraries(serial_hipnuc_msg ${catkin_LIBRARIES})
+ add_dependencies(serial_hipnuc_msg ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+ add_dependencies(serial_hipnuc_msg ${PROJECT_NAME}_generate_messages_cpp)
 
- add_executable(sub_0x91 src/sub_0x91.cpp)
- target_link_libraries(sub_0x91 ${catkin_LIBRARIES})
- add_dependencies(sub_0x91 ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
- add_dependencies(sub_0x91 ${PROJECT_NAME}_generate_messages_cpp)
+ add_executable(sub_hipnuc_imu_msg src/sub_hipnuc_imu_msg.cpp)
+ target_link_libraries(sub_hipnuc_imu_msg ${catkin_LIBRARIES})
+ add_dependencies(sub_hipnuc_imu_msg ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+ add_dependencies(sub_hipnuc_imu_msg ${PROJECT_NAME}_generate_messages_cpp)
 
 add_executable(serial_imu src/serial_imu.cpp src/hipnuc_dec.c)
 target_link_libraries(serial_imu ${catkin_LIBRARIES}) 
