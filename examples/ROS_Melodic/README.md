@@ -73,7 +73,7 @@ imu_topic_costom: "/imu_0x91_package"
 ​	1.打开一个终端，执行：
 
 ```shell
-linux@ubuntu:~$ roslaunch hipinuc_imu imu_msg.launch
+linux@ubuntu:~$ roslaunch hipnuc_imu imu_msg.launch
 ```
 
 ​	2.如果执行失败，提示找不到相应的launch文件，则需要配置环境，在当前终端执行：
