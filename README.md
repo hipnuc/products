@@ -6,7 +6,10 @@
 
 ## 目录结构
 
-- **usb_uart_drivers/**: USB转串口驱动程序。安装指南请参见 [驱动安装说明](usb_uart_drivers/README.md)。
+- **usb_uart_drivers/**: CP210xUSB转串口驱动程序
+  -  Linux: Ubuntu 18.04以上版本一般免驱. 如果未能识别请见Silabs[官网](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=overview)安装步骤, 或自行Google”Linux下安装CP210x驱动”解决。
+  -  Windows 请直接运行exe驱动安装程序
+
 - **examples/**: 各种平台和语言的示例程序及其源码，包括 STM32, ROS, Linux, MATLAB 等。
 
 ## 快速开始
