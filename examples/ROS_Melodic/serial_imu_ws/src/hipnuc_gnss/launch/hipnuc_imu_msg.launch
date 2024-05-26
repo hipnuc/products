@@ -1,0 +1,7 @@
+<launch>
+	<rosparam file="$(find hipnuc_gnss)/config/hipnuc_gnss_config.yaml" command="load"	/>
+
+	<node pkg="hipnuc_gnss" type="serial_gnss" name="serial_gnss" />
+	<node pkg="hipnuc_gnss" name="sub_imu" type="sub_imu" output="screen" />
+
+</launch>
