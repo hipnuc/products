@@ -30,10 +30,13 @@ extern "C"{
 #define GYR_FACTOR	 (0.001)
 #define EUL_FACTOR	 (0.001)
 #define QUA_FACTOR   (0.0001)
+#define NAV_FACTOR   (0.0000001)
+#define MSL_FACTOR   (0.001)
 
 
 void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data);
 void publish_nav_data(nmea_raw_t *data, sensor_msgs::NavSatFix *NavSatFix_data);
+void publish_ins_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data, sensor_msgs::NavSatFix *NavSatFix_data);
 
 
 #ifdef __cplusplus
@@ -64,24 +67,16 @@ void read_gnss(int fd)
 	{
 		for(int i = 0; i < n; i++)
 		{
-			rev = input_nmea(&raw_nav, buf[i]);
-			if(rev)
-			{
-				NavSatFix_data.header.stamp = ros::Time::now();
-				publish_nav_data(&raw_nav, &NavSatFix_data);
-				NavSatFix_pub.publish(NavSatFix_data);
-				rev = 0;
-			}
-			
 			rev = hipnuc_input(&raw_imu, buf[i]);
 			if(rev)
 			{
 				imu_data.header.stamp = ros::Time::now();
-				publish_imu_data(&raw_imu, &imu_data);
+				NavSatFix_data.header.stamp = ros::Time::now();
+				publish_ins_data(&raw_imu, &imu_data, &NavSatFix_data);
 				IMU_pub.publish(imu_data);
+				NavSatFix_pub.publish(NavSatFix_data);
 				rev = 0;
 			}
-
 		}
 	}
 }
@@ -164,7 +159,7 @@ int main(int argc, char** argv)
 	std::string imu_topic, gps_topic, ins_topic, gst_topic;
 	int fd = 0;
 
-	ros::param::param<std::string>("/serial_port", serial_port, "/dev/ttyUSB0");
+	ros::param::param<std::string>("/serial_port", serial_port, "/dev/ttyUSB1");
 	ros::param::param<int>("/baud_rate", baud_rate, 115200 );
 	ros::param::param<std::string>("/frame_id", frame_id, "gnss_link");
 	ros::param::param<std::string>("/imu_topic", imu_topic, "/rawimu_data");
@@ -174,7 +169,7 @@ int main(int argc, char** argv)
 
     IMU_pub = n.advertise<sensor_msgs::Imu>(imu_topic, 5);
 	NavSatFix_pub = n.advertise<sensor_msgs::NavSatFix>(gps_topic, 5);
-
+	
 	fd = open_port(serial_port, baud_rate);
 	
 	imu_data.header.frame_id = frame_id;
@@ -191,6 +186,26 @@ int main(int argc, char** argv)
 	return 0;
 }
 
+void publish_ins_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data, sensor_msgs::NavSatFix *NavSatFix_data)
+{
+	if(data->hi81.tag == 0x81)
+	{
+		imu_data->orientation.x = (float)data->hi81.quat[1] * QUA_FACTOR;
+		imu_data->orientation.y = (float)data->hi81.quat[2] * QUA_FACTOR;
+		imu_data->orientation.z = (float)data->hi81.quat[3] * QUA_FACTOR;
+		imu_data->orientation.w = (float)data->hi81.quat[0] * QUA_FACTOR;
+		imu_data->angular_velocity.x = (float)data->hi81.gyr_b[0] * GYR_FACTOR;
+		imu_data->angular_velocity.y = (float)data->hi81.gyr_b[1] * GYR_FACTOR;
+		imu_data->angular_velocity.z = (float)data->hi81.gyr_b[2] * GYR_FACTOR;
+		imu_data->linear_acceleration.x = (float)data->hi81.acc_b[0] * ACC_FACTOR;
+		imu_data->linear_acceleration.y = (float)data->hi81.acc_b[1] * ACC_FACTOR;
+		imu_data->linear_acceleration.z = (float)data->hi81.acc_b[2] * ACC_FACTOR;
+		NavSatFix_data->latitude = data->hi81.ins_lat * NAV_FACTOR;
+		NavSatFix_data->longitude = data->hi81.ins_lon * NAV_FACTOR;
+		NavSatFix_data->altitude = data->hi81.ins_msl * MSL_FACTOR;
+	}
+}
+
 void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data)
 {
 	if(data->hi91.tag == 0x91)
@@ -205,6 +220,7 @@ void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data)
 		imu_data->linear_acceleration.x = data->hi91.acc[0] * GRA_ACC;
 		imu_data->linear_acceleration.y = data->hi91.acc[1] * GRA_ACC;
 		imu_data->linear_acceleration.z = data->hi91.acc[2] * GRA_ACC;
+	//	std::cout << "eul:" << data->hi91.roll << data->hi91.pitch << data->hi91.yaw << std::endl;
 	}  
 	if(data->hi92.tag == 0x92)
 	{
@@ -219,6 +235,8 @@ void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data)
 		imu_data->linear_acceleration.y = (float)data->hi92.acc_b[1] * ACC_FACTOR;
 		imu_data->linear_acceleration.z = (float)data->hi92.acc_b[2] * ACC_FACTOR;
 	}
+
+
 }
 
 void publish_nav_data(nmea_raw_t *data, sensor_msgs::NavSatFix *NavSatFix_data)

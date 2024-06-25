@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 
-add_message_files(FILES Ins_0x81_package.msg Imu_0x92_package.msg  Imu_0x91_package.msg hipnuc_imu_msg.msg)
+#add_message_files(FILES Ins_0x81_package.msg Imu_0x92_package.msg  Imu_0x91_package.msg hipnuc_imu_msg.msg)
 
 generate_messages(DEPENDENCIES std_msgs geometry_msgs)
 
@@ -53,8 +53,8 @@ include_directories(
 add_executable(serial_gnss src/serial_gnss.cpp src/hipnuc_dec.c src/nmea_decode.c)
 target_link_libraries(serial_gnss ${catkin_LIBRARIES}) 
 
-add_executable(pub_path src/pub_path.cpp)
-target_link_libraries(pub_path ${catkin_LIBRARIES})
+#add_executable(pub_path src/pub_path.cpp)
+#target_link_libraries(pub_path ${catkin_LIBRARIES})
 
  add_executable(sub_gnss src/sub_gnss.cpp)
  add_dependencies(sub_gnss ${${PROJECT_NAME}_EXPORTED_TARGETS} 

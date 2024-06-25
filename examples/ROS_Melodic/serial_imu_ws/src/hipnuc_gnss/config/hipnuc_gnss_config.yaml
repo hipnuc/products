@@ -1,5 +1,5 @@
 #hipnuc config
-imu_serial: "/dev/ttyUSB1"
+serial_port: "/dev/ttyUSB1"
 baud_rate: 115200
 frame_id: "gnss_link"
 imu_topic: "/rawimu_data"

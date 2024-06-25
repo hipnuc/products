@@ -4,5 +4,4 @@
 	<node pkg="hipnuc_gnss" type="serial_gnss" name="serial_gnss" />
 	<node pkg="hipnuc_gnss" name="sub_gnss" type="sub_gnss"  output="screen" />
 	
-
 </launch>
