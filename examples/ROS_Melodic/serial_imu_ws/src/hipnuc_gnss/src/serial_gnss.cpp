@@ -37,15 +37,19 @@ extern "C"{
 void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data);
 void publish_nav_data(nmea_raw_t *data, sensor_msgs::NavSatFix *NavSatFix_data);
 void publish_ins_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data, sensor_msgs::NavSatFix *NavSatFix_data);
+void publish_gpsfix_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data, gps_common::GPSFix * GPSFix_data);
+void publish_gpsstatus_data(hipnuc_raw_t *data, gps_common::GPSStatus *GPSStatus_data);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-ros::Publisher IMU_pub, NavSatFix_pub;
+ros::Publisher IMU_pub, NavSatFix_pub, GPSFix_pub, GPSStatus_pub;
 sensor_msgs::Imu imu_data;
 sensor_msgs::NavSatFix NavSatFix_data;
+gps_common::GPSFix GPSFix_data;
+gps_common::GPSStatus GPSStatus_data;
 
 int n = 0;
 int rev = 0;
@@ -203,6 +207,7 @@ void publish_ins_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data, sensor_msg
 		NavSatFix_data->latitude = data->hi81.ins_lat * NAV_FACTOR;
 		NavSatFix_data->longitude = data->hi81.ins_lon * NAV_FACTOR;
 		NavSatFix_data->altitude = data->hi81.ins_msl * MSL_FACTOR;
+		NavSatFix_data->status.status = data->hi81.solq_pos;
 	}
 }
 
@@ -220,7 +225,6 @@ void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data)
 		imu_data->linear_acceleration.x = data->hi91.acc[0] * GRA_ACC;
 		imu_data->linear_acceleration.y = data->hi91.acc[1] * GRA_ACC;
 		imu_data->linear_acceleration.z = data->hi91.acc[2] * GRA_ACC;
-	//	std::cout << "eul:" << data->hi91.roll << data->hi91.pitch << data->hi91.yaw << std::endl;
 	}  
 	if(data->hi92.tag == 0x92)
 	{
@@ -235,8 +239,6 @@ void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data)
 		imu_data->linear_acceleration.y = (float)data->hi92.acc_b[1] * ACC_FACTOR;
 		imu_data->linear_acceleration.z = (float)data->hi92.acc_b[2] * ACC_FACTOR;
 	}
-
-
 }
 
 void publish_nav_data(nmea_raw_t *data, sensor_msgs::NavSatFix *NavSatFix_data)
