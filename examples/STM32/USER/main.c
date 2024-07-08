@@ -66,7 +66,23 @@ void USART2_IRQHandler(void)
     {
         ch = USART_ReceiveData(USART2); 
         
-        /* put each recevied byte into decoder */
+        /* put each received byte into decoder
+
+            if you are using DMA to receive data, you should do the following:
+            ```
+            uint32_t rx_size = DMA_GetRxSize();  // get received bytes from DMA 
+            for(int i = 0; i < rx_size; i++)
+            {
+                decode_succ = hipnuc_input(&hipnuc_raw, dma_rx_buf[i]); // dma_rx_buf is the buffer that stores the usart rx data, put each byte into the decoder(hipnuc_input)
+                if(decode_succ)
+                {
+                    // process the frames that successfully decoded.
+                    ....
+                }
+            }
+            ```
+        */
+
         decode_succ = hipnuc_input(&hipnuc_raw, ch);
     }
 }

@@ -1,5 +1,14 @@
+
+/*
+ * Copyright (c) 2006-2024, HiPNUC
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ */
+
 #include "hipnuc.h"
 
+/* The driver file for decoding HiPNUC protocol, DO NOT MODIFTY*/
 
 /* legcy support of HI226/HI229 */
 #define HIPNUC_ID_USRID         (0x90)

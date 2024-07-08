@@ -1,3 +1,11 @@
+
+/*
+ * Copyright (c) 2006-2024, HiPNUC
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ */
+ 
 #ifndef __HIPNUC_H__
 #define __HIPNUC_H__
 
