@@ -1,0 +1,4 @@
+commands:
+    - LOG IMU91 ONTIME 0.01
+    - SERIALCONFIG 115200
+    - SAVECONFIG
