@@ -14,7 +14,7 @@ def read_all_data(ser, timeout = 0.1):
         while ser.in_waiting > 0:
             data = ser.readline(ser.in_waiting).decode('latin1')
             buffer += data
-        time.sleep(0.01)
+        time.sleep(0.1)
     return buffer
 
 def send_command(ser, command, expected_response, retries=5):
@@ -41,7 +41,7 @@ def auto_detect_baudrate(port):
     for baudrate in common_baudrate:
         try:
             ser = serial.Serial(port, baudrate, timeout=1)
-            time.sleep(0.02)
+            time.sleep(0.1)
             response = send_command(ser,'AT+EOUT=0', 'OK')
             ser.close()
             if response is True:
@@ -58,7 +58,7 @@ def config_module(port, baudrate, config_file):
 
     try:
         ser = serial.Serial(port, baudrate, timeout=1)
-        time.sleep(0.02)
+        time.sleep(0.1)
         
         if not send_command(ser, 'AT+EOUT=0', 'ok'):
             print("Failed to reveive 'ok' for AT+EOUT=0")
