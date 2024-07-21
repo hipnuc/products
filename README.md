@@ -22,7 +22,7 @@
 
 提供多种语言和平台的示例代码：
 
-- [Python 示例](examples/Python)
+- [python 示例](examples/python)
 - [C/STM32 示例](examples/STM32)
 - [ROS (Melodic) 示例](examples/ROS_Melodic)
 - [ROS2 示例](examples/ROS2)
