@@ -2,18 +2,22 @@
 
 ## 简介
 
-本示例包提供了如何使用 Python 从 IMU 设备读取数据并进行处理的示例代码。支持 Windows、Ubuntu 和树莓派平台。
+本示例包提供了如何使用 Python 读取 HiPNUC 模块数据或发送一条指令给模块的示例
 
-## 系统需求
-
-- **Python**: 版本 3.6 及以上
-- **依赖库**: pyserial 版本 3.4 及以上
 
 ## 测试平台
 
 - Windows 11
 - Ubuntu 20.04
 - 树莓派 4B
+
+## 目录结构
+
+├── main.py: 主程序入口
+├── README.md
+├── requirements.txt
+├── commands: 命令脚本
+└── parsers: 解析器脚本
 
 ## 安装与使用
 
@@ -25,46 +29,84 @@
 $ pip install -r requirements.txt
 ```
 
-## 运行示例代码
+### main.py --help: 显示帮助
 
-运行 `main.py` 文件以开始从 IMU 设备读取数据。
-
-在 Linux 系统上： 
-
-```bash
-$ sudo python main.py -p /dev/ttyUSB0 -b 115200
-```
-
-在 Windows 系统上
-
-```sh
-$ python main.py -p COM3 -b 115200
-```
-
-## 示例输出
-
-成功运行后，程序将读取并打印 IMU 数据。以下是一个示例输出：
+`main.py --help` : 显示例程读取脚本help文档:
 
 ```
-frame received: 10, frame_rate: 101Hz
-Temperature  :     37 C
-Pressure     : 99459.211 Pa
-Acceleration : X=    0.010, Y=    0.010, Z=    1.003 G
-Gyroscope    : X=   -0.076, Y=    0.053, Z=   -0.034 dps
-Magnetometer : X=   21.062, Y=    6.181, Z=  -34.019 uT
-Euler Angles : Roll=   -0.514, Pitch=    0.575, Yaw=    3.860 deg
-Quaternion   : W=    0.999, X=    0.005, Y=   -0.004, Z=    0.034
-Timestamp    : 146140 ms
-PPS Sync Time:   6876 ms
+$ python main.py --help
+Usage: main.py [OPTIONS] COMMAND [ARGS]...
+
+  HiPNUC Python Example
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  list  List all available serial ports
+  read  Read data from the specified serial port
+  send  Send a command to the module
 ```
 
-## 目录结构
+### main.py list: 列出设备可用串口
 
-.
-├── main.py               # 主程序入口
-├── README.md             # 项目说明文件
-├── requirements.txt      # 依赖包列表
-└── hipnuc_serial_parser.py # 二进制数据解析器
+```
+$ python main.py list
+Your Python version is 3.11.2.
+Found 3 available serial port(s):
+Device: COM13                Manufacturer: Microsoft            Permissions: Unknown
+Device: COM20                Manufacturer: Microsoft            Permissions: Unknown
+Device: COM27                Manufacturer: Silicon Labs         Permissions: Unknown
+
+```
+
+### main.py read: 读取数据
+
+* 帮助: `main.py read --help`
+
+* 示例(Linux): `$ python main.py read -p /dev/ttyUSB0 -b 115200`
+
+* 示例(Windows): `$ python main.py read -p COM3 -b 115200`
+
+返回模块数据：
+
+  ```
+  frame received: 10, frame_rate: 101Hz
+  Temperature  :     37 C
+  Pressure     : 99459.211 Pa
+  Acceleration : X=    0.010, Y=    0.010, Z=    1.003 G
+  Gyroscope    : X=   -0.076, Y=    0.053, Z=   -0.034 dps
+  Magnetometer : X=   21.062, Y=    6.181, Z=  -34.019 uT
+  Euler Angles : Roll=   -0.514, Pitch=    0.575, Yaw=    3.860 deg
+  Quaternion   : W=    0.999, X=    0.005, Y=   -0.004, Z=    0.034
+  Timestamp    : 146140 ms
+  PPS Sync Time:   6876 ms
+  ```
+
+### main.py send: 发送一条指令到模块
+
+发送一条配置指令(以发送“LOG VERSION”为例):
+
+* 帮助: `main.py send --help`
+
+* 示例(Linux): `$ python main.py send -p /dev/ttyUSB0 -b 115200 "LOG VERSION"` 
+
+* 示例(Windows): `$ python main.py send -p COM3 -b 115200 "LOG VERSION"`
+
+```
+$ python main.py send -p COM27 -b 115200 "LOG VERSION"
+Your Python version is 3.11.2.
+Serial port COM27 opened with baud rate 115200
+PNAME=HI14
+BUILD=Jul 31 2024
+UUID=048495968DD31708
+APP_VER=154
+BL_VER=108
+OK
+```
+
+> 1. 所有配置指令请参考用户编程手册
+> 2. 每次调用send命令，都会默认先尝试停止模块输出，然后发送用户命令字符串，然后保存配置，最后恢复数据输出
 
 ## 常见问题
 
@@ -73,7 +115,7 @@ PPS Sync Time:   6876 ms
 你可以通过命令行参数 `-p` 和 `-b` 来指定串口端口和波特率。例如：
 
 ```bash
-$ python main.py -p COM3 -b 115200
+$ python main.py read -p COM3 -b 115200
 ```
 
 ### 如果遇到权限问题怎么办？
@@ -81,6 +123,6 @@ $ python main.py -p COM3 -b 115200
 在 Linux 系统上，访问串口设备可能需要超级用户权限。你可以使用 `sudo` 命令来运行脚本：
 
 ```bash
-$ sudo python main.py -p /dev/ttyUSB0 -b 115200
+$ sudo python main.py read -p /dev/ttyUSB0 -b 115200
 ```
 

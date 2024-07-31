@@ -1,1 +1,2 @@
 pyserial==3.4
+pynmea2==1.19.0
