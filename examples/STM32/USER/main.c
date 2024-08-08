@@ -32,9 +32,8 @@
  * @version 1.0
  * @author 
  */
-
+ 
 #include "delay.h"
-#include "usart.h"
 #include "stm32f10x_rcc.h"
 #include "stm32f10x_dma.h"
 #include "hipnuc.h"
@@ -45,6 +44,9 @@
 
 /* Enable/Disable DMA for USART reception */
 #define ENABLE_USART_DMA              0
+
+#define USART1_BAUD 115200
+#define USART2_BAUD 115200
 
 #define UART_RX_BUF_SIZE        (1024)
 #define LOG_STRING_SIZE         (512)
@@ -59,10 +61,11 @@ static uint8_t new_data_flag = 0;
 static char log_buf[LOG_STRING_SIZE];
 
 static uint8_t uart_rx_buf[UART_RX_BUF_SIZE];
+static uint8_t dma_rx_buf[UART_RX_BUF_SIZE];
 static uint16_t uart_rx_index = 0;
 
 /* Function prototypes */
-static void USART_Configuration(void);
+static void USART_Configuration(uint32_t usart1_baud, uint32_t usart2_baud);
 static void DMA_Configuration(void);
 static void app_init(void);
 static void printf_welcome_information(void);
@@ -106,10 +109,8 @@ static void app_init(void)
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
     
     /* Initialize USART1 for debug output */
-    uart_init(115200);  
-    
     /* Initialize USART2 for IMU data reception */
-    USART_Configuration();
+    USART_Configuration(USART1_BAUD, USART2_BAUD);
     
     #if ENABLE_USART_DMA
     /* Initialize DMA for USART2 reception */
@@ -160,7 +161,6 @@ static void process_data(void)
             {
                 /* Convert result to strings */
                 hipnuc_dump_packet(&hipnuc_raw, log_buf, sizeof(log_buf));
-
                 /* Display result */
                 printf("parse ok, frame len:%d\r\n", hipnuc_raw.len);
                 printf("%s\r\n", log_buf);
@@ -178,41 +178,47 @@ static void process_data(void)
 }
 
 /**
- * @brief Configure USART2 for IMU data reception
+ * @brief Configure USART1 USART2 for IMU data reception
  * 
- * Configures GPIO pins, USART2 settings, and NVIC for USART2 interrupts.
+ * Configures GPIO pins, USART1 USART2 settings, and NVIC for USART2 interrupts.
  */
-static void USART_Configuration(void)
+static void USART_Configuration(uint32_t usart1_baud, uint32_t usart2_baud)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
     USART_InitTypeDef USART_InitStructure;
     NVIC_InitTypeDef NVIC_InitStructure;
 
-    /* Enable USART2 and GPIOA clocks */
+    /* Enable USART1 USART2 and GPIOA clocks */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
 
-    /* Configure USART2 Rx as input floating */
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
+    /* Configure USART1 USART2 Rx as input floating */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10 | GPIO_Pin_3;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-    /* Configure USART2 Tx as alternate function push-pull */
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
+    /* Configure USART1 USART2 Tx as alternate function push-pull */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9 | GPIO_Pin_2;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-    /* USART2 configuration */
-    USART_InitStructure.USART_BaudRate = 115200;
+    /* USART configuration */
     USART_InitStructure.USART_WordLength = USART_WordLength_8b;
     USART_InitStructure.USART_StopBits = USART_StopBits_1;
     USART_InitStructure.USART_Parity = USART_Parity_No;
     USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
     USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-    USART_Init(USART2, &USART_InitStructure);
+    
+    /* Enable USART1 */
+    USART_InitStructure.USART_BaudRate = usart1_baud;
+    USART_Init(USART1, &USART_InitStructure); 
+    USART_Cmd(USART1, ENABLE);
 
     /* Enable USART2 */
+    USART_InitStructure.USART_BaudRate = usart2_baud;
+    USART_Init(USART2, &USART_InitStructure);
     USART_Cmd(USART2, ENABLE);
 
     /* Enable USART2 IDLE line detection interrupt */
@@ -246,7 +252,7 @@ static void DMA_Configuration(void)
     /* DMA1 Channel6 (triggered by USART2 Rx event) Config */
     DMA_DeInit(DMA1_Channel6);
     DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&USART2->DR;
-    DMA_InitStructure.DMA_MemoryBaseAddr = (uint32_t)uart_rx_buf;
+    DMA_InitStructure.DMA_MemoryBaseAddr = (uint32_t)dma_rx_buf;
     DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
     DMA_InitStructure.DMA_BufferSize = UART_RX_BUF_SIZE;
     DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
@@ -310,7 +316,8 @@ static void handle_usart_rx_idle(void)
     /* Process received data */
     for (uint16_t i = 0; i < rx_size; i++)
     {
-        uart_rx_buf[uart_rx_index++] = uart_rx_buf[i];
+        uart_rx_buf[uart_rx_index++] = dma_rx_buf[i];
+        
         if (uart_rx_index >= UART_RX_BUF_SIZE)
         {
             uart_rx_index = 0; // Prevent buffer overflow
