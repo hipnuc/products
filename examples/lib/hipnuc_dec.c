@@ -238,6 +238,9 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
         ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "Roll/Pitch/Yaw(deg):", raw->hi91.roll, raw->hi91.pitch, raw->hi91.yaw);
         if (ret > 0) written += ret;
         
+        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f %.3f\r\n", "quat:", raw->hi91.quat[0], raw->hi91.quat[1], raw->hi91.quat[2], raw->hi91.quat[3]);
+        if (ret > 0) written += ret;
+        
         ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "timestamp(ms):", raw->hi91.ts);
         if (ret > 0) written += ret;
     }
