@@ -36,7 +36,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_executable(talker src/serial_port.cpp src/ch_serial.c)
+add_executable(talker src/serial_port.cpp src/hipnuc_dec.c)
 ament_target_dependencies(talker rclcpp std_msgs sensor_msgs)
 
 add_executable(listener src/sub_spec.cpp)

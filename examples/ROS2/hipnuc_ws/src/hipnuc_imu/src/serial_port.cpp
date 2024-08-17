@@ -11,7 +11,7 @@
 extern "C"{
 #endif
 #include <poll.h>
-#include "ch_serial.h"
+#include "hipnuc.h"
 
 #define GRA_ACC     (9.8)
 #define DEG_TO_RAD  (0.01745329)
@@ -71,20 +71,20 @@ class IMUPublisher : public rclcpp::Node
 
 			for(int i = 0; i < n; i++)
 			{
-				int rev = ch_serial_input(&raw, buf[i]);
+				int rev = hipnuc_input(&raw, buf[i]);
 				
 				if(rev)
 				{
-					imu_data.orientation.w = raw.imu.quat[0];
-					imu_data.orientation.x = raw.imu.quat[1];	
-					imu_data.orientation.y = raw.imu.quat[2];
-					imu_data.orientation.z = raw.imu.quat[3];
-					imu_data.angular_velocity.x = raw.imu.gyr[0] * DEG_TO_RAD;
-					imu_data.angular_velocity.y = raw.imu.gyr[1] * DEG_TO_RAD;
-					imu_data.angular_velocity.z = raw.imu.gyr[2] * DEG_TO_RAD;
-					imu_data.linear_acceleration.x = raw.imu.acc[0] * GRA_ACC;
-					imu_data.linear_acceleration.y = raw.imu.acc[1] * GRA_ACC;
-					imu_data.linear_acceleration.z = raw.imu.acc[2] * GRA_ACC;
+					imu_data.orientation.w = raw.hi91.quat[0];
+					imu_data.orientation.x = raw.hi91.quat[1];	
+					imu_data.orientation.y = raw.hi91.quat[2];
+					imu_data.orientation.z = raw.hi91.quat[3];
+					imu_data.angular_velocity.x = raw.hi91.gyr[0] * DEG_TO_RAD;
+					imu_data.angular_velocity.y = raw.hi91.gyr[1] * DEG_TO_RAD;
+					imu_data.angular_velocity.z = raw.hi91.gyr[2] * DEG_TO_RAD;
+					imu_data.linear_acceleration.x = raw.hi91.acc[0] * GRA_ACC;
+					imu_data.linear_acceleration.y = raw.hi91.acc[1] * GRA_ACC;
+					imu_data.linear_acceleration.z = raw.hi91.acc[2] * GRA_ACC;
 
 					imu_data.header.stamp = rclcpp::Clock().now();
 					

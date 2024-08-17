@@ -1,0 +1,8 @@
+INS_publisher:
+    ros__parameters:
+        serial_port: "/dev/ttyUSB0"
+        baud_rate: 921600
+        frame_id: "gnss_link"
+        imu_topic: "/rawimu_data"
+        nav_topic: "/NavSatFix_data"
+
