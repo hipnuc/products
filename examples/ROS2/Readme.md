@@ -32,18 +32,20 @@ hugepages        null          tty12     tty40  ttyS1      udmabuf  vmci
    $ sudo chmod 777 /dev/ttyUSB0
 ```
 
-## 编译serial_imu_ws工作空间
+## 编译hipnuc_ws工作空间
 
-1. 打开终端进入/examples/ROS2/serial_imu_ws 目录
+1. 打开终端进入/examples/ROS2/hipnuc_ws 目录
 2. 执行`colcon build`命令，编译成功后出现如下信息。
 
 ```shell
-linux@ubuntu20:~/serial_imu_ws$ colcon build
+linux@ubuntu20:~/hipnuc_ws$ colcon build
+Starting >>> hipnuc_gnss
 Starting >>> hipnuc_imu
-Finished <<< hipnuc_imu [0.24s]                  
+Finished <<< hipnuc_imu [0.44s]                                      
+Finished <<< hipnuc_gnss [0.49s]
 
-Summary: 1 package finished [0.35s]
-linux@ubuntu20:~/serial_imu_ws$ 
+Summary: 2 packages finished [0.61s]
+linux@ubuntu20:~/hipnuc_ws$ 
 ```
 
 ## 3. 修改串口波特率和设备号
@@ -61,7 +63,7 @@ IMU_publisher:
         imu_topic: "/IMU_data"
 ```
 
-注意修改后需要回到serial_imu_ws目录下，重新执行`colcon build`命令
+注意修改后需要回到hipnuc_ws目录下，重新执行`colcon build`命令
 
 ## 显示数据
 本例程提供了一种查看数据方式：
@@ -73,13 +75,13 @@ IMU_publisher:
 1. 打开终端，执行：
 
 ```shell
-linux@ubuntu20:~$ ros2 launch serial_imu imu_spec_msg.launch.py
+linux@ubuntu20:~$ ros2 launch hipnuc_imu imu_spec_msg.launch.py
 ```
 
 ​	2.如果执行失败，提示找不到相应的launch文件，则需要配置环境，在当前终端执行：
 
 ```shell
-linux@ubuntu:~$source <serial_imu_ws_dir>/install/setup.bash
+linux@ubuntu:~$source <hipnuc_ws_dir>/install/setup.bash
 ```
 
 ​	3.执行成功后，就可以看到所有的信息：
