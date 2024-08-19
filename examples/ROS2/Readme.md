@@ -1,6 +1,6 @@
 # ROS2串口例程
 
-本文档介绍如何在ROS2下来读取超核电子IMU的数据，并提供了c++语言例程代码，通过执行ROS2命令，运行相应的节点，就可以看到打印到终端上的信息。
+本文档介绍如何在ROS2下来读取超核电子IMU&GNSS的数据，并提供了c++语言例程代码，通过执行ROS2命令，运行相应的节点，就可以看到打印到终端上的信息。
 
 * 测试环境：Ubuntu20.04   
 
@@ -48,27 +48,40 @@ Summary: 2 packages finished [0.61s]
 linux@ubuntu20:~/hipnuc_ws$ 
 ```
 
-## 3. 修改串口波特率和设备号
+##  修改串口波特率和设备号
 
 1. 在Ubuntu环境中，支持的波特率为115200, 460800, 921600。本例程使用的默认波特率是115200，默认打开的串口名称是/dev/ttyUSB0。	
 
 2. 如果您需要更高的输出频率，请修改`config/hipnuc_config.yaml`文件中的配置参数。	
 
 ```c
+#hipnuc_imu config file
 IMU_publisher:
     ros__parameters:
         serial_port: "/dev/ttyUSB0"
         baud_rate: 115200
         frame_id: "base_link"
         imu_topic: "/IMU_data"
+
+            
+ #hipnuc_gnss config file
+ INS_publisher:
+    ros__parameters:
+        serial_port: "/dev/ttyUSB0"
+        baud_rate: 115200
+        frame_id: "gnss_link"
+        imu_topic: "/rawimu_data"
+        nav_topic: "/NavSatFix_data"
 ```
 
 注意修改后需要回到hipnuc_ws目录下，重新执行`colcon build`命令
 
 ## 显示数据
-本例程提供了一种查看数据方式：
+​	查看数据方式：
 
 ​	1、输出ROS 定义的sensor_msgs::Imu。
+
+​	2、输出ROS 定义的sensor_msgs::NavSatFix
 
 ###  输出ROS标准 Imu.msg
 
@@ -124,5 +137,51 @@ average rate: 100.019
 	min: 0.007s max: 0.013s std dev: 0.00064s window: 303
 ^C
 linux@ubuntu20:~$ 
+```
+
+### 输出ROS标准的NavSatFix.msg
+
+​	1、打开终端，执行：
+
+```shell
+linux@ubuntu20:~$ ros2 launch hipnuc_gnss nav_spec_msg.launch.py 
+```
+
+​	2、如果执行失败，提示找不到相应的launch文件，则需要配置环境，在当前终端执行：
+
+```shell
+linux@ubuntu:~$source <hipnuc_ws_dir>/install/setup.bash
+```
+
+​	3、执行成功后，可以看到如下信息：
+
+```shell
+[listener_INS-2] header:
+[listener_INS-2] 	stamp:
+[listener_INS-2] 	  secs: 1724034005
+[listener_INS-2] 	  nanosecs: 370900173
+[listener_INS-2] 	frame_id: gnss_link
+[listener_INS-2] status:
+[listener_INS-2] 	status: 1
+[listener_INS-2] 	service: 0
+[listener_INS-2] latitude: 40.20336080
+[listener_INS-2] longitude: 116.24086010
+[listener_INS-2] altitude: 66.30100000
+[listener_INS-2] orientation_covariance: [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+[listener_INS-2] position_covariance_type: 0
+```
+
+​	4、另开一个终端窗口，执行`ros2 topic hz /NavSatFix_data`，可以查看话题发布的频率。
+
+```shell
+linux@ubuntu20:~$ ros2 topic hz /NavSatFix_data`
+average rate: 10.032
+	min: 0.008s max: 0.012s std dev: 0.00058s window: 10
+average rate: 10.014
+	min: 0.008s max: 0.012s std dev: 0.00054s window: 20
+average rate: 10.019
+	min: 0.007s max: 0.013s std dev: 0.00064s window: 30
+^C
+linux@ubuntu20:~$
 ```
 
