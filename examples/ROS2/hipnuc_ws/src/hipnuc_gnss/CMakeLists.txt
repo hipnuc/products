@@ -33,7 +33,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_executable(talker_INS src/ins_module.cpp src/hipnuc_dec.c)
+add_executable(talker_INS src/ins_module.cpp src/hipnuc_dec.c src/nmea_decode.c) 
 ament_target_dependencies(talker_INS rclcpp std_msgs sensor_msgs gps_msgs)
 
 add_executable(listener_INS src/sub_nav.cpp)

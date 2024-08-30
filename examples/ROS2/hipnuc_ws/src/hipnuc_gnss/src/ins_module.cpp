@@ -33,8 +33,10 @@ extern "C"{
 using namespace std::chrono_literals;
 using namespace std;
 static hipnuc_raw_t raw;
+static nmea_raw_t raw_gnss;
 
 void publish_ins_data(hipnuc_raw_t *data, sensor_msgs::msg::Imu *imu_data, sensor_msgs::msg::NavSatFix *NavSatFix_data);
+void publish_gps_data(nmea_raw_t *data, sensor_msgs::msg::NavSatFix *NavSatFix_data);
 
 class INSPublisher : public rclcpp::Node
 {
@@ -89,18 +91,23 @@ class INSPublisher : public rclcpp::Node
 
 			for(int i = 0; i < n; i++)
 			{
-				int rev = hipnuc_input(&raw, buf[i]);
+				// int rev = hipnuc_input(&raw, buf[i]); /* HI81 */
+				int rev = input_nmea(&raw_gnss, buf[i]); /* GGA RMC SXT */
 				
 				if(rev)
 				{
-					publish_ins_data(&raw, &imu_data, &nav_data);
-
-					imu_data.header.stamp = rclcpp::Clock().now();
+					/* publish NavSatFix data */
+					publish_gps_data(&raw_gnss, &nav_data);
+					
 					nav_data.header.stamp = rclcpp::Clock().now();
-	
-					imu_pub->publish(imu_data);
+
 					nav_pub->publish(nav_data);
 
+					/* publish imu data */
+					// publish_ins_data(&raw, &imu_data, &nav_data);
+					// imu_data.header.stamp = rclcpp::Clock().now();
+					// imu_pub->publish(imu_data);
+					
 					rev = 0;
 				}
 			}
@@ -257,14 +264,12 @@ void publish_gps_data(nmea_raw_t *data, sensor_msgs::msg::NavSatFix *NavSatFix_d
 		NavSatFix_data->altitude = data->gga.alt;
 		NavSatFix_data->status.status = data->gga.status;
     }
-
-    if (!strncmp(data->type, "RMC", 3))
+    else if (!strncmp(data->type, "RMC", 3))
     {
         NavSatFix_data->latitude = data->rmc.lat;
 		NavSatFix_data->longitude = data->rmc.lon;
 	}
-    
-	if (!strncmp(data->type, "SXT", 3))
+	else if (!strncmp(data->type, "SXT", 3))
     {
         NavSatFix_data->latitude = data->sxt.lat;
 		NavSatFix_data->longitude = data->sxt.lon;

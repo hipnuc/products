@@ -424,6 +424,6 @@ int input_nmea(nmea_raw_t *raw, uint8_t data)
 
     raw->len = raw->nbyte;
     raw->nbyte = 0;
-    return 1;
-//    return parse_nmea(raw);
+    // return 1;
+   return parse_nmea(raw);
 }
