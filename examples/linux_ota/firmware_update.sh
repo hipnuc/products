@@ -30,8 +30,11 @@ if [ "$#" -lt 4 ]; then
         "x86_64")
             blhost_cmd="./blhost/amd64/blhost"
             ;;
-        "armv7l"|"aarch64")
+        "armv7l")
             blhost_cmd="./blhost/armv7l/blhost"
+            ;;
+        "aarch64")
+            blhost_cmd="./blhost/aarch64/blhost"
             ;;
         *)
             echo "Error: Unsupported architecture: $arch"
