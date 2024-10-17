@@ -1,5 +1,5 @@
 #include "example_hipnuc_data_decode.h"
-#include "hipnuc.h"
+#include "hipnuc_dec.h"
 
 
 /* Example data */
@@ -11,7 +11,7 @@ static void parse_example_data(const char* name, const uint8_t* data, size_t siz
 {
     int i;
     static hipnuc_raw_t hipnuc_raw = {0};
-    static char log_buf[256];
+    static char log_buf[512];
     uint8_t decode_succ = 0;
 
     printf("Parsing %s data:\n", name);

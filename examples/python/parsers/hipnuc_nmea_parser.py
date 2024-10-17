@@ -17,7 +17,7 @@ class SXTData:
     altitude: float
     yaw: float
     pitch: float
-    speed_angle: float
+    speed_heading: float
     horizontal_speed: float
     roll: float
     pos_solq: int
@@ -147,7 +147,7 @@ class hipnuc_nmea_parser:
                 altitude=float(parts[4]),
                 yaw=float(parts[5]),
                 pitch=float(parts[6]),
-                speed_angle=float(parts[7]),
+                speed_heading=float(parts[7]),
                 horizontal_speed=float(parts[8]),
                 roll=float(parts[9]),
                 pos_solq=int(parts[10]),

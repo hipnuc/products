@@ -222,7 +222,7 @@ class hipnuc_parser:
                 ("Diff Age",               f"{data.diff_age:<9}" if data.diff_age is not None else None),
                 ("Undulation",             f"{data.undulation:<9}" if data.undulation is not None else None),
                 ("Acceleration (G)",       f"({data.acc[0]:<9.3f}, {data.acc[1]:<9.3f}, {data.acc[2]:<9.3f})" if data.acc is not None else None),
-                ("Gyroscope (dps)",        f"({data.gyr[0]:<9.3f}, {data.gyr[1]:<9.3f}, {data.gyr[2]:<9.3f})" if data.gyr is not None else None),
+                ("Gyroscope (deg/s)",        f"({data.gyr[0]:<9.3f}, {data.gyr[1]:<9.3f}, {data.gyr[2]:<9.3f})" if data.gyr is not None else None),
                 ("Magnetometer (uT)",      f"({data.mag[0]:<9.3f}, {data.mag[1]:<9.3f}, {data.mag[2]:<9.3f})" if data.mag is not None else None),
                 ("Quaternion",             f"({data.quat[0]:<9.3f}, {data.quat[1]:<9.3f}, {data.quat[2]:<9.3f}, {data.quat[3]:<9.3f})" if data.quat is not None else None),
                 ("Velocity ENU (m/s)",     f"({data.vel_enu[0]:<9.3f}, {data.vel_enu[1]:<9.3f}, {data.vel_enu[2]:<9.3f})" if data.vel_enu is not None else None),

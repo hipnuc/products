@@ -6,9 +6,14 @@
  *
  */
 
-#include "hipnuc.h"
+#include "hipnuc_dec.h"
 
 /* The driver file for decoding HiPNUC protocol, DO NOT MODIFTY*/
+
+/* HiPNUC protocol constants */
+#define CHSYNC1                 (0x5A)              /* CHAOHE message sync code 1 */
+#define CHSYNC2                 (0xA5)              /* CHAOHE message sync code 2 */
+#define CH_HDR_SIZE             (0x06)              /* CHAOHE protocol header size */
 
 /* legcy support of HI226/HI229 */
 #define HIPNUC_ID_USRID         (0x90)
@@ -163,12 +168,11 @@ static int sync_hipnuc(uint8_t *buf, uint8_t data)
 }
 
 /**
-* @brief     hipnuc decoder input, read one byte at one time.
+ * @brief     HiPNUC decoder input, read one byte at a time.
  *
  * @param    raw is the decoder struct.
- * @param    data is the one byte read from stram.
- * @param    buf is the log string buffer, ireturn > 0: decoder received a frame successfully, else: receiver not receive a frame successfully.
- *
+ * @param    data is the one byte read from stream.
+ * @return   >0: decoder received a frame successfully, else: receiver did not receive a frame successfully.
  */
 int hipnuc_input(hipnuc_raw_t *raw, uint8_t data)
 {
@@ -205,12 +209,12 @@ int hipnuc_input(hipnuc_raw_t *raw, uint8_t data)
 
 
 /**
- * @brief    convert packet to string, only dump parts of data
+ * @brief    Convert packet to string, only dump parts of data
  *
  * @param    raw is struct of decoder
- * @param    buf is the log string buffer, make sure buf larger than 256
- * @param    buf_size is the szie of the log buffer
- *
+ * @param    buf is the log string buffer, make sure buf is larger than 256
+ * @param    buf_size is the size of the log buffer
+ * @return   Number of characters written to the buffer
  */
 int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
 {
@@ -305,12 +309,11 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
 }
 
 /**
- * @brief    calcuate hipnuc_crc16
+ * @brief    Calculate HiPNUC CRC16
  *
- * @param    inital is intial value
+ * @param    inital is initial value
  * @param    buf    is input buffer pointer
  * @param    len    is length of the buffer
- *
  */
 static void hipnuc_crc16(uint16_t *inital, const uint8_t *buf, uint32_t len)
 {

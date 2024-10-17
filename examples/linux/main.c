@@ -1,119 +1,93 @@
+#include <getopt.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <termios.h>
 #include <errno.h>
+#include <limits.h>
 
-#include "serial_port.h"
-#include "hipnuc.h"
+#include "commands.h"
+#include "global_options.h"
+#include "log.h"
 
-#define REFRESH_INTERVAL 20000 // 以微秒为单位，对应于50Hz
 
+#define PROGRAM_NAME "hihost"
+#define VERSION "1.0.1"
 
-int main(int argc, char *argv[])
-{
-	hipnuc_raw_t hipnuc_raw = {0};
-	int baud_rate = 115200;
-	uint8_t recv_buf[2048];
-	char log[512];
-	int len;
+static void print_usage(const char *program_name);
+static void signal_handler(int signum);
 
-	if (argc < 2)
-	{
-		fprintf(stderr, "Usage: %s <serial_port> [baud_rate]\n", argv[0]);
-		return 1;
-	}
+int main(int argc, char *argv[]) {
+    GlobalOptions opts = {
+        .port_name = NULL,
+        .baud_rate = 115200
+    };
 
-	char *port_name = argv[1];
+    static struct option long_options[] = {
+        {"help", no_argument, 0, 'h'},
+        {"port", required_argument, 0, 'p'},
+        {"baud", required_argument, 0, 'b'},
+        {"version", no_argument, 0, 'v'},
+        {0, 0, 0, 0}
+    };
 
-	if (argc > 2)
-		baud_rate = atoi(argv[2]);
+    int opt;
+    while ((opt = getopt_long(argc, argv, "hvp:b:", long_options, NULL)) != -1) {
+        switch (opt) {
+            case 'h':
+                print_usage(argv[0]);
+                return 0;
+            case 'v':
+                print_usage(argv[0]);
+                return 0;
+            case 'p':
+                opts.port_name = optarg;
+                break;
+            case 'b':
+                {
+                    char *endptr;
+                    errno = 0;
+                    long baud = strtol(optarg, &endptr, 10);
+                    if (errno != 0 || *endptr != '\0' || baud <= 0) {
+                        fprintf(stderr, "Invalid baud rate: %s\n", optarg);
+                        return 1;
+                    }
+                    opts.baud_rate = (int)baud;
+                }
+                break;
+            default:
+                print_usage(argv[0]);
+                return 1;
+        }
+    }
 
-	int fd = serial_port_open(port_name);
-	if (fd < 0)
-		return 1;
+    if (optind >= argc) {
+        fprintf(stderr, "Expected command\n");
+        print_usage(argv[0]);
+        return 1;
+    }
 
-	if (serial_port_configure(fd, baud_rate) < 0)
-	{
-		fprintf(stderr, "Cannot open %s\n", port_name);
-		serial_port_close(fd);
-		return 1;
-	}
-
-	printf("* %s successfully open with %d.\n", port_name, baud_rate);
-	printf("* Starting serial data reader. Press CTRL+C to exit.\n");
-	printf("* Select mode:\n");
-	printf("  R - Read device data\n");
-	printf("  C - Send command to device\n");
-	printf("* Enter your choice: ");
-	int choice = getchar();
-
-	if (choice == 'R' || choice == 'r')
-	{
-		/* enable output */
-		serial_send_then_recv(fd, "AT+EOUT=1\r\n", "OK\r\n", recv_buf, sizeof(recv_buf), 200);
-		printf("Being read data...\n");
-		while (1)
-		{
-			len = read(fd, recv_buf, sizeof(recv_buf));
-
-			for (int i = 0; i < len; i++)
-			{
-				if (hipnuc_input(&hipnuc_raw, recv_buf[i]))
-				{
-				    hipnuc_dump_packet(&hipnuc_raw, log, sizeof(log));
-					printf("\033[H\033[J");
-					printf("%s", log);
-				}
-			}
-			usleep(REFRESH_INTERVAL);
-		}
-	}
-
-	else if (choice == 'C' || choice == 'c')
-	{
-		/* stop data output */
-		serial_send_then_recv(fd, "AT+EOUT=0\r\n", "OK\r\n", recv_buf, sizeof(recv_buf), 200);
-
-		printf("Enter command(example: AT+INFO) or Press CTRL+C to exit:\n");
-
-		/* clear buffer */
-		int ch;
-		while ((ch = getchar()) != '\n' && ch != EOF)
-			;
-
-		fgets(log, sizeof(log), stdin);
-
-		len = serial_send_then_recv(fd, log, "", recv_buf, sizeof(recv_buf), 500);
-		if (len > 0)
-		{
-			printf("Received %d bytes: \n\n", len);
-
-			for (int i = 0; i < len; i++)
-			{
-				if (recv_buf[i] == '\r' || recv_buf[i] == '\n')
-				{
-					printf("%c", recv_buf[i]);
-				}
-				else
-				{
-					printf("%c", isprint(recv_buf[i]) ? recv_buf[i] : '.');
-				}
-			}
-		}
-		else
-		{
-			printf("No response or error.\n");
-		}
-	}
-	else
-	{
-		printf("Invalid choice.\n");
-	}
-
-	return 0;
+    const char *command = argv[optind];
+    optind++;
+    return execute_command(command, &opts, argc - optind, argv + optind);
 }
 
+static void print_usage(const char *program_name) {
+    printf("\n%s %s  %s\n", PROGRAM_NAME, VERSION, "www.hipnuc.com");
+    fprintf(stderr, "Usage: %s [GLOBAL OPTIONS] <COMMAND> [COMMAND OPTIONS]\n", program_name);
+    fprintf(stderr, "Global Options:\n");
+    fprintf(stderr, "  -p, --port PORT         Specify the serial port (e.g., /dev/ttyUSB0)\n");
+    fprintf(stderr, "  -b, --baud RATE         Specify the baud rate (default: 115200)\n");
+    fprintf(stderr, "  -h, --help              Display this help message\n");
+    fprintf(stderr, "  -v, --version           Display version\n");
+    fprintf(stderr, "Commands:\n");
+    fprintf(stderr, "  list                    List all available serial ports\n");
+    fprintf(stderr, "  read                    Enter read mode to display IMU data\n");
+    fprintf(stderr, "  write <COMMAND>         Send a command to the device\n");
+    fprintf(stderr, "  example                 Process example static fix data\n");
+}
+
+static void signal_handler(int signum) {
+    printf("\nReceived signal %d. Exiting...\n", signum);
+    exit(0);
+}

@@ -1,55 +1,78 @@
 # 	Linux例程
 
-在Linux环境下接收超核IMU 二进制数据帧并显示
+本工程在Linux上读取，配置HiPNUC产品的功能及示例，并提供linux命令行工具hihost的源代码及用法。
 
-* 测试环境： Ubuntu 20.04 / 树莓派4B
-* 支持硬件: 	所有超核IMU产品
+hihost是一个用于读取和控制超核设备的命令行工具。它支持多种操作，包括列出可用串口、读取IMU数据、发送命令到设备，以及处理示例数据。
+
+## 支持的硬件
+
+ 所有超核IMU产品
+
+## 测试环境
+- Ubuntu 20.04 
+- 树莓派4B
 
 ## 文件说明
 
-| 文件                          | 位置 | 说明                             |
-| ----------------------------- | ---- | -------------------------------- |
-| serial_port.c / serial_port.h | .    | linux C串口驱动封装              |
-| hipnuc_dec.c / hipnuc.h       | ../  | 公共驱动文件，解析超核二进制协议 |
-| main                          | .    | example示例文件                  |
+| 文件           | 说明                                     |
+| -------------- | ---------------------------------------- |
+| main.c         | 主程序入口，处理命令行参数和调用相应命令 |
+| commands.c     | 实现各种命令的功能                       |
+| example_data.c | 处理示例数据的函数                       |
+| serial_port.c  | Linux C串口驱动封装                      |
+| log            | log组件                                  |
+| CMakeLists.txt | CMake构建配置文件                        |
 
-## 使用
+另外本工程依赖解码库hipnuc_dec.c 和 nmea_decode.c，位于 ../lib下
 
-1. 查找串口设备,  确定Linux可以找到你的tty串口，命令行切换到本目录下执行make，生成可执行文件main
-```shell
- $ ls /dev/ttyUSB*
-```
+## 构建说明
 
-2. 编译example, 切到本目录下执行make. 编译为可执行文件main
-
-```
-$ make
-gcc -I../lib -c main.c -o main.o
-gcc -I../lib -c serial_port.c -o serial_port.o
-gcc -I../lib -c ../lib/ch_serial.c -o ../lib/ch_serial.o
-gcc -I../lib main.o serial_port.o ../lib/ch_serial.o -o main
-Cleaning up...
-```
-
-3. 运行main
-```
-$ sudo ./main ttyUSB0 115200
-isatty success!
-* ttyUSB0 successfully open with 115200.
-* Starting serial data reader. Press CTRL+C to exit.
-* Select mode:
-  R - Read device data
-  C - Send command to device
-* Enter your choice: 
+本项目使用CMake构建，创建构建目录并进入: example/linux目录:
 
 ```
+mkdir build
+cd build
+cmake ..
+make
+```
 
-4. 根据提示输入
+构建完成后生成可执行文件 `hihost` 
 
-   * R+回车:  读取并显示IMU数据
-   * C+回车:  向模块发送一条ASCII命令
+## 使用说明
 
-执行R后会打印IMU数据：
+### 基本用法
+
+hihost [全局选项] <命令> [命令选项]
+
+### 全局选项
+
+- `-p, --port PORT`：指定串口设备（例如：/dev/ttyUSB0）
+- `-b, --baud RATE`：指定波特率（默认：115200）
+- `-h, --help`：显示帮助信息
+- `-v, --version`：显示版本信息
+
+### 可用命令
+
+1. `list`：列出所有可用的串口
+2. `read`：进入读取模式，显示IMU数据
+3. `write <COMMAND>`：向设备发送命令
+4. `example`：处理示例静态数据
+
+### 使用示例
+
+#### 列出可用串口
+```sh
+sudo ./hihost list
+```
+
+#### 读取IMU数据
+
+```sh
+sudo ./hihost -p /dev/ttyUSB0 -b 115200 read
+```
+
+这将持续显示IMU数据，如下所示：
+
 ```
 acc(G):            0.020   -0.017    1.001
 gyr(deg/s):        0.097    0.105   -0.194
@@ -60,17 +83,41 @@ presure(pa):    104514.461
 timestamp(ms):   1286394
 ```
 
-执行C后会根据提示输入ASCII命令, 如AT+INFO, 而后会返回接收到的串口的字节数和数据。
-```
-* Enter your choice: C
-Enter command(example: AT+INFO) or Press CTRL+C to exit:
-AT+INFO
-Received 150 bytes: 
+按 CTRL+C 可以退出程序, 如果需要将解码数据保存到文件可直接重定向到文件：
 
-HI14 1.3.8 build Dec 27 2023
-2010 - 2023 Copyright by HiPNUC
-MODE:           6 AIXS
-UUID:           043995698D6E1708
-ODR:            100Hz
+```sh
+sudo ./hihost -p /dev/ttyUSB0 -b 115200 read > output.txt
+```
+
+#### 发送命令到设备
+```sh
+sudo ./hihost -p /dev/ttyUSB0 -b 115200 write "LOG VERSION"
+```
+
+这将发送 `LOG VERSION\r\n` 命令并显示返回数据：
+```
+Received 80 bytes:
+
+PNAME=HI14R3
+BUILD=Oct 15 2024
+UUID=043995698D6E1708
+APP_VER=156
+BL_VER=109
 OK
 ```
+注意：使用 write 命令时，不需要在命令末尾添加 \r\n，程序会自动处理。
+
+#### 处理静态示例数据
+```sh
+sudo ./hihost example
+```
+这将处理内置的示例数据并显示结果。
+
+### 使用解码库驱动
+
+如果您想加入数据解析工程到您的工程中,可以直接参考 ../lib下 hipnuc_dec.c 和 nmea_dec.c,  使用方法可以参考example_data.c
+
+### 注意事项
+
+* 在Linux系统中，访问串口设备通常需要root权限，因此需要使用 sudo 运行程序。
+* 确保您有正确的串口设备名称和波特率设置。

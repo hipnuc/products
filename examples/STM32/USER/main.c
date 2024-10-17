@@ -36,7 +36,7 @@
 #include "delay.h"
 #include "stm32f10x_rcc.h"
 #include "stm32f10x_dma.h"
-#include "hipnuc.h"
+#include "hipnuc_dec.h"
 #include "example_hipnuc_data_decode.h"
 
 /* Enable/Disable fixed data array decoding example */

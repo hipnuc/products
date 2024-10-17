@@ -72,7 +72,7 @@ def cmd_read(port, baudrate):
     except (serial.SerialException, PermissionError) as e:
         print(f"Error: {e}")
         print(f"To run this script with superuser privileges, use the 'sudo' command:")
-        print(f"Example: sudo python main.py read-data --port {port} --baudrate {baudrate}")
+        print(f"Example: sudo python main.py read --port {port} --baudrate {baudrate}")
         sys.exit(1)
 
 if __name__ == "__main__":
