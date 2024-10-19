@@ -55,13 +55,12 @@ static void stdout_callback(log_Event *ev) {
   buf[strftime(buf, sizeof(buf), "%H:%M:%S", ev->time)] = '\0';
 #ifdef LOG_USE_COLOR
   fprintf(
-    ev->udata, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
-    buf, level_colors[ev->level], level_strings[ev->level],
-    ev->file, ev->line);
+    ev->udata, "%s %s%-5s\x1b[0m ",
+    buf, level_colors[ev->level], level_strings[ev->level]);
 #else
   fprintf(
-    ev->udata, "%s %-5s %s:%d: ",
-    buf, level_strings[ev->level], ev->file, ev->line);
+    ev->udata, "%s %-5s ",
+    buf, level_strings[ev->level]);
 #endif
   vfprintf(ev->udata, ev->fmt, ev->ap);
   fprintf(ev->udata, "\n");
@@ -73,13 +72,12 @@ static void file_callback(log_Event *ev) {
   char buf[64];
   buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ev->time)] = '\0';
   fprintf(
-    ev->udata, "%s %-5s %s:%d: ",
-    buf, level_strings[ev->level], ev->file, ev->line);
+    ev->udata, "%s %-5s ",
+    buf, level_strings[ev->level]);
   vfprintf(ev->udata, ev->fmt, ev->ap);
   fprintf(ev->udata, "\n");
   fflush(ev->udata);
 }
-
 
 static void lock(void)   {
   if (L.lock) { L.lock(true, L.udata); }

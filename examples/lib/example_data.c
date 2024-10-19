@@ -3,8 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "example_data.h"
 #include "nmea_dec.h"
 #include "hipnuc_dec.h"
+
+
+static hipnuc_raw_t hipnuc_raw = {0};
+static nmea_raw_t nmea_raw = {0};
+static char log_buf[1024];
 
 // Function to print raw data in hexadecimal format
 void print_raw_data(const uint8_t* data, size_t length) {
@@ -16,12 +22,9 @@ void print_raw_data(const uint8_t* data, size_t length) {
     if (length % 16 != 0) printf("\n");
 }
 
+
 int process_example_data() 
 {
-    static hipnuc_raw_t hipnuc_raw = {0};
-    static nmea_raw_t nmea_raw = {0};
-    static char log[1024];
-    
     // HI91 example data
     uint8_t example_data_hi91[] = {
         0x5A, 0xA5, 0x4C, 0x00, 0x14, 0xBB, 0x91, 0x08, 0x15, 0x23, 0x09, 0xA2, 0xC4, 0x47, 0x08, 0x15,
@@ -56,8 +59,8 @@ int process_example_data()
     printf("Decoded data:\n");
     for (size_t i = 0; i < sizeof(example_data_hi91); i++) {
         if (hipnuc_input(&hipnuc_raw, example_data_hi91[i])) {
-            hipnuc_dump_packet(&hipnuc_raw, log, sizeof(log));
-            printf("%s\n", log);
+            hipnuc_dump_packet(&hipnuc_raw, log_buf, sizeof(log_buf));
+            printf("%s\n", log_buf);
         }
     }
 
@@ -66,8 +69,8 @@ int process_example_data()
     printf("Decoded data:\n");
     for (size_t i = 0; i < sizeof(example_data_hi92); i++) {
         if (hipnuc_input(&hipnuc_raw, example_data_hi92[i])) {
-            hipnuc_dump_packet(&hipnuc_raw, log, sizeof(log));
-            printf("%s\n", log);
+            hipnuc_dump_packet(&hipnuc_raw, log_buf, sizeof(log_buf));
+            printf("%s\n", log_buf);
         }
     }
 
@@ -76,8 +79,8 @@ int process_example_data()
     printf("Decoded data:\n");
     for (size_t i = 0; i < sizeof(example_data_hi81); i++) {
         if (hipnuc_input(&hipnuc_raw, example_data_hi81[i])) {
-            hipnuc_dump_packet(&hipnuc_raw, log, sizeof(log));
-            printf("%s\n", log);
+            hipnuc_dump_packet(&hipnuc_raw, log_buf, sizeof(log_buf));
+            printf("%s\n", log_buf);
         }
     }
 
@@ -100,8 +103,8 @@ int process_example_data()
         {
             if (input_nmea(&nmea_raw, nmea_str[j]) > 0) 
             {
-                nmea_dec_dump_msg(&nmea_raw, log, sizeof(log));
-                printf("%s\n", log);
+                nmea_dec_dump_msg(&nmea_raw, log_buf, sizeof(log_buf));
+                printf("%s\n", log_buf);
             }
         }
     }

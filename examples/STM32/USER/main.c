@@ -37,7 +37,7 @@
 #include "stm32f10x_rcc.h"
 #include "stm32f10x_dma.h"
 #include "hipnuc_dec.h"
-#include "example_hipnuc_data_decode.h"
+
 
 /* Enable/Disable fixed data array decoding example */
 #define ENABLE_FIXED_DATA_EXAMPLE     0
@@ -86,7 +86,8 @@ int main(void)
 
     /* Use macro to control whether to show the fixed data array decoding example */
     #if ENABLE_FIXED_DATA_EXAMPLE
-    fixed_data_example();
+    #include "example_data.h"
+    process_example_data();
     #endif
     
     while (1)

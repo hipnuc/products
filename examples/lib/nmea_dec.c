@@ -205,7 +205,7 @@ static int parse_nmea(nmea_raw_t *raw)
     /* Parse fields */
     for (p = (char *)raw->buf; *p && n < MAXFIELD; p = q + 1)
     {
-        if ((q = strchr(p, ',')) || (q = strchr(p, '*')))
+        if (((q = strchr(p, ',')) != NULL) || ((q = strchr(p, '*')) != NULL))
         {
             val[n++] = p;
             *q = '\0';

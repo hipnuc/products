@@ -11,7 +11,8 @@
 #include "serial_port.h"
 #include "log.h"
 
-#define REFRESH_INTERVAL (50*1000)  // 50ms in microseconds
+#define REFRESH_INTERVAL_MS (50)
+#define CMD_REPLAY_TIMEOUT_MS (300)
 
 // Structure to hold command information
 typedef struct {
@@ -171,7 +172,7 @@ static int cmd_read(GlobalOptions *opts, int argc, char *argv[]) {
                 last_time = current_time;
             }
 
-            usleep(REFRESH_INTERVAL);
+            usleep(REFRESH_INTERVAL_MS*1000);
         }
 
     } while(0);
@@ -184,33 +185,65 @@ static int cmd_read(GlobalOptions *opts, int argc, char *argv[]) {
     return result;
 }
 
-/**
- * @brief Write a command to the specified serial port
- * 
- * @param opts Global options structure
- * @param argc Number of command arguments
- * @param argv Array of command arguments
- * @return int 0 on success, -1 on failure
- */
-static int cmd_write(GlobalOptions *opts, int argc, char *argv[]) {
-    if (!opts->port_name || argc < 1) {
-        log_error("Usage: write <COMMAND>");
+// Read and execute commands from a file
+static int execute_commands_from_file(int fd, const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        log_error("Unable to open file %s", filename);
         return -1;
     }
 
-    // Combine all arguments into a single command string
-    char command[256] = {0};
-    for (int i = 0; i < argc; i++) {
-        if (i > 0) strcat(command, " ");
-        strcat(command, argv[i]);
+    char line[256];
+    uint8_t recv_buf[2048];
+    int line_number = 0;
+
+    while (fgets(line, sizeof(line), file)) {
+        line_number++;
+        // Remove newline character from the end of the line
+        line[strcspn(line, "\n")] = 0;
+        
+        // Skip empty lines and comment lines
+        if (line[0] == '\0' || line[0] == '#') {
+            continue;
+        }
+
+        log_info("Send command (line %d): %s", line_number, line);
+
+        // Prepare command with CRLF
+        char command_with_crlf[strlen(line) + 3];
+        snprintf(command_with_crlf, sizeof(command_with_crlf), "%s\r\n", line);
+
+        // Send command and receive response
+        int len = serial_send_then_recv(fd, command_with_crlf, "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
+        if (len > 0) {
+            log_info("Received %d bytes:", len);
+            for (int i = 0; i < len; i++) {
+                if (recv_buf[i] == '\r' || recv_buf[i] == '\n') {
+                    printf("%c", recv_buf[i]);
+                } else {
+                    printf("%c", isprint(recv_buf[i]) ? recv_buf[i] : '.');
+                }
+            }
+            printf("\n");
+        } else {
+            log_info("No response or error.");
+        }
+
+        // Add a short delay between commands
+        usleep(10000);
     }
 
-    log_info("Sending command: %s", command);
+    fclose(file);
+    return 0;
+}
 
-    uint8_t recv_buf[2048];
-    int len;
+static int cmd_write(GlobalOptions *opts, int argc, char *argv[]) {
 
-    // Open and configure the serial port
+    if (!opts->port_name || argc < 1) {
+        log_error("Usage: write <COMMAND> or write <config_file>");
+        return -1;
+    }
+
     int fd = serial_port_open(opts->port_name);
     if (fd < 0) {
         log_error("Failed to open port %s", opts->port_name);
@@ -224,30 +257,46 @@ static int cmd_write(GlobalOptions *opts, int argc, char *argv[]) {
     }
 
     // Disable data output before sending command
-    serial_send_then_recv(fd, "AT+EOUT=0\r\n", "OK\r\n", recv_buf, sizeof(recv_buf), 200);
-    
-    // Prepare command with CRLF
-    char command_with_crlf[strlen(command) + 3];
-    snprintf(command_with_crlf, sizeof(command_with_crlf), "%s\r\n", command);
-    
-    // Send command and receive response
-    len = serial_send_then_recv(fd, command_with_crlf, "", recv_buf, sizeof(recv_buf), 200);
-    if (len > 0) {
-        log_info("\nReceived %d bytes:", len);
-        for (int i = 0; i < len; i++) {
-            if (recv_buf[i] == '\r' || recv_buf[i] == '\n') {
-                printf("%c", recv_buf[i]);
-            } else {
-                printf("%c", isprint(recv_buf[i]) ? recv_buf[i] : '.');
-            }
-        }
+    uint8_t recv_buf[2048];
+    serial_send_then_recv(fd, "AT+EOUT=0\r\n", "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
+
+    int result = 0;
+
+    if (argc == 1 && access(argv[0], F_OK) != -1) {
+        // If the argument is a file that exists, execute commands from the file
+        result = execute_commands_from_file(fd, argv[0]);
     } else {
-        log_info("No response or error.");
+        // Otherwise, treat it as a single command
+        char command[256] = {0};
+        for (int i = 0; i < argc; i++) {
+            if (i > 0) strcat(command, " ");
+            strcat(command, argv[i]);
+        }
+
+        log_info("Sending command: %s", command);
+
+        char command_with_crlf[strlen(command) + 3];
+        snprintf(command_with_crlf, sizeof(command_with_crlf), "%s\r\n", command);
+
+        int len = serial_send_then_recv(fd, command_with_crlf, "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
+        if (len > 0) {
+            log_info("\nReceived %d bytes:", len);
+            for (int i = 0; i < len; i++) {
+                if (recv_buf[i] == '\r' || recv_buf[i] == '\n') {
+                    printf("%c", recv_buf[i]);
+                } else {
+                    printf("%c", isprint(recv_buf[i]) ? recv_buf[i] : '.');
+                }
+            }
+        } else {
+            log_info("No response or error.");
+        }
     }
 
     serial_port_close(fd);
-    return 0;
+    return result;
 }
+
 
 /**
  * @brief Process example data (for demonstration purposes)

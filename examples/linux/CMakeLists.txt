@@ -17,7 +17,7 @@ set(SOURCES
     serial_port.c
     commands.c
     log.c
-    example_data.c
+    ../lib/example_data.c
     ../lib/hipnuc_dec.c
     ../lib/nmea_dec.c
 )

@@ -84,7 +84,12 @@ static void print_usage(const char *program_name) {
     fprintf(stderr, "  list                    List all available serial ports\n");
     fprintf(stderr, "  read                    Enter read mode to display IMU data\n");
     fprintf(stderr, "  write <COMMAND>         Send a command to the device\n");
+    fprintf(stderr, "  write <CONFIG_FILE>     Execute commands from a configuration file\n");
     fprintf(stderr, "  example                 Process example static fix data\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Configuration File:\n");
+    fprintf(stderr, "  A text file containing one command per line. Used with the 'write' command.\n");
+    fprintf(stderr, "  Example usage: %s -p /dev/ttyUSB0 -b 115200 write device_setup.ini\n", program_name);
 }
 
 static void signal_handler(int signum) {

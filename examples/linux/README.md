@@ -18,12 +18,17 @@ hihost是一个用于读取和控制超核设备的命令行工具。它支持�
 | -------------- | ---------------------------------------- |
 | main.c         | 主程序入口，处理命令行参数和调用相应命令 |
 | commands.c     | 实现各种命令的功能                       |
-| example_data.c | 处理示例数据的函数                       |
 | serial_port.c  | Linux C串口驱动封装                      |
 | log            | log组件                                  |
 | CMakeLists.txt | CMake构建配置文件                        |
 
-另外本工程依赖解码库hipnuc_dec.c 和 nmea_decode.c，位于 ../lib下
+另外本工程依赖解码库hipnuc_dec.c 和 nmea_decode.c，位于 ../lib下:
+| 文件            | 说明                                                         |
+| --------------- | ------------------------------------------------------------ |
+| hipnuc_dec.c    | 位于../lib下, HiPNUC二进制协议解析器                         |
+| nmea_decode.c   | 位于../lib下, NMEA 消息解析器，支持GGA,RMC以及HiPNUC自定义NMEA 协议SXT 等 |
+| example _data.c | 使用示例                                                     |
+
 
 ## 构建说明
 
@@ -56,7 +61,8 @@ hihost [全局选项] <命令> [命令选项]
 1. `list`：列出所有可用的串口
 2. `read`：进入读取模式，显示IMU数据
 3. `write <COMMAND>`：向设备发送命令
-4. `example`：处理示例静态数据
+4. `write <CONFIG_FILE>`：读取配置文件并根据配置内容向设备批量写入命令
+5. `example`：处理示例静态数据
 
 ### 使用示例
 
@@ -106,6 +112,16 @@ BL_VER=109
 OK
 ```
 注意：使用 write 命令时，不需要在命令末尾添加 \r\n，程序会自动处理。
+
+##### 批量发送配置命令
+
+ hihost 支持从配置文件执行多个命令。配置文件是一个包含多个命令的文本文件，每行一个命令。使用方法如下：
+
+```
+sudo ./hihost -p /dev/ttyUSB0 -b 115200 write ../device_setup.ini
+```
+
+其中device_setup.ini 是配置文本文件，每一个命令占一行。
 
 #### 处理静态示例数据
 ```sh

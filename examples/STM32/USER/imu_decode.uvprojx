@@ -399,11 +399,6 @@
               <FileType>1</FileType>
               <FilePath>.\system_stm32f10x.c</FilePath>
             </File>
-            <File>
-              <FileName>example_hipnuc_data_decode.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\example_hipnuc_data_decode.c</FilePath>
-            </File>
           </Files>
         </Group>
         <Group>
@@ -478,6 +473,16 @@
               <FileName>hipnuc_dec.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\lib\hipnuc_dec.c</FilePath>
+            </File>
+            <File>
+              <FileName>example_data.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\lib\example_data.c</FilePath>
+            </File>
+            <File>
+              <FileName>nmea_dec.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\lib\nmea_dec.c</FilePath>
             </File>
           </Files>
         </Group>
