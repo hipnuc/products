@@ -23,7 +23,7 @@ void print_raw_data(const uint8_t* data, size_t length) {
 }
 
 
-int process_example_data() 
+int process_example_data(void) 
 {
     // HI91 example data
     uint8_t example_data_hi91[] = {

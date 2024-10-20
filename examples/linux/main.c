@@ -12,7 +12,7 @@
 
 
 #define PROGRAM_NAME "hihost"
-#define VERSION "1.0.1"
+#define VERSION "1.0.2"
 
 static void print_usage(const char *program_name);
 static void signal_handler(int signum);
@@ -73,23 +73,33 @@ int main(int argc, char *argv[]) {
 }
 
 static void print_usage(const char *program_name) {
-    printf("\n%s %s  %s\n", PROGRAM_NAME, VERSION, "www.hipnuc.com");
-    fprintf(stderr, "Usage: %s [GLOBAL OPTIONS] <COMMAND> [COMMAND OPTIONS]\n", program_name);
-    fprintf(stderr, "Global Options:\n");
-    fprintf(stderr, "  -p, --port PORT         Specify the serial port (e.g., /dev/ttyUSB0)\n");
-    fprintf(stderr, "  -b, --baud RATE         Specify the baud rate (default: 115200)\n");
-    fprintf(stderr, "  -h, --help              Display this help message\n");
-    fprintf(stderr, "  -v, --version           Display version\n");
-    fprintf(stderr, "Commands:\n");
-    fprintf(stderr, "  list                    List all available serial ports\n");
-    fprintf(stderr, "  read                    Enter read mode to display IMU data\n");
-    fprintf(stderr, "  write <COMMAND>         Send a command to the device\n");
-    fprintf(stderr, "  write <CONFIG_FILE>     Execute commands from a configuration file\n");
-    fprintf(stderr, "  example                 Process example static fix data\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "Configuration File:\n");
-    fprintf(stderr, "  A text file containing one command per line. Used with the 'write' command.\n");
-    fprintf(stderr, "  Example usage: %s -p /dev/ttyUSB0 -b 115200 write device_setup.ini\n", program_name);
+    printf("%s %s - HiPNUC Configuration and Monitoring Tool\n", PROGRAM_NAME, VERSION);
+    printf("Copyright (C) 2024 HiPNUC. All rights reserved.\n");
+    printf("Website: www.hipnuc.com\n\n");
+
+    printf("Usage: %s [GLOBAL OPTIONS] COMMAND [COMMAND OPTIONS]\n\n", program_name);
+
+    printf("Global Options:\n");
+    printf("  -p, --port PORT         Specify the serial port (e.g., /dev/ttyUSB0)\n");
+    printf("  -b, --baud RATE         Set the baud rate (default: 115200)\n");
+    printf("  -h, --help              Display this help message and exit\n");
+    printf("  -v, --version           Display version information and exit\n\n");
+
+    printf("Commands:\n");
+    printf("  list                    List all available serial ports\n");
+    printf("  probe                   Automatically probe for device on all serial port\n");
+    printf("  read                    Enter read mode to display IMU data\n");
+    printf("  write <COMMAND>         Send a single command to the device\n");
+    printf("  write <CONFIG_FILE>     Execute commands from a configuration file\n");
+    printf("  example                 Process example static fix data\n\n");
+
+    printf("Examples:\n");
+    printf("  %s  list\n", program_name);
+    printf("  %s  probe\n", program_name);
+    printf("  %s  example\n", program_name);
+    printf("  %s -p /dev/ttyUSB0 -b 115200 read\n", program_name);
+    printf("  %s -p /dev/ttyUSB0 write \"AT+INFO\"\n", program_name);
+    printf("  %s -p /dev/ttyUSB0 write config.ini\n\n", program_name);
 }
 
 static void signal_handler(int signum) {
