@@ -17,6 +17,16 @@
 static void print_usage(const char *program_name);
 static void signal_handler(int signum);
 
+/**
+ * The main entry point of the HiPNUC Configuration and Monitoring Tool.
+ * This function parses the command-line arguments, sets up the global options,
+ * and executes the requested command.
+ *
+ * @param argc The number of command-line arguments.
+ * @param argv The array of command-line arguments.
+ * @return The exit status of the program.
+ */
+int main(int argc, char *argv[]);
 int main(int argc, char *argv[]) {
     GlobalOptions opts = {
         .port_name = NULL,
@@ -72,6 +82,7 @@ int main(int argc, char *argv[]) {
     return execute_command(command, &opts, argc - optind, argv + optind);
 }
 
+
 static void print_usage(const char *program_name) {
     printf("%s %s - HiPNUC Configuration and Monitoring Tool\n", PROGRAM_NAME, VERSION);
     printf("Copyright (C) 2024 HiPNUC. All rights reserved.\n");
@@ -99,7 +110,7 @@ static void print_usage(const char *program_name) {
     printf("  %s  example\n", program_name);
     printf("  %s -p /dev/ttyUSB0 -b 115200 read\n", program_name);
     printf("  %s -p /dev/ttyUSB0 write \"AT+INFO\"\n", program_name);
-    printf("  %s -p /dev/ttyUSB0 write config.ini\n\n", program_name);
+    printf("  %s -p /dev/ttyUSB0 write <FILE>\n\n", program_name);
 }
 
 static void signal_handler(int signum) {

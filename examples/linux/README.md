@@ -100,7 +100,7 @@ timestamp(ms):   1286394
 sudo ./hihost -p /dev/ttyUSB0 -b 115200 read > output.txt
 ```
 
-#### 发送命令到设备
+#### 发送单个命令到设备
 ```sh
 sudo ./hihost -p /dev/ttyUSB0 -b 115200 write "LOG VERSION"
 ```
@@ -118,7 +118,7 @@ OK
 ```
 注意：使用 write 命令时，不需要在命令末尾添加 \r\n，程序会自动处理。
 
-##### 批量发送配置命令
+#### 使用配置文件批量发送命令
 
  hihost 支持从配置文件执行多个命令。配置文件是一个包含多个命令的文本文件，每行一个命令。使用方法如下：
 
@@ -126,7 +126,7 @@ OK
 sudo ./hihost -p /dev/ttyUSB0 -b 115200 write ../device_setup.ini
 ```
 
-其中device_setup.ini 是配置文本文件，每一个命令占一行。
+其中device_setup.ini 是配置文本文件，每一个命令占一行。配置文件[示例](device_setup.ini)
 
 #### 处理静态示例数据
 ```sh

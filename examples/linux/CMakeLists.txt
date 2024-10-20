@@ -9,6 +9,7 @@ set(CMAKE_C_STANDARD 99)
 
 # Add include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fw_downloader)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../lib)
 
 # Define source files
@@ -17,6 +18,7 @@ set(SOURCES
     serial_port.c
     commands.c
     log.c
+    fw_downloader/hex2bin.c
     ../lib/example_data.c
     ../lib/hipnuc_dec.c
     ../lib/nmea_dec.c

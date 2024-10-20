@@ -28,6 +28,7 @@ static int cmd_read(GlobalOptions *opts, int argc, char *argv[]);
 static int cmd_write(GlobalOptions *opts, int argc, char *argv[]);
 static int cmd_example(GlobalOptions *opts, int argc, char *argv[]);
 static int cmd_probe(GlobalOptions *opts, int argc, char *argv[]);
+static int cmd_hex2bin(GlobalOptions *opts, int argc, char *argv[]);
 
 // Array of available commands
 static command_t commands[] = {
@@ -35,6 +36,7 @@ static command_t commands[] = {
     {"probe", cmd_probe},
     {"read", cmd_read},
     {"write", cmd_write},
+    {"hex2bin", cmd_hex2bin},
     {"example", cmd_example},
     {NULL, NULL}  // Sentinel to mark end of array
 };
@@ -210,19 +212,23 @@ static int execute_commands_from_file(int fd, const char *filename) {
 
     while (fgets(line, sizeof(line), file)) {
         line_number++;
+        // Remove leading whitespace
+        char *trimmed_line = line;
+        while (isspace(*trimmed_line)) trimmed_line++;
+
         // Remove newline character from the end of the line
-        line[strcspn(line, "\n")] = 0;
+        trimmed_line[strcspn(trimmed_line, "\n")] = 0;
         
-        // Skip empty lines and comment lines
-        if (line[0] == '\0' || line[0] == '#') {
+        // Skip empty lines and comment lines (starting with # or ;)
+        if (trimmed_line[0] == '\0' || trimmed_line[0] == '#' || trimmed_line[0] == ';') {
             continue;
         }
 
-        log_info("Send command (line %d): %s", line_number, line);
+        log_info("Send command (line %d): %s", line_number, trimmed_line);
 
         // Prepare command with CRLF
-        char command_with_crlf[strlen(line) + 3];
-        snprintf(command_with_crlf, sizeof(command_with_crlf), "%s\r\n", line);
+        char command_with_crlf[strlen(trimmed_line) + 3];
+        snprintf(command_with_crlf, sizeof(command_with_crlf), "%s\r\n", trimmed_line);
 
         // Send command and receive response
         int len = serial_send_then_recv(fd, command_with_crlf, "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
@@ -247,6 +253,7 @@ static int execute_commands_from_file(int fd, const char *filename) {
     fclose(file);
     return 0;
 }
+
 
 /**
  * @brief Writes a command or executes commands from a file to the connected serial device.
@@ -383,7 +390,7 @@ static int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
                     found_baud = baud_rates[i];
                     strncpy(device_info, (char *)recv_buf, sizeof(device_info) - 1);
 
-                    serial_send_then_recv(fd, "AT+EOUT=1\r\n", "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
+                    serial_send_then_recv(fd, "AT+EOUT=1\r\n", "OK", recv_buf, sizeof(recv_buf), 10);
                     break;
                 }
 
@@ -408,7 +415,7 @@ static int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
         printf("\nExample commands to use this device:\n");
         printf("1. Read data:\n   sudo ./hihost -p %s -b %d read\n", found_port, found_baud);
         printf("2. Send a command:\n   sudo ./hihost -p %s -b %d write \"AT+INFO\"\n", found_port, found_baud);
-        printf("3. Execute commands from a file:\n   sudo ./hihost -p %s -b %d write config.ini\n", found_port, found_baud);
+        printf("3. Execute commands from a file:\n   sudo ./hihost -p %s -b %d <FILE>\n", found_port, found_baud);
         printf("===================================\n");
         return 0;
     } else {
@@ -431,4 +438,60 @@ static int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
 static int cmd_example(GlobalOptions *opts, int argc, char *argv[]) {
     return process_example_data();
 }
+
+
+#include <string.h>
+#include <libgen.h>
+#include <limits.h>
+#include "hex2bin.h"
+
+static int cmd_hex2bin(GlobalOptions *opts, int argc, char *argv[]) {
+    if (argc != 1) {
+        log_error("Usage: hex2bin <hex_file>");
+        return -1;
+    }
+
+    const char *hex_file = argv[0];
+    char *hex_file_copy = strdup(hex_file);
+    char *base_name = basename(hex_file_copy);
+    
+    // Check file extension
+    char *ext = strrchr(base_name, '.');
+    if (ext == NULL || strcasecmp(ext, ".hex") != 0) {
+        log_error("Input file must have a .hex extension");
+        free(hex_file_copy);
+        return -1;
+    }
+
+    // Create output filename
+    char bin_file[PATH_MAX];
+    strncpy(bin_file, hex_file, sizeof(bin_file) - 1);
+    bin_file[sizeof(bin_file) - 1] = '\0';
+    char *bin_ext = strrchr(bin_file, '.');
+    if (bin_ext) {
+        strcpy(bin_ext, ".bin");
+    } else {
+        strncat(bin_file, ".bin", sizeof(bin_file) - strlen(bin_file) - 1);
+    }
+
+    uint32_t start_address;
+    size_t bin_size;
+
+    // Perform HEX to BIN conversion
+    int result = hex_to_bin(hex_file, bin_file, &start_address, &bin_size);
+    if (result == 0) {
+        log_info("HEX to BIN conversion successful");
+        log_info("Input file: %s", hex_file);
+        log_info("Output file: %s", bin_file);
+        log_info("Start address: 0x%08X", start_address);
+        log_info("Binary size: %zu bytes", bin_size);
+    } else {
+        log_error("HEX to BIN conversion failed");
+    }
+
+    free(hex_file_copy);
+    return result;
+}
+
+
 

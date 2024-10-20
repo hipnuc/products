@@ -20,6 +20,13 @@ static const struct {
     {0, B0}  // Sentinel
 };
 
+
+/**
+ * Opens a serial port device and returns a file descriptor for it.
+ *
+ * @param portname The name of the serial port device to open, e.g. "ttyUSB0".
+ * @return The file descriptor for the opened serial port, or -1 on error.
+ */
 int serial_port_open(const char *portname)
 {
     if (portname == NULL || strlen(portname) == 0) {
@@ -61,6 +68,14 @@ int serial_port_open(const char *portname)
     return fd;
 }
 
+
+/**
+ * Configures the serial port with the specified baud rate.
+ *
+ * @param fd The file descriptor of the open serial port.
+ * @param baud_rate The baud rate to set for the serial port.
+ * @return 0 on success, -1 on error.
+ */
 int serial_port_configure(int fd, int baud_rate)
 {
     if (fd < 0) return -1;
@@ -127,7 +142,6 @@ int serial_port_configure(int fd, int baud_rate)
 
 
 
-// Send data and then receive response
 int serial_send_then_recv(int fd, const char *send_str, const char *expected, char *recv_buf, size_t recv_buf_size, int timeout_ms)
 {
     if (fd < 0 || !send_str || !recv_buf || recv_buf_size == 0)
