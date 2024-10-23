@@ -2,20 +2,16 @@
 #define HEX2BIN_H
 
 #include <stdint.h>
-#include <stdio.h>
-
-#define MAX_LINE_LENGTH 256
-#define MAX_DATA_LENGTH 16
+#include <stdlib.h>
 
 typedef struct {
-    uint8_t data[MAX_DATA_LENGTH];
-    uint32_t address;
-    uint8_t length;
-    uint8_t type;
-} HexRecord;
-
-int hex_to_bin(const char *hex_file, const char *bin_file, uint32_t *start_address, size_t *bin_size);
+    uint8_t *data;
+    size_t size;
+    uint32_t start_address;
+} binary_data_t;
 
 
+binary_data_t *hex2bin_convert(const char *hex_file);
+void hex2bin_free(binary_data_t *bin_data);
 
 #endif // HEX2BIN_H

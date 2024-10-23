@@ -22,12 +22,11 @@ HiPNUC 产品软件例程包
 
 提供多种语言和平台的示例代码：
 
-- [python 示例(包含模块配置例程)](examples/python)
+- [python 示例(包含模块配置等)](examples/python)
 - [C/STM32 示例](examples/STM32)
 - [ROS (Melodic) 示例](examples/ROS_Melodic)
 - [ROS2 示例](examples/ROS2)
-- [Linux C 示例](examples/linux)
-- [Linux 固件升级示例](examples/linux_ota)
+- [Linux C 示例(包含模块配置,固件升级等)](examples/linux)
 
 ## 配置模块
 

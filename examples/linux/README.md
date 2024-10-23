@@ -1,16 +1,18 @@
 # 	Linux例程
 
+
+## 概览
 本工程在提供Linux上读取，配置HiPNUC产品的功能及示例，并提供linux命令行工具hihost的源代码及用法。hihost是一个用于读取和控制HiPNUC产品的命令行工具。它支持多种操作，包括列出可用串口、读取IMU数据、发送命令到设备，以及处理示例数据。
 
-## 支持的硬件
+### 支持的硬件
 
  所有超核IMU产品
 
-## 测试环境
+### 测试环境
 - Ubuntu 20.04 
 - 树莓派4B
 
-## 文件说明
+### 文件说明
 
 | 文件           | 说明                                     |
 | -------------- | ---------------------------------------- |
@@ -62,6 +64,7 @@ hihost [全局选项] <命令> [命令选项]
 4. `write <COMMAND>`：向设备发送命令
 5. `write <CONFIG_FILE>`：读取配置文件并根据配置内容向设备批量写入命令
 6. `example`：处理示例静态数据
+7. `update <HEX_FILE>`： 固件升级
 
 ### 使用示例
 
@@ -75,6 +78,8 @@ sudo ./hihost list
 ```sh
 sudo ./hihost probe
 ```
+
+一旦自动探测成功，后面使用其他命令后可省略 -p, -b 参数。
 
 #### 读取IMU数据
 
@@ -133,6 +138,14 @@ sudo ./hihost -p /dev/ttyUSB0 -b 115200 write ../device_setup.ini
 sudo ./hihost example
 ```
 这将处理内置的示例数据并显示结果。
+
+#### 固件升级
+
+其中firmware.hex为升级固件，请联系我司获取，升级成功后会自动重启模块
+
+```
+sudo ./hihost -p /dev/ttyUSB0 -b 115200 update firwamre.hex
+```
 
 ### 使用解码库驱动
 

@@ -19,6 +19,7 @@ set(SOURCES
     commands.c
     log.c
     fw_downloader/hex2bin.c
+    fw_downloader/kboot.c
     ../lib/example_data.c
     ../lib/hipnuc_dec.c
     ../lib/nmea_dec.c

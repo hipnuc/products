@@ -140,9 +140,148 @@ int serial_port_configure(int fd, int baud_rate)
     return 0;
 }
 
+// Write data to the serial port
+int serial_port_write(int fd, const void *buffer, int size)
+{
+    if (fd < 0 || !buffer || size <= 0)
+    {
+        return -1;
+    }
 
+    int bytes_written = write(fd, buffer, size);
+    if (bytes_written < 0)
+    {
+        return -1;
+    }
 
-int serial_send_then_recv(int fd, const char *send_str, const char *expected, char *recv_buf, size_t recv_buf_size, int timeout_ms)
+    if (tcdrain(fd) < 0)
+    {
+        return -1;
+    }
+
+    return bytes_written;
+}
+
+/**
+ * Read data from serial port with idle timeout mechanism
+ *
+ * @param fd          File descriptor of the serial port
+ * @param buffer      Buffer to store received data
+ * @param size        Maximum number of bytes to read
+ * @param timeout_ms  Idle timeout in milliseconds (timeout between bytes)
+ *
+ * @return Number of bytes read, or -1 on error
+ * @note The timeout is reset each time new data arrives
+ */
+static int serial_port_read_timeout(int fd, void *buffer, int size, int timeout_ms)
+{
+    if (fd < 0 || !buffer || size <= 0 || timeout_ms < 0)
+    {
+        fprintf(stderr, "Invalid parameters for read with timeout\n");
+        return -1;
+    }
+
+    uint8_t *buf = (uint8_t *)buffer;
+    int total_read = 0;
+    int ret;
+
+    // Setup for select() timeout
+    struct timeval tv;
+    fd_set readfds;
+
+    while (total_read < size)
+    {
+        // Reset select() parameters for each iteration
+        FD_ZERO(&readfds);
+        FD_SET(fd, &readfds);
+        
+        // Configure timeout for this iteration
+        tv.tv_sec = timeout_ms / 1000;
+        tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+        // Wait for data or timeout
+        ret = select(fd + 1, &readfds, NULL, NULL, &tv);
+
+        if (ret < 0)
+        {
+            // Handle interruption by signal
+            if (errno == EINTR)
+                continue;
+            perror("select");
+            return -1;
+        }
+        else if (ret == 0)
+        {
+            // No data received within timeout period
+            // This means the line has been idle for timeout_ms
+            break;
+        }
+        
+        // Data is available, read it
+        ret = read(fd, buf + total_read, size - total_read);
+        if (ret < 0)
+        {
+            // Handle non-blocking operations
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                continue;
+            perror("read");
+            return -1;
+        }
+        else if (ret == 0)
+        {
+            // Port closed or disconnected
+            break;
+        }
+
+        // Update total bytes read
+        total_read += ret;
+    }
+
+    return total_read;
+}
+
+// Read data from the serial port
+int serial_port_read(int fd, void *buffer, int size)
+{
+    return serial_port_read_timeout(fd, buffer, size, 1);
+}
+
+/**
+ * Send data and wait for response with idle timeout
+ *
+ * @param fd              File descriptor of the serial port
+ * @param tx_data        Data to transmit
+ * @param tx_len         Length of data to transmit
+ * @param rx_data        Buffer to store received data
+ * @param expected_rx_len Expected number of bytes to receive
+ * @param timeout_ms     Idle timeout in milliseconds
+ *
+ * @return Number of bytes received, or -1 on error
+ * @note The timeout is reset whenever new data arrives
+ */
+int serial_send_then_recv(int fd, const uint8_t *tx_data, int tx_len, 
+                         uint8_t *rx_data, int expected_rx_len, int timeout_ms) 
+{
+    if (fd < 0 || !tx_data || !rx_data || tx_len <= 0 || expected_rx_len <= 0)
+    {
+        fprintf(stderr, "Invalid parameters for send_then_recv\n");
+        return -1;
+    }
+    
+    // Clear any pending input data
+    tcflush(fd, TCIFLUSH);
+
+    // Send the data
+    if (serial_port_write(fd, tx_data, tx_len) != tx_len) {
+        fprintf(stderr, "Failed to send data\n");
+        return -1;
+    }
+
+    // Read response with idle timeout mechanism
+    return serial_port_read_timeout(fd, rx_data, expected_rx_len, timeout_ms);
+}
+
+int serial_send_then_recv_str(int fd, const char *send_str, const char *expected, char *recv_buf, size_t recv_buf_size, int timeout_ms)
 {
     if (fd < 0 || !send_str || !recv_buf || recv_buf_size == 0)
     {
@@ -150,84 +289,32 @@ int serial_send_then_recv(int fd, const char *send_str, const char *expected, ch
         return -1;
     }
 
-    // Set the port to non-blocking mode
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1)
+    int send_len = strlen(send_str);
+    int total_bytes_read = serial_send_then_recv(fd, (const uint8_t *)send_str, send_len, (uint8_t *)recv_buf, recv_buf_size - 1, timeout_ms);
+
+    if (total_bytes_read < 0)
     {
-        fprintf(stderr, "Error getting file status flags: %s\n", strerror(errno));
-        return -1;
-    }
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
-    {
-        fprintf(stderr, "Error setting non-blocking mode: %s\n", strerror(errno));
         return -1;
     }
 
-    // Send the string
-    ssize_t bytes_written = write(fd, send_str, strlen(send_str));
-    if (bytes_written < 0)
+    // Ensure null-termination
+    recv_buf[total_bytes_read] = '\0';
+
+    // Check for expected response if provided
+    if (expected && *expected)
     {
-        fprintf(stderr, "Error writing to serial port: %s\n", strerror(errno));
-        fcntl(fd, F_SETFL, flags); // Restore original flags
-        return -1;
-    }
-
-    // Clear input buffer
-    tcflush(fd, TCIFLUSH);
-
-    int total_bytes_read = 0;
-    recv_buf[0] = '\0';
-    int elapsed_time = 0;
-
-    while (elapsed_time < timeout_ms)
-    {
-        ssize_t bytes_read = read(fd, recv_buf + total_bytes_read, recv_buf_size - total_bytes_read - 1);
-        if (bytes_read > 0)
+        if (strstr(recv_buf, expected) != NULL)
         {
-            total_bytes_read += bytes_read;
-            recv_buf[total_bytes_read] = '\0'; // Ensure null-termination
-            if (expected && *expected && strstr(recv_buf, expected) != NULL)
-            {
-                fcntl(fd, F_SETFL, flags); // Restore original flags
-                return total_bytes_read;
-            }
+            return total_bytes_read;
         }
-        else if (bytes_read < 0 && errno != EAGAIN)
+        else
         {
-            fprintf(stderr, "Error reading from serial port: %s\n", strerror(errno));
-            fcntl(fd, F_SETFL, flags); // Restore original flags
+            // Expected response not found
             return -1;
         }
-
-        usleep(10000); // 10ms
-        elapsed_time += 10;
     }
 
-    // Timeout occurred
-    fcntl(fd, F_SETFL, flags); // Restore original flags
     return total_bytes_read;
-}
-
-// Write data to the serial port
-int serial_port_write(int fd, const void *buffer, int size)
-{
-    if (fd < 0 || !buffer || size <= 0)
-    {
-        fprintf(stderr, "Invalid parameters for write\n");
-        return -1;
-    }
-    return write(fd, buffer, size);
-}
-
-// Read data from the serial port
-int serial_port_read(int fd, void *buffer, int size)
-{
-    if (fd < 0 || !buffer || size <= 0)
-    {
-        fprintf(stderr, "Invalid parameters for read\n");
-        return -1;
-    }
-    return read(fd, buffer, size);
 }
 
 // Close the serial port

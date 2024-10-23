@@ -1,10 +1,12 @@
 #include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
+#include <sys/stat.h>
 
 #include "commands.h"
 #include "global_options.h"
@@ -12,7 +14,8 @@
 
 
 #define PROGRAM_NAME "hihost"
-#define VERSION "1.0.2"
+#define VERSION "1.0.3"
+
 
 static void print_usage(const char *program_name);
 static void signal_handler(int signum);
@@ -26,12 +29,23 @@ static void signal_handler(int signum);
  * @param argv The array of command-line arguments.
  * @return The exit status of the program.
  */
-int main(int argc, char *argv[]);
 int main(int argc, char *argv[]) {
     GlobalOptions opts = {
         .port_name = NULL,
         .baud_rate = 115200
     };
+
+    FILE *tmp_file = fopen(TMP_CONFIG_FILE, "r");
+    if (tmp_file) {
+        char port_buf[256];
+        int baud;
+        if (fscanf(tmp_file, "%255s %d", port_buf, &baud) == 2) {
+            opts.port_name = strdup(port_buf);
+            opts.baud_rate = baud;
+            printf("opts.port_name:%s, %d\r\n", opts.port_name, opts.baud_rate);
+        }
+        fclose(tmp_file);
+    }
 
     static struct option long_options[] = {
         {"help", no_argument, 0, 'h'},
@@ -84,7 +98,7 @@ int main(int argc, char *argv[]) {
 
 
 static void print_usage(const char *program_name) {
-    printf("%s %s - HiPNUC Configuration and Monitoring Tool\n", PROGRAM_NAME, VERSION);
+    printf("%s %s - HiPNUC Products Evaluation Tool\n", PROGRAM_NAME, VERSION);
     printf("Copyright (C) 2024 HiPNUC. All rights reserved.\n");
     printf("Website: www.hipnuc.com\n\n");
 
@@ -100,6 +114,7 @@ static void print_usage(const char *program_name) {
     printf("  list                    List all available serial ports\n");
     printf("  probe                   Automatically probe for device on all serial port\n");
     printf("  read                    Enter read mode to display IMU data\n");
+    printf("  update <HEX_FILE>       Device firmware update\n");
     printf("  write <COMMAND>         Send a single command to the device\n");
     printf("  write <CONFIG_FILE>     Execute commands from a configuration file\n");
     printf("  example                 Process example static fix data\n\n");
@@ -109,8 +124,9 @@ static void print_usage(const char *program_name) {
     printf("  %s  probe\n", program_name);
     printf("  %s  example\n", program_name);
     printf("  %s -p /dev/ttyUSB0 -b 115200 read\n", program_name);
-    printf("  %s -p /dev/ttyUSB0 write \"AT+INFO\"\n", program_name);
-    printf("  %s -p /dev/ttyUSB0 write <FILE>\n\n", program_name);
+    printf("  %s -p /dev/ttyUSB0 -b 115200 write \"AT+INFO\"\n", program_name);
+    printf("  %s -p /dev/ttyUSB0 -b 115200 write <FILE>\n", program_name);
+    printf("  %s -p /dev/ttyUSB0 -b 115200 update <HEX_FILE>\n\n", program_name);
 }
 
 static void signal_handler(int signum) {
