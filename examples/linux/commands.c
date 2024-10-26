@@ -19,6 +19,7 @@
 #define MAX_ATTEMPTS 2
 
 
+
 // Structure to hold command information
 typedef struct {
     const char *name;  // Command name
@@ -85,19 +86,22 @@ int execute_command(const char *command_name, GlobalOptions *opts, int argc, cha
  * @return int 0 on success, -1 on failure
  */
 static int cmd_list(GlobalOptions *opts, int argc, char *argv[]) {
-    PortInfo *ports;
+    PortInfo *ports = NULL;
     int count = list_serial_ports(&ports);
-    if (count > 0) {
-        print_port_list(ports, count);
-        free_port_list(ports);
-        return 0;
-    } else if (count == 0) {
-        log_info("No serial ports found.");
-        return 0;
-    } else {
+
+    if (count < 0) {
         log_error("Failed to list serial ports.");
         return -1;
     }
+
+    if (count == 0) {
+        log_info("No serial ports found.");
+        return 0;
+    }
+
+    print_port_list(ports, count);
+    free_port_list(ports);
+    return 0;
 }
 
 /**

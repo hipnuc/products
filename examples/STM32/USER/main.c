@@ -49,7 +49,7 @@
 #define USART2_BAUD 115200
 
 #define UART_RX_BUF_SIZE        (1024)
-#define LOG_STRING_SIZE         (512)
+#define LOG_STRING_SIZE         (1024)
 
 /* IMU stream read/control struct */
 static hipnuc_raw_t hipnuc_raw = {0};

@@ -27,9 +27,9 @@
 #define HIPNUC_ID_PRS           (0xF0)
 
 /* new HiPNUC standard packet */
-#define HIPNUC_ID_IMUSOL        (0x91)
-#define HIPNUC_ID_IMUBIN        (0x92)
-#define HIPNUC_ID_INSSOL        (0x81)
+#define HIPNUC_ID_HI91        (0x91)
+#define HIPNUC_ID_HI92        (0x92)
+#define HIPNUC_ID_HI81        (0x81)
 
 #ifndef D2R
 #define D2R (0.0174532925199433F)
@@ -82,7 +82,7 @@ static int parse_data(hipnuc_raw_t *raw)
             break;
         case HIPNUC_ID_ACC_RAW:
         case HIPNUC_ID_ACC_CAL:
-             raw->hi91.tag = HIPNUC_ID_IMUSOL;
+             raw->hi91.tag = HIPNUC_ID_HI91;
              raw->hi91.acc[0] = (float)I2(p + ofs + 1) / 1000;
              raw->hi91.acc[1] = (float)I2(p + ofs + 3) / 1000;
              raw->hi91.acc[2] = (float)I2(p + ofs + 5) / 1000;
@@ -90,28 +90,28 @@ static int parse_data(hipnuc_raw_t *raw)
             break;
         case HIPNUC_ID_GYR_RAW:
         case HIPNUC_ID_GYR_CAL:
-            raw->hi91.tag = HIPNUC_ID_IMUSOL;
+            raw->hi91.tag = HIPNUC_ID_HI91;
             raw->hi91.gyr[0] = (float)I2(p + ofs + 1) / 10;
             raw->hi91.gyr[1] = (float)I2(p + ofs + 3) / 10;
             raw->hi91.gyr[2] = (float)I2(p + ofs + 5) / 10;
             ofs += 7;
             break;
         case HIPNUC_ID_MAG_RAW:
-            raw->hi91.tag = HIPNUC_ID_IMUSOL;
+            raw->hi91.tag = HIPNUC_ID_HI91;
             raw->hi91.mag[0] = (float)I2(p + ofs + 1) / 10;
             raw->hi91.mag[1] = (float)I2(p + ofs + 3) / 10;
             raw->hi91.mag[2] = (float)I2(p + ofs + 5) / 10;
             ofs += 7;
             break;
         case HIPNUC_ID_EUL:
-            raw->hi91.tag = HIPNUC_ID_IMUSOL;
+            raw->hi91.tag = HIPNUC_ID_HI91;
             raw->hi91.pitch = (float)I2(p + ofs + 1) / 100;
             raw->hi91.roll = (float)I2(p + ofs + 3) / 100;
             raw->hi91.yaw = (float)I2(p + ofs + 5) / 10;
             ofs += 7;
             break;
         case HIPNUC_ID_QUAT:
-            raw->hi91.tag = HIPNUC_ID_IMUSOL;
+            raw->hi91.tag = HIPNUC_ID_HI91;
             raw->hi91.quat[0] = R4(p + ofs + 1);
             raw->hi91.quat[1] = R4(p + ofs + 5);
             raw->hi91.quat[2] = R4(p + ofs + 9);
@@ -119,19 +119,19 @@ static int parse_data(hipnuc_raw_t *raw)
             ofs += 17;
             break;
         case HIPNUC_ID_PRS:
-            raw->hi91.tag = HIPNUC_ID_IMUSOL;
-            raw->hi91.prs = R4(p + ofs + 1);
+            raw->hi91.tag = HIPNUC_ID_HI91;
+            raw->hi91.air_pressure = R4(p + ofs + 1);
             ofs += 5;
             break;
-        case HIPNUC_ID_IMUSOL:
+        case HIPNUC_ID_HI91:
             memcpy(&raw->hi91, p + ofs, sizeof(hi91_t));
             ofs += sizeof(hi91_t);
             break;
-        case HIPNUC_ID_INSSOL:
+        case HIPNUC_ID_HI81:
             memcpy(&raw->hi81, p + ofs, sizeof(hi81_t));
             ofs += sizeof(hi81_t);
             break;
-        case HIPNUC_ID_IMUBIN:
+        case HIPNUC_ID_HI92:
             memcpy(&raw->hi92, p + ofs, sizeof(hi92_t));
             ofs += sizeof(hi92_t);
             break;
@@ -222,89 +222,172 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
     int ret;
 
     /* dump 0x91 packet */
-    if(raw->hi91.tag == HIPNUC_ID_IMUSOL)
+    if(raw->hi91.tag == HIPNUC_ID_HI91)
     {
-        ret = snprintf(buf + written, buf_size - written, "%-16s0x%X\r\n", "tag:", raw->hi91.tag);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "sync_time(ms):", raw->hi91.pps_sync_ms);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "acc(m/s^(2)):", raw->hi91.acc[0]*GRAVITY, raw->hi91.acc[1]*GRAVITY, raw->hi91.acc[2]*GRAVITY);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "gyr(deg/s):", raw->hi91.gyr[0], raw->hi91.gyr[1], raw->hi91.gyr[2]);
-        if (ret > 0) written += ret;
-
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "mag(uT):", raw->hi91.mag[0], raw->hi91.mag[1], raw->hi91.mag[2]);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "Roll/Pitch/Yaw(deg):", raw->hi91.roll, raw->hi91.pitch, raw->hi91.yaw);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f %.3f\r\n", "quat:", raw->hi91.quat[0], raw->hi91.quat[1], raw->hi91.quat[2], raw->hi91.quat[3]);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "timestamp(ms):", raw->hi91.ts);
-        if (ret > 0) written += ret;
+        /* Format:
+         * system_time: ms
+         * pps_sync_stamp: ms
+         * acc: m/s²
+         * gyr: deg/s
+         * mag: uT
+         * pitch/roll/yaw: deg
+         * quat: w,x,y,z
+         * air_pressure: Pa
+         */
+        ret = snprintf(buf + written, buf_size - written,
+            "{\n"
+            "  \"type\": \"HI91\",\n"
+            "  \"system_time\": %d,\n"
+            "  \"pps_sync_stamp\": %d,\n"
+            "  \"acc\": [%.3f, %.3f, %.3f],\n"
+            "  \"gyr\": [%.3f, %.3f, %.3f],\n"
+            "  \"mag\": [%.3f, %.3f, %.3f],\n"
+            "  \"pitch\": %.2f,\n"
+            "  \"roll\": %.2f,\n"
+            "  \"yaw\": %.2f,\n"
+            "  \"quat\": [%.3f, %.3f, %.3f, %.3f],\n"
+            "  \"air_pressure\": %.1f\n"
+            "}\n",
+            raw->hi91.system_time, raw->hi91.pps_sync_stamp,
+            raw->hi91.acc[0]*GRAVITY, raw->hi91.acc[1]*GRAVITY, raw->hi91.acc[2]*GRAVITY,
+            raw->hi91.gyr[0], raw->hi91.gyr[1], raw->hi91.gyr[2],
+            raw->hi91.mag[0], raw->hi91.mag[1], raw->hi91.mag[2],
+            raw->hi91.pitch, raw->hi91.roll, raw->hi91.yaw,
+            raw->hi91.quat[0], raw->hi91.quat[1], raw->hi91.quat[2], raw->hi91.quat[3],
+            raw->hi91.air_pressure);
     }
     
     /* dump 0x92 packet */
-    if(raw->hi92.tag == HIPNUC_ID_IMUBIN)
+    else if(raw->hi92.tag == HIPNUC_ID_HI92)
     {
-        ret = snprintf(buf + written, buf_size - written, "%-16s0x%X\r\n", "tag:", raw->hi92.tag);
-        if (ret > 0) written += ret;
-    
-        ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "temperature", raw->hi92.temperature);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "sync_time(ms):", raw->hi92.sync_time);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "acc(m/s^(2)):", raw->hi92.acc_b[0]*0.0048828, raw->hi92.acc_b[1]*0.0048828, raw->hi92.acc_b[2]*0.0048828);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "gyr(deg/s):", raw->hi92.gyr_b[0]*(0.001*R2D), raw->hi92.gyr_b[1]*(0.001*R2D), raw->hi92.gyr_b[2]*(0.001*R2D));
-        if (ret > 0) written += ret;
-
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "mag(uT):", raw->hi92.mag_b[0]*0.030517, raw->hi92.mag_b[1]*0.030517, raw->hi92.mag_b[2]*0.030517);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "Roll/Pitch/Yaw(deg):", raw->hi92.roll*0.001, raw->hi92.pitch*0.001, raw->hi92.yaw*0.001);
-        if (ret > 0) written += ret;
+        /* Format:
+         * temperature: °C
+         * acc: m/s²
+         * gyr: deg/s
+         * mag: uT
+         * pitch/roll/yaw: deg
+         */
+        ret = snprintf(buf + written, buf_size - written,
+            "{\n"
+            "  \"type\": \"HI92\",\n"
+            "  \"status\": %d,\n"
+            "  \"temperature\": %d,\n"
+            "  \"pps_pps_sync_stamp\": %d,\n"
+            "  \"acc\": [%.3f, %.3f, %.3f],\n"
+            "  \"gyr\": [%.3f, %.3f, %.3f],\n"
+            "  \"mag\": [%.3f, %.3f, %.3f],\n"
+            "  \"pitch\": %.2f,\n"
+            "  \"roll\": %.2f,\n"
+            "  \"yaw\": %.2f\n"
+            "  \"quat\": [%.3f, %.3f, %.3f, %.3f],\n"
+            "}\n",
+            raw->hi92.status,
+            raw->hi92.temperature,
+            raw->hi92.pps_sync_stamp,
+            raw->hi92.acc_b[0]*0.0048828, raw->hi92.acc_b[1]*0.0048828, raw->hi92.acc_b[2]*0.0048828,
+            raw->hi92.gyr_b[0]*(0.001*R2D), raw->hi92.gyr_b[1]*(0.001*R2D), raw->hi92.gyr_b[2]*(0.001*R2D),
+            raw->hi92.mag_b[0]*0.030517, raw->hi92.mag_b[1]*0.030517, raw->hi92.mag_b[2]*0.030517,
+            raw->hi92.pitch*0.001, raw->hi92.roll*0.001, raw->hi92.yaw*0.001,
+            raw->hi91.quat[0], raw->hi91.quat[1], raw->hi91.quat[2], raw->hi91.quat[3]);
     }
 
     /* dump 0x81 packet */
-    if(raw->hi81.tag == HIPNUC_ID_INSSOL)
-    {
-        ret = snprintf(buf + written, buf_size - written, "%-16s0x%X\r\n", "tag:", raw->hi81.tag);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "solq_pos:", raw->hi81.solq_pos);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%d\r\n", "sat number:", raw->hi81.nv_pos);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.7f %.7f\r\n", "Lat/Lon(deg):", raw->hi81.ins_lat*1e-7, raw->hi81.ins_lon*1e-7);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f\r\n", "height(m):", raw->hi81.ins_msl*1e-3);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "acc(m/s^(2)):", raw->hi81.acc_b[0]*0.0048828, raw->hi81.acc_b[1]*0.0048828, raw->hi81.acc_b[2]*0.0048828);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "gyr(deg/s):", raw->hi81.gyr_b[0]*(0.001*R2D), raw->hi81.gyr_b[1]*(0.001*R2D), raw->hi81.gyr_b[2]*(0.001*R2D));
-        if (ret > 0) written += ret;
-
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "mag(uT):", raw->hi81.mag_b[0]*0.030517, raw->hi81.mag_b[1]*0.030517, raw->hi81.mag_b[2]*0.030517);
-        if (ret > 0) written += ret;
-        
-        ret = snprintf(buf + written, buf_size - written, "%-16s%.3f %.3f %.3f\r\n", "Roll/Pitch/Yaw(deg):", raw->hi81.roll*0.01, raw->hi81.pitch*0.01, raw->hi81.yaw*0.01);
-        if (ret > 0) written += ret;
+else if(raw->hi81.tag == HIPNUC_ID_HI81)
+{
+    /* Format:
+     * status: device status
+     * ins_status: INS algorithm status
+     * gpst_wn/tow: GPS week number and time of week
+     * pps_sync_stamp: PPS sync time(ms)
+     * gyr: deg/s
+     * acc: m/s²
+     * mag: uT
+     * air_pressure: Pa
+     * temperature: °C
+     * utc: YYYY-MM-DD HH:mm:ss.SSS
+     * pitch/roll/yaw: deg
+     * quat: w,x,y,z
+     * ins_lat/lon: deg
+     * ins_msl: m
+     * pdop/hdop: position/horizontal dilution of precision
+     * solq_pos: 0:invalid 1:SPP 2:DGPS 4:RTK-FLOAT 5:RTK-FIXED
+     * nv_pos: number of satellites used for position
+     * solq_heading: 0:invalid 4:valid
+     * nv_heading: number of satellites used for heading
+     * diff_age: differential age(s)
+     * undulation: geoidal separation(m)
+     * vel_enu: east,north,up velocity(m/s)
+     * acc_enu: east,north,up acceleration(m/s²)
+     */
+    ret = snprintf(buf + written, buf_size - written,
+        "{\n"
+        "  \"type\": \"HI81\",\n"
+        "  \"status\": %d,\n"
+        "  \"ins_status\": %d,\n"
+        "  \"gpst_wn\": %d,\n"
+        "  \"gpst_tow\": %d,\n"
+        "  \"pps_sync_stamp\": %d,\n"
+        "  \"gyr\": [%.3f, %.3f, %.3f],\n"
+        "  \"acc\": [%.3f, %.3f, %.3f],\n"
+        "  \"mag\": [%.3f, %.3f, %.3f],\n"
+        "  \"air_pressure\": %.1f,\n"
+        "  \"temperature\": %d,\n"
+        "  \"utc\": \"20%02d-%02d-%02d %02d:%02d:%02d.%03d\",\n"
+        "  \"pitch\": %.2f,\n"
+        "  \"roll\": %.2f,\n"
+        "  \"yaw\": %.2f,\n"
+        "  \"quat\": [%.3f, %.3f, %.3f, %.3f],\n"
+        "  \"ins_lat\": %.7f,\n"
+        "  \"ins_lon\": %.7f,\n"
+        "  \"ins_msl\": %.2f,\n"
+        "  \"pdop\": %.1f,\n"
+        "  \"hdop\": %.1f,\n"
+        "  \"solq_pos\": %d,\n"
+        "  \"nv_pos\": %d,\n"
+        "  \"solq_heading\": %d,\n"
+        "  \"nv_heading\": %d,\n"
+        "  \"diff_age\": %d,\n"
+        "  \"undulation\": %.2f,\n"
+        "  \"vel_enu\": [%.2f, %.2f, %.2f],\n"
+        "  \"acc_enu\": [%.2f, %.2f, %.2f],\n"
+        "}\n",
+        raw->hi81.status,
+        raw->hi81.ins_status,
+        raw->hi81.gpst_wn,
+        raw->hi81.gpst_tow,
+        raw->hi81.pps_sync_stamp,
+        raw->hi81.gyr_b[0]*(0.001*R2D), raw->hi81.gyr_b[1]*(0.001*R2D), raw->hi81.gyr_b[2]*(0.001*R2D),
+        raw->hi81.acc_b[0]*0.0048828, raw->hi81.acc_b[1]*0.0048828, raw->hi81.acc_b[2]*0.0048828,
+        raw->hi81.mag_b[0]*0.030517, raw->hi81.mag_b[1]*0.030517, raw->hi81.mag_b[2]*0.030517,
+        (float)raw->hi81.air_pressure,
+        raw->hi81.temperature,
+        raw->hi81.utc_year,
+        raw->hi81.utc_month,
+        raw->hi81.utc_day,
+        raw->hi81.utc_hour,
+        raw->hi81.utc_min,
+        raw->hi81.utc_msec/1000,
+        raw->hi81.utc_msec%1000,
+        raw->hi81.pitch*0.01,
+        raw->hi81.roll*0.01,
+        raw->hi81.yaw*0.01,
+        raw->hi81.quat[0]*0.0001, raw->hi81.quat[1]*0.0001, raw->hi81.quat[2]*0.0001, raw->hi81.quat[3]*0.0001,
+        raw->hi81.ins_lat*1e-7,
+        raw->hi81.ins_lon*1e-7,
+        raw->hi81.ins_msl*1e-3,
+        raw->hi81.pdop*0.1,
+        raw->hi81.hdop*0.1,
+        raw->hi81.solq_pos,
+        raw->hi81.nv_pos,
+        raw->hi81.solq_heading,
+        raw->hi81.nv_heading,
+        raw->hi81.diff_age,
+        raw->hi81.undulation*0.01,
+        raw->hi81.vel_enu[0]*0.01, raw->hi81.vel_enu[1]*0.01, raw->hi81.vel_enu[2]*0.01,
+        raw->hi81.acc_enu[0]*0.0048828, raw->hi81.acc_enu[1]*0.0048828, raw->hi81.acc_enu[2]*0.0048828);
     }
-    
+
+    if (ret > 0) written += ret;
     return written;
 }
 

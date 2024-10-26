@@ -1,44 +1,50 @@
+[English](README.md) | [中文](README_zh.md)
+
 ![Logo](img/logo.png)
 
-# 项目名称
+# HiPNUC Product Software Examples Package
 
-HiPNUC 产品软件例程包
+## Directory Structure
 
-## 目录结构
+- usb_uart_drivers/: CP210x USB-to-UART Bridge Driver
+  - Linux: Generally plug-and-play for Ubuntu 18.04 and above. If the device is not recognized, please refer to the installation guide on Silabs [official website](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=overview), or search for "CP210x driver installation on Linux" for solutions.
+  - Windows: Execute the driver installer directly
 
-- usb_uart_drivers/: CP210xUSB 转串口驱动程序
-  -  Linux: Ubuntu 18.04以上版本一般免驱. 如果未能识别请见Silabs[官网](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=overview)安装步骤, 或自行Google”Linux下安装CP210x驱动”解决。
-  -  Windows 请直接运行exe驱动安装程序
+- examples/: Example programs and source code for various platforms and languages, including STM32, ROS, Linux, MATLAB, etc.
 
-- examples: 各种平台和语言的示例程序及其源码，包括 STM32, ROS, Linux, MATLAB 等。
+## Quick Start
 
-## 快速开始
+### Windows
 
-1. 安装驱动：从 `usb_uart_drivers` 文件夹安装 USB转串口驱动程序。
-2. 下载Windows上位机软件：下载并安装 [CHCenter](http://download.hipnuc.com/internal/pc_host/CHCenter.7z)
-3. 硬件连接：将评估板的 USB 口连接到 PC，打开 CHCenter，连接到相应的 COM 口，开始产品评估。
+1. Driver Installation: Install the USB-to-UART bridge driver from the `usb_uart_drivers` folder.
+2. Host Software: Download and install [CHCenter](http://download.hipnuc.com/internal/pc_host/CHCenter.7z)
+3. Hardware Connection: Connect the evaluation board's USB port to your PC, launch CHCenter, establish connection to the corresponding COM port to begin product evaluation.
 
-## 示例代码
+### Linux
 
-提供多种语言和平台的示例代码：
+1. Recommended to start with the [Linux C examples](examples/linux)
 
-- [python 示例(包含模块配置等)](examples/python)
-- [C/STM32 示例](examples/STM32)
-- [ROS (Melodic) 示例](examples/ROS_Melodic)
-- [ROS2 示例](examples/ROS2)
-- [Linux C 示例(包含模块配置,固件升级等)](examples/linux)
+## Example Code
 
-## 配置模块
+Example code is provided for multiple languages and platforms:
 
-第一次配置模块强烈建议使用Windows上位机软件 CHCenter， 熟悉后，如果您打算用命令脚本或者在Linux环境下，可以参考python例程，里面包含基于Python的数据读取和模块配置教程。
+- [Python Examples (Including module configuration)](examples/python)
+- [C/STM32 Examples](examples/STM32)
+- [ROS (Melodic) Examples](examples/ROS_Melodic)
+- [ROS2 Examples](examples/ROS2)
+- [Linux C Examples (Includes module configuration, firmware, and reading examples - recommended for Linux users)](examples/linux)
 
-## 资源
+## Module Configuration
 
-- 官方网站：[www.hipnuc.com](http://www.hipnuc.com)
-- 产品资料和文档：[GitHub 仓库](https://github.com/hipnuc/products.git)
+For first-time configuration, it is strongly recommended to use the Windows host software CHCenter. Once familiar, if you plan to use command scripts or work in a Linux environment, refer to the Python examples which include tutorials for Python-based data reading and module configuration.
 
-## 联系我们
+## Resources
 
-欢迎通过以下方式关注我们和获取最新信息：
+- Official Website: [www.hipnuc.com](http://www.hipnuc.com)
+- Product Documentation: [GitHub Repository](https://github.com/hipnuc/products.git)
+
+## Contact Us
+
+Follow us and get the latest updates through:
 
 ![QR Code](img/qr_qqq.jpg)

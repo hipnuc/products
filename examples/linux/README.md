@@ -16,10 +16,11 @@
 
 | 文件           | 说明                                     |
 | -------------- | ---------------------------------------- |
-| main.c         | 主程序入口，处理命令行参数和调用相应命令 |
-| commands.c     | 实现各种命令的功能                       |
-| serial_port.c  | Linux C串口驱动封装                      |
+| main           | 主程序入口，处理命令行参数和调用相应命令 |
+| commands       | 实现各种命令的功能                       |
+| serial_port    | Linux C串口驱动封装                      |
 | log            | log组件                                  |
+| fw_downloader  | 固件下载相关                             |
 | CMakeLists.txt | CMake构建配置文件                        |
 
 另外本工程依赖解码库hipnuc_dec.c 和 nmea_decode.c，位于 ../lib下:

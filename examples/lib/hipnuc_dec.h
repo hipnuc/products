@@ -34,10 +34,10 @@ extern "C" {
 typedef struct __attribute__((__packed__))
 {
     uint8_t         tag;            /* Data packet tag, if tag = 0x00, means that this packet is null */
-    uint16_t        pps_sync_ms;    /* PPS synchronization time in milliseconds */
+    uint16_t        pps_sync_stamp; /* PPS synchronization time in milliseconds */
     int8_t          temp;           /* Temperature */
-    float           prs;            /* Pressure */
-    uint32_t        ts;             /* Timestamp */
+    float           air_pressure;   /* Pressure */
+    uint32_t        system_time;    /* Timestamp */
     float           acc[3];         /* Accelerometer data (x, y, z) */
     float           gyr[3];         /* Gyroscope data (x, y, z) */
     float           mag[3];         /* Magnetometer data (x, y, z) */
@@ -55,7 +55,7 @@ typedef struct __attribute__((__packed__))
     uint8_t         tag;            /* Data packet tag */
     uint16_t        status;         /* Status information */
     int8_t          temperature;    /* Temperature */
-    uint16_t        sync_time;      /* Synchronization time */
+    uint16_t        pps_sync_stamp; /* Synchronization time */
     int16_t         air_pressure;   /* Air pressure */
     int16_t         reserved;       /* Reserved field */
     int16_t         gyr_b[3];       /* Gyroscope data (raw) */
@@ -77,7 +77,7 @@ typedef struct __attribute__((__packed__))
     uint8_t         ins_status;     /* INS status */
     uint16_t        gpst_wn;        /* GPS time: week number */
     uint32_t        gpst_tow;       /* GPS time: time of week */
-    uint16_t        sync_time;      /* Synchronization time */
+    uint16_t        pps_sync_stamp; /* Synchronization time */
     int16_t         gyr_b[3];       /* Gyroscope data (raw) */
     int16_t         acc_b[3];       /* Accelerometer data (raw) */
     int16_t         mag_b[3];       /* Magnetometer data (raw) */
@@ -105,7 +105,7 @@ typedef struct __attribute__((__packed__))
     uint8_t         nv_heading;     /* Number of satellites used for heading */
     uint8_t         diff_age;       /* Differential age */
     int16_t         undulation;     /* Undulation */
-    uint8_t         reserved;       /* Reserved field */
+    uint8_t         ant_status;     /* Reserved field */
     int16_t         vel_enu[3];     /* Velocity in ENU frame */
     int16_t         acc_enu[3];     /* Acceleration in ENU frame */
     int32_t         gnss_lon;       /* GNSS longitude */
