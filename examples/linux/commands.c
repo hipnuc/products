@@ -333,7 +333,7 @@ static int cmd_write(GlobalOptions *opts, int argc, char *argv[]) {
             }
             printf("\n");  // Ensure output ends with a newline
         } else {
-            log_info("No response or error.");
+            log_info("No response or error. try: sudo ./hihost probe");
         }
     }
 
@@ -391,7 +391,7 @@ static int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
         return -1;
     }
 
-    int baud_rates[] = {115200, 921600, 9600, 460800};
+    int baud_rates[] = {115200, 921600, 9600, 460800, 230400, 256000};
     int num_baud_rates = sizeof(baud_rates) / sizeof(baud_rates[0]);
 
     bool device_found = false;

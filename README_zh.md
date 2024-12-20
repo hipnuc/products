@@ -17,7 +17,7 @@
 ### Windows
 
 1. 安装驱动: 从 `usb_uart_drivers` 文件夹安装 USB转串口驱动程序。
-2. 下载Windows上位机软件：下载并安装 [CHCenter](http://download.hipnuc.com/internal/pc_host/CHCenter.7z)
+2. 下载Windows上位机软件：下载并安装 [CHCenter](https://download.hipnuc.com/internal/pc_host/CHCenter.7z)
 3. 硬件连接：将评估板的 USB 口连接到 PC，打开 CHCenter，连接到相应的 COM 口，开始产品评估。
 
 ### linux

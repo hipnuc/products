@@ -17,7 +17,7 @@
 ### Windows
 
 1. Driver Installation: Install the USB-to-UART bridge driver from the `usb_uart_drivers` folder.
-2. Host Software: Download and install [CHCenter](http://download.hipnuc.com/internal/pc_host/CHCenter.7z)
+2. Host Software: Download and install [CHCenter](https://download.hipnuc.com/internal/pc_host/CHCenter.7z)
 3. Hardware Connection: Connect the evaluation board's USB port to your PC, launch CHCenter, establish connection to the corresponding COM port to begin product evaluation.
 
 ### Linux
