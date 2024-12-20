@@ -22,7 +22,7 @@
   </DaveTm>
 
   <Target>
-    <TargetName>imu_decode</TargetName>
+    <TargetName>hipnuc_decode</TargetName>
     <ToolsetNumber>0x4</ToolsetNumber>
     <ToolsetName>ARM-ADS</ToolsetName>
     <TargetOption>
