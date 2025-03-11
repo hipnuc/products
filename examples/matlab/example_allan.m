@@ -38,20 +38,15 @@ for i = 1:3
 end
 fprintf('\n');
 
-% 定义tau值（使用整数倍的采样周期）
-m = logspace(0, log10(floor(length(gyr)/2)), 1000);
-m = unique(round(m));  % 确保m是唯一的整数值
-tau = m / 100;
-
 % 创建图形
 figure('Name', 'Gyroscope Allan Deviation');
 figure('Name', 'Accelerometer Allan Deviation');
 colors = { 'r', 'g', 'b'};
 for i = 1:3
     % 陀螺仪Allan方差分析
-    [avar_gyr, tau_gyr] = allanVar(gyr(:,i)*3600, 1/Fs);
+    [avar_gyr, tau_gyr] = allanVar(gyr(:,i)*3600, imu_dt);
     % 加速度计Allan方差分析
-    [avar_acc, tau_acc] = allanVar(acc(:,i)*1e6, 1/Fs);
+    [avar_acc, tau_acc] = allanVar(acc(:,i)*1e6, imu_dt);
     % 绘制陀螺仪Allan偏差曲线
     figure(1);
     loglog(tau_gyr, avar_gyr, colors{i}, 'LineWidth', 2);
@@ -75,7 +70,7 @@ for i = 1:3
     [min_avar, min_index] = min(avar_gyr_filtered);
     min_tau = tau_gyr_filtered(min_index);
     
-    B_gyr = min_avar;   % 零偏不稳定性 (deg/s)
+    B_gyr = min_avar;   % 零偏不稳定性 (deg/h)
 
     % 加速度计
     % 使用这些索引找到对应的 avar_gyr 值
@@ -85,7 +80,7 @@ for i = 1:3
     % 查找过滤后的 avar_gyr 的最小值
     [min_avar, min_index] = min(avar_acc_filtered);
 
-    B_acc = min_avar;   % 零偏不稳定性 (G)
+    B_acc = min_avar;   % 零偏不稳定性 (uG)
 
     % 输出结果
     fprintf('Results for %s Axis:\n', axis_names{i});
@@ -96,7 +91,6 @@ for i = 1:3
 end
 axis_temp = {'1', '2', '3'};
 figure(1);
-%title('Root Allan Variance of gyro');
 title('Gyroscope Allan Deviation - All Axex');
 xlabel('Averaging time,τ (s)');
 ylabel('Allan Deviation (deg/h)');
