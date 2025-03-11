@@ -2,14 +2,12 @@ clear;
 clc;
 close all;
 
-%读取数据
-imudata = readtable('D:\WANGFENG\CHAOHE\040数据\040-1.csv'); 
-
+%% 读取数据
+load('imudata.mat');
 R2D = 180/pi;       % Rad to Deg
 D2R = pi/180;       % Deg to Rad
 GRAVITY = 9.80665;  % 标准重力加速度 (m/s^2)
 
-% 单位转换
 acc = [imudata.AccX, imudata.AccY, imudata.AccZ];
 gyr = [imudata.GyrX, imudata.GyrY, imudata.GyrZ];
 
@@ -18,7 +16,6 @@ total_samples = length(acc);
 total_time = (imudata.TimeStamp(end) - imudata.TimeStamp(1)) / 1000; % 总时间（秒）
 imu_dt = mean(diff(imudata.TimeStamp)) / 1000;
 Fs = 1 / imu_dt; % 采样频率
-
 
 %% 数据信息
 fprintf('数据信息:\n');
@@ -52,18 +49,17 @@ figure('Name', 'Accelerometer Allan Deviation');
 colors = { 'r', 'g', 'b'};
 for i = 1:3
     % 陀螺仪Allan方差分析
-    [avar_gyr, tau_gyr] = allanvar(gyr(:,i), m, Fs);
+    [avar_gyr, tau_gyr] = allanVar(gyr(:,i)*3600, 1/Fs);
     % 加速度计Allan方差分析
-    [avar_acc, tau_acc] = allanvar(acc(:,i), m, Fs);
-
+    [avar_acc, tau_acc] = allanVar(acc(:,i)*1e6, 1/Fs);
     % 绘制陀螺仪Allan偏差曲线
     figure(1);
-    loglog(tau_gyr, sqrt(avar_gyr), colors{i}, 'LineWidth', 2);
+    loglog(tau_gyr, avar_gyr, colors{i}, 'LineWidth', 2);
     hold on;
 
     % 绘制加速度计Allan偏差曲线
     figure(2);
-    loglog(tau_acc, sqrt(avar_acc), colors{i}, 'LineWidth', 2);
+    loglog(tau_acc, avar_acc, colors{i}, 'LineWidth', 2);
     hold on;
 
     % 计算一些关键参数
@@ -79,7 +75,7 @@ for i = 1:3
     [min_avar, min_index] = min(avar_gyr_filtered);
     min_tau = tau_gyr_filtered(min_index);
     
-    B_gyr = sqrt(min_avar);   % 零偏不稳定性 (deg/s)
+    B_gyr = min_avar;   % 零偏不稳定性 (deg/s)
 
     % 加速度计
     % 使用这些索引找到对应的 avar_gyr 值
@@ -88,23 +84,15 @@ for i = 1:3
 
     % 查找过滤后的 avar_gyr 的最小值
     [min_avar, min_index] = min(avar_acc_filtered);
-    
-    VRW = sqrt(avar_acc(1)) * 60;  % 速度随机游走 (G/sqrt(hr))
-    B_acc = sqrt(min_avar);   % 零偏不稳定性 (G)
+
+    B_acc = min_avar;   % 零偏不稳定性 (G)
 
     % 输出结果
     fprintf('Results for %s Axis:\n', axis_names{i});
     fprintf('Gyroscope (Allan Variance):\n');
-    fprintf('  零偏不稳定性: %.6f deg/h\n', B_gyr * 3600);
+    fprintf('  零偏不稳定性: %.6f deg/h\n', B_gyr);
     fprintf('Accelerometer (Allan Variance):\n');
-    fprintf('  零偏不稳定性: %.6f uG\n', B_acc * 1e6);
- %{   
-    fprintf('Results for %s Axis:\n', axis_names{i});
-    fprintf('Gyroscope (Allan Variance):\n');
-    fprintf('  随机游走: %.6f deg/h\n', ARW);
-    fprintf('Accelerometer (Allan Variance):\n');
-    fprintf('  随机游走: %.6f m/s/sqrt(h)\n', VRW * 9.8);
-%}
+    fprintf('  零偏不稳定性: %.6f uG\n', B_acc );
 end
 axis_temp = {'1', '2', '3'};
 figure(1);
@@ -119,7 +107,7 @@ hold off;
 figure(2);
 title('Accelerometer Allan Deviation - All Axes');
 xlabel('Averaging time,τ (s)');
-ylabel('Allan Deviation (mg)');
+ylabel('Allan Deviation (ug)');
 legend(axis_names);
 grid on;
 hold off;
@@ -147,4 +135,18 @@ for i = 1:3
     fprintf('  陀螺仪零偏稳定性: %.6f deg/h\n', gyr_std * 3600);
     fprintf('  加速度计零偏稳定性: %.6f uG\n\n', acc_std * 1e6);
 end
-
+%Allan方差计算函数-psins 
+function [sigma, tau, Err] = allanVar(y0, tau0)
+    N = length(y0);
+    y = y0; NL = N;
+    for k = 1:log2(N)
+        sigma(k,1) = sqrt(1/(2*(NL-1))*sum((y(2:NL)-y(1:NL-1)).^2)); % diff&std
+        tau(k,1) = 2^(k-1)*tau0;      % correlated time
+        Err(k,1) = 1/sqrt(2*(NL-1));  % error boundary
+        NL = floor(NL/2);
+        if NL<3
+            break;
+        end
+        y = 1/2*(y(1:2:2*NL) + y(2:2:2*NL));  % mean & half data length
+    end
+end
