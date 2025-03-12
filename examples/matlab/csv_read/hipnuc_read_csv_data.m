@@ -33,52 +33,53 @@ hi91_data = data(strcmp(data.frame_type, 'HI91'), :);
 % Convert system time to seconds from start
 time = (hi91_data.sys_time - hi91_data.sys_time(1)) / 1000; % Convert to seconds
 
-%% Create figure for accelerometer data
-figure('Name', 'Accelerometer Data', 'Position', [100 100 800 400]);
-plot(time, hi91_data.acc_x, 'r-', 'LineWidth', 1.5);
+%% Create a single figure with subplots for all data
+figure('Name', 'IMU Data Visualization', 'Position', [100 100 1200 800]);
+
+% Subplot for accelerometer data
+subplot(2, 2, 1);
+plot(time, hi91_data.acc_x, 'r.-');
 hold on;
-plot(time, hi91_data.acc_y, 'g-', 'LineWidth', 1.5);
-plot(time, hi91_data.acc_z, 'b-', 'LineWidth', 1.5);
+plot(time, hi91_data.acc_y, 'g.-');
+plot(time, hi91_data.acc_z, 'b.-');
 grid on;
 xlabel('Time (s)');
 ylabel('Acceleration (g)');
 title('Accelerometer Measurements');
 legend('X-axis', 'Y-axis', 'Z-axis');
 
-%% Create figure for gyroscope data
-figure('Name', 'Gyroscope Data', 'Position', [100 550 800 400]);
-plot(time, hi91_data.gyr_x, 'r-', 'LineWidth', 1.5);
+% Subplot for gyroscope data
+subplot(2, 2, 2);
+plot(time, hi91_data.gyr_x, 'r.-');
 hold on;
-plot(time, hi91_data.gyr_y, 'g-', 'LineWidth', 1.5);
-plot(time, hi91_data.gyr_z, 'b-', 'LineWidth', 1.5);
+plot(time, hi91_data.gyr_y, 'g.-');
+plot(time, hi91_data.gyr_z, 'b.-');
 grid on;
 xlabel('Time (s)');
 ylabel('Angular Rate (deg/s)');
 title('Gyroscope Measurements');
 legend('X-axis', 'Y-axis', 'Z-axis');
 
-%% Create figure for magnetometer data
-figure('Name', 'Magnetometer Data', 'Position', [950 100 800 400]);
-plot(time, hi91_data.mag_x, 'r-', 'LineWidth', 1.5);
+% Subplot for magnetometer data
+subplot(2, 2, 3);
+plot(time, hi91_data.mag_x, 'r.-');
 hold on;
-plot(time, hi91_data.mag_y, 'g-', 'LineWidth', 1.5);
-plot(time, hi91_data.mag_z, 'b-', 'LineWidth', 1.5);
+plot(time, hi91_data.mag_y, 'g.-');
+plot(time, hi91_data.mag_z, 'b.-');
 grid on;
 xlabel('Time (s)');
 ylabel('Magnetic Field (uT)');
 title('Magnetometer Measurements');
 legend('X-axis', 'Y-axis', 'Z-axis');
 
-%% Create figure for Euler angles
-figure('Name', 'Euler Angles', 'Position', [950 550 800 400]);
-plot(time, hi91_data.roll, 'r-', 'LineWidth', 1.5);
+% Subplot for Euler angles
+subplot(2, 2, 4);
+plot(time, hi91_data.roll, 'r.-');
 hold on;
-plot(time, hi91_data.pitch, 'g-', 'LineWidth', 1.5);
-plot(time, hi91_data.yaw, 'b-', 'LineWidth', 1.5);
+plot(time, hi91_data.pitch, 'g.-');
+plot(time, hi91_data.yaw, 'b.-');
 grid on;
 xlabel('Time (s)');
 ylabel('Angle (deg)');
 title('Euler Angles');
 legend('Roll', 'Pitch', 'Yaw');
-
-
