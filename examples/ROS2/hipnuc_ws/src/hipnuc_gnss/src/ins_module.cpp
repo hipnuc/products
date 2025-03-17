@@ -12,8 +12,8 @@
 extern "C"{
 #endif
 #include <poll.h>
-#include "hipnuc_dec.h"
-#include "nmea_decode.h"
+#include "hipnuc_lib_package/hipnuc_dec.h"
+#include "hipnuc_lib_package/nmea_decode.h"
 
 #define GRA_ACC     (9.8)
 #define DEG_TO_RAD  (0.01745329)

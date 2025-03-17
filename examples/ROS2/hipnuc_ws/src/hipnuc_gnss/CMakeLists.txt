@@ -21,6 +21,7 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(gps_msgs REQUIRED)
+find_package(hipnuc_lib_package REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -33,8 +34,8 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_executable(talker_INS src/ins_module.cpp src/hipnuc_dec.c src/nmea_decode.c) 
-ament_target_dependencies(talker_INS rclcpp std_msgs sensor_msgs gps_msgs)
+add_executable(talker_INS src/ins_module.cpp ) 
+ament_target_dependencies(talker_INS rclcpp std_msgs sensor_msgs gps_msgs hipnuc_lib_package)
 
 add_executable(listener_INS src/sub_nav.cpp)
 ament_target_dependencies(listener_INS rclcpp std_msgs sensor_msgs gps_msgs)

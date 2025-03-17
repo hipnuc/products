@@ -20,6 +20,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(hipnuc_lib_package REQUIRED)
 
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -36,8 +37,13 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_executable(talker src/serial_port.cpp src/hipnuc_dec.c)
-ament_target_dependencies(talker rclcpp std_msgs sensor_msgs)
+add_executable(talker src/serial_port.cpp)
+ament_target_dependencies(talker rclcpp std_msgs sensor_msgs hipnuc_lib_package)
+
+set_target_properties(talker PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
+)
 
 add_executable(listener src/sub_spec.cpp)
 ament_target_dependencies(listener rclcpp std_msgs sensor_msgs)
