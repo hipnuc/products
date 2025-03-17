@@ -1,0 +1,78 @@
+# ROS2 build directories
+build/
+install/
+log/
+
+# Compiled Object files
+*.o
+*.obj
+*.so
+*.a
+*.la
+*.lo
+*.dll
+*.dylib
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Colcon specific
+.colcon_cd_root
+COLCON_IGNORE
+
+# Log files
+*.log
+
+# ROS specific
+.catkin_workspace
+
+# Backup files
+*.bak
+*~
+
+# Generated documentation
+html/
+latex/
+doxygen/
+
+# User-specific files
+.env
+.envrc

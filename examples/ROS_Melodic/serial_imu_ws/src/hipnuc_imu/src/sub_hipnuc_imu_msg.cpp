@@ -8,7 +8,7 @@
 #include <hipnuc_imu/hipnuc_imu_msg.h>
 #include <hipnuc_imu/Imu_0x91_package.h>
 #include <hipnuc_imu/Imu_0x92_package.h>
-#include "hipnuc.h"
+#include "hipnuc_lib_package/hipnuc_dec.h"
 
 void imu_callback_hipnuc(const hipnuc_imu::hipnuc_imu_msg imu_msg_hipnuc);
 
@@ -41,8 +41,6 @@ void imu_callback_hipnuc(const hipnuc_imu::hipnuc_imu_msg imu_msg_hipnuc)
 
 		printf("%16s %d days  %d:%d:%d:%d\n","Run Time:", imu_msg_hipnuc.hi91_data.system_time / 86400000, imu_msg_hipnuc.hi91_data.system_time / 3600000 % 24, imu_msg_hipnuc.hi91_data.system_time / 60000 % 60, imu_msg_hipnuc.hi91_data.system_time / 1000 % 60, imu_msg_hipnuc.hi91_data.system_time % 1000);
 
-		printf("%16s %8d\r\n","PPS TIme:", imu_msg_hipnuc.hi91_data.pps_sync_stamp);
-
 		printf("%16s %8.3f %8.3f %8.3f\r\n", "Acc(G):", imu_msg_hipnuc.hi91_data.acc_x, imu_msg_hipnuc.hi91_data.acc_y, imu_msg_hipnuc.hi91_data.acc_z);
 
 		printf("%16s %8.2f %8.2f %8.2f\r\n", "Gyr(deg/s):", imu_msg_hipnuc.hi91_data.gyr_x, imu_msg_hipnuc.hi91_data.gyr_y, imu_msg_hipnuc.hi91_data.gyr_z);
@@ -62,8 +60,6 @@ void imu_callback_hipnuc(const hipnuc_imu::hipnuc_imu_msg imu_msg_hipnuc)
 		printf("%16s %8f\n", "Prs(hPa):", imu_msg_hipnuc.hi92_data.air_pressure);
 
 		printf("%16s %8d\n", "Temperature:", imu_msg_hipnuc.hi92_data.temperature);
-
-		printf("%16s %8d\r\n","PPS TIme:", imu_msg_hipnuc.hi92_data.pps_sync_stamp);
 
 		printf("%16s %8.3f %8.3f %8.3f\r\n", "Acc(G):", imu_msg_hipnuc.hi92_data.acc_x, imu_msg_hipnuc.hi92_data.acc_y, imu_msg_hipnuc.hi92_data.acc_z);
 

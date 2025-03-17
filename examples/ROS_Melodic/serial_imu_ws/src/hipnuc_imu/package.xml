@@ -31,6 +31,8 @@
   <exec_depend>message_generation</exec_depend> 
   <exec_depend>message_runtime</exec_depend>
 
+  <build_depend>hipnuc_lib_package</build_depend>
+  <exec_depend>hipnuc_lib_package</exec_depend>
  <url>http://ros.org/wiki/sensor_mags</url>
 
   <export>

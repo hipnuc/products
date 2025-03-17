@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/NavSatFix.h>
-#include <gps_common/GPSFix.h>
-#include <gps_common/GPSStatus.h>
+// #include <gps_common/GPSFix.h>
+// #include <gps_common/GPSStatus.h>
 
 #ifdef __cplusplus 
 extern "C"{
@@ -18,8 +18,8 @@ extern "C"{
 #include <termios.h>
 #include <poll.h>
 
-#include "hipnuc.h"
-#include "nmea_decode.h"
+#include "hipnuc_lib_package/hipnuc_dec.h"
+#include "hipnuc_lib_package/nmea_decode.h"
 
 #define GRA_ACC      (9.8)
 #define DEG_TO_RAD   (0.01745329)
@@ -37,8 +37,8 @@ extern "C"{
 void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data);
 void publish_nav_data(nmea_raw_t *data, sensor_msgs::NavSatFix *NavSatFix_data);
 void publish_ins_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data, sensor_msgs::NavSatFix *NavSatFix_data);
-void publish_gpsfix_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data, gps_common::GPSFix * GPSFix_data);
-void publish_gpsstatus_data(hipnuc_raw_t *data, gps_common::GPSStatus *GPSStatus_data);
+// void publish_gpsfix_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data, gps_common::GPSFix * GPSFix_data);
+// void publish_gpsstatus_data(hipnuc_raw_t *data, gps_common::GPSStatus *GPSStatus_data);
 
 
 #ifdef __cplusplus
@@ -48,8 +48,8 @@ void publish_gpsstatus_data(hipnuc_raw_t *data, gps_common::GPSStatus *GPSStatus
 ros::Publisher IMU_pub, NavSatFix_pub, GPSFix_pub, GPSStatus_pub;
 sensor_msgs::Imu imu_data;
 sensor_msgs::NavSatFix NavSatFix_data;
-gps_common::GPSFix GPSFix_data;
-gps_common::GPSStatus GPSStatus_data;
+// gps_common::GPSFix GPSFix_data;
+// gps_common::GPSStatus GPSStatus_data;
 
 int n = 0;
 int rev = 0;

@@ -49,18 +49,21 @@ include_directories(
   ${catkin_INCLUDE_DIRS} 
 )
 
- add_executable(serial_hipnuc_msg src/serial_hipnuc_msg.cpp src/hipnuc_dec.c)
- target_link_libraries(serial_hipnuc_msg ${catkin_LIBRARIES})
+
+ add_executable(serial_hipnuc_msg src/serial_hipnuc_msg.cpp )
+ #add_executable(serial_hipnuc_msg src/serial_hipnuc_msg.cpp src/hipnuc_dec.c)
+ target_link_libraries(serial_hipnuc_msg ${catkin_LIBRARIES} hipnuc_lib)
  add_dependencies(serial_hipnuc_msg ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
  add_dependencies(serial_hipnuc_msg ${PROJECT_NAME}_generate_messages_cpp)
 
  add_executable(sub_hipnuc_imu_msg src/sub_hipnuc_imu_msg.cpp)
- target_link_libraries(sub_hipnuc_imu_msg ${catkin_LIBRARIES})
+ target_link_libraries(sub_hipnuc_imu_msg ${catkin_LIBRARIES} hipnuc_lib) 
  add_dependencies(sub_hipnuc_imu_msg ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
  add_dependencies(sub_hipnuc_imu_msg ${PROJECT_NAME}_generate_messages_cpp)
 
-add_executable(serial_imu src/serial_imu.cpp src/hipnuc_dec.c)
-target_link_libraries(serial_imu ${catkin_LIBRARIES}) 
+add_executable(serial_imu src/serial_imu.cpp )
+#add_executable(serial_imu src/serial_imu.cpp src/hipnuc_dec.c)
+target_link_libraries(serial_imu ${catkin_LIBRARIES} hipnuc_lib) 
 
  add_executable(sub_spec src/sub_spec.cpp)
  add_dependencies(sub_spec ${${PROJECT_NAME}_EXPORTED_TARGETS} 

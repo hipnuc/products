@@ -30,7 +30,6 @@ class hipnuc_frame:
         self.gyr = None
         self.mag = None
         self.quat = None
-        self.sync_time = None
         self.roll = None
         self.pitch = None
         self.yaw = None
@@ -99,7 +98,6 @@ class hipnuc_parser:
             return ofs + 1
 
     def _parse_hi91(self, data, ofs):
-        self.frame.sync_time = struct.unpack_from('<H', data, ofs + 1)[0] * 1e-3
         self.frame.temperature = struct.unpack_from('<b', data, ofs + 3)[0]
         self.frame.pressure = struct.unpack_from('<f', data, ofs + 4)[0]
         self.frame.system_time_ms = struct.unpack_from('<I', data, ofs + 8)[0]
@@ -114,7 +112,6 @@ class hipnuc_parser:
     def _parse_hi92(self, data, ofs):
         # self.frame.status = struct.unpack_from('<H', data, ofs + 1)[0]
         self.frame.temperature = struct.unpack_from('<b', data, ofs + 3)[0]
-        self.frame.sync_time = struct.unpack_from('<H', data, ofs + 4)[0] * 1e-3
         self.frame.pressure = struct.unpack_from('<h', data, ofs + 6)[0] + 100000
         self.frame.gyr = [x * 0.001 * R2D for x in struct.unpack_from('<3h', data, ofs + 10)]
         self.frame.acc = [x * 0.0048828 / GRAVITY for x in struct.unpack_from('<3h', data, ofs + 16)]
@@ -128,7 +125,6 @@ class hipnuc_parser:
         self.frame.ins_status = struct.unpack_from('<B', data, ofs + 3)[0]
         self.frame.gpst_wn = struct.unpack_from('<H', data, ofs + 4)[0]
         self.frame.gpst_tow = struct.unpack_from('<I', data, ofs + 6)[0] * 1e-3
-        self.frame.sync_time = struct.unpack_from('<H', data, ofs + 10)[0] * 1e-3
         self.frame.gyr = [x * 0.001 * R2D for x in struct.unpack_from('<3h', data, ofs + 12)]  # Convert to degrees per second
         self.frame.acc = [x * 0.0048828 / GRAVITY for x in struct.unpack_from('<3h', data, ofs + 18)]  # Convert to G
         self.frame.mag = [x * 0.030517 for x in struct.unpack_from('<3h', data, ofs + 24)]  # Convert to uT
@@ -202,7 +198,6 @@ class hipnuc_parser:
                 ("Temperature (C)",        f"{data.temperature:<6}" if data.temperature is not None else None),
                 ("Pressure (Pa)",          f"{data.pressure:<9.3f}" if data.pressure is not None else None),
                 ("System_time_ms",         f"{data.system_time_ms:<9}" if data.system_time_ms is not None else None),
-                ("Sync_time (s)",          f"{data.sync_time:<9.3f}" if data.sync_time is not None else None),
                 ("Roll (deg)",             f"{data.roll:<9.3f}" if data.roll is not None else None),
                 ("Pitch (deg)",            f"{data.pitch:<9.3f}" if data.pitch is not None else None),
                 ("Yaw (deg)",              f"{data.yaw:<9.3f}" if data.yaw is not None else None),

@@ -19,7 +19,7 @@ extern "C"{
 #include <fcntl.h>
 #include <termios.h> /* POSIX terminal control definitions */
 #include <poll.h>
-#include "hipnuc.h"
+#include "hipnuc_lib_package/hipnuc_dec.h"
 
 #define GRA_ACC      (9.8)
 #define DEG_TO_RAD   (0.01745329)
@@ -201,9 +201,8 @@ void imu_0x91_data(hipnuc_raw_t *data, hipnuc_imu::hipnuc_imu_msg *data_imu)
 
 	data_imu->hi91_data.tag = data->hi91.tag;
 
-	data_imu->hi91_data.system_time = data->hi91.ts;
-	data_imu->hi91_data.air_pressure = data->hi91.prs;
-	data_imu->hi91_data.pps_sync_stamp = data->hi91.pps_sync_ms;
+	data_imu->hi91_data.system_time = data->hi91.system_time;
+	data_imu->hi91_data.air_pressure = data->hi91.air_pressure;
 	data_imu->hi91_data.temperature = data->hi91.temp;
 
 	data_imu->hi91_data.acc_x = data->hi91.acc[0];
@@ -237,7 +236,6 @@ void imu_0x92_data(hipnuc_raw_t *data, hipnuc_imu::hipnuc_imu_msg *data_imu)
 	data_imu->hi92_data.tag = data->hi92.tag;
 
 	data_imu->hi92_data.air_pressure = data->hi92.air_pressure;
-	data_imu->hi92_data.pps_sync_stamp = data->hi92.sync_time;
 	data_imu->hi92_data.temperature = data->hi92.temperature;
 
 	data_imu->hi92_data.acc_x = data->hi92.acc_b[0] * ACC_FACTOR;
