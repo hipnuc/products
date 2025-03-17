@@ -226,7 +226,6 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
     {
         /* Format:
          * system_time: ms
-         * pps_sync_stamp: ms
          * acc: m/s²
          * gyr: deg/s
          * mag: uT
@@ -238,7 +237,6 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
             "{\n"
             "  \"type\": \"HI91\",\n"
             "  \"system_time\": %d,\n"
-            "  \"pps_sync_stamp\": %d,\n"
             "  \"acc\": [%.3f, %.3f, %.3f],\n"
             "  \"gyr\": [%.3f, %.3f, %.3f],\n"
             "  \"mag\": [%.3f, %.3f, %.3f],\n"
@@ -248,7 +246,7 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
             "  \"quat\": [%.3f, %.3f, %.3f, %.3f],\n"
             "  \"air_pressure\": %.1f\n"
             "}\n",
-            raw->hi91.system_time, raw->hi91.pps_sync_stamp,
+            raw->hi91.system_time,
             raw->hi91.acc[0]*GRAVITY, raw->hi91.acc[1]*GRAVITY, raw->hi91.acc[2]*GRAVITY,
             raw->hi91.gyr[0], raw->hi91.gyr[1], raw->hi91.gyr[2],
             raw->hi91.mag[0], raw->hi91.mag[1], raw->hi91.mag[2],
@@ -272,7 +270,6 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
             "  \"type\": \"HI92\",\n"
             "  \"status\": %d,\n"
             "  \"temperature\": %d,\n"
-            "  \"pps_pps_sync_stamp\": %d,\n"
             "  \"acc\": [%.3f, %.3f, %.3f],\n"
             "  \"gyr\": [%.3f, %.3f, %.3f],\n"
             "  \"mag\": [%.3f, %.3f, %.3f],\n"
@@ -283,7 +280,6 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
             "}\n",
             raw->hi92.status,
             raw->hi92.temperature,
-            raw->hi92.pps_sync_stamp,
             raw->hi92.acc_b[0]*0.0048828, raw->hi92.acc_b[1]*0.0048828, raw->hi92.acc_b[2]*0.0048828,
             raw->hi92.gyr_b[0]*(0.001*R2D), raw->hi92.gyr_b[1]*(0.001*R2D), raw->hi92.gyr_b[2]*(0.001*R2D),
             raw->hi92.mag_b[0]*0.030517, raw->hi92.mag_b[1]*0.030517, raw->hi92.mag_b[2]*0.030517,
@@ -298,7 +294,6 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
      * status: device status
      * ins_status: INS algorithm status
      * gpst_wn/tow: GPS week number and time of week
-     * pps_sync_stamp: PPS sync time(ms)
      * gyr: deg/s
      * acc: m/s²
      * mag: uT
@@ -326,7 +321,6 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
         "  \"ins_status\": %d,\n"
         "  \"gpst_wn\": %d,\n"
         "  \"gpst_tow\": %d,\n"
-        "  \"pps_sync_stamp\": %d,\n"
         "  \"gyr\": [%.3f, %.3f, %.3f],\n"
         "  \"acc\": [%.3f, %.3f, %.3f],\n"
         "  \"mag\": [%.3f, %.3f, %.3f],\n"
@@ -355,7 +349,6 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
         raw->hi81.ins_status,
         raw->hi81.gpst_wn,
         raw->hi81.gpst_tow,
-        raw->hi81.pps_sync_stamp,
         raw->hi81.gyr_b[0]*(0.001*R2D), raw->hi81.gyr_b[1]*(0.001*R2D), raw->hi81.gyr_b[2]*(0.001*R2D),
         raw->hi81.acc_b[0]*0.0048828, raw->hi81.acc_b[1]*0.0048828, raw->hi81.acc_b[2]*0.0048828,
         raw->hi81.mag_b[0]*0.030517, raw->hi81.mag_b[1]*0.030517, raw->hi81.mag_b[2]*0.030517,

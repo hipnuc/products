@@ -22,17 +22,18 @@
 
 ### linux
 
-1. 推荐直接使用[Linux C 示例](examples/linux)入门
+1. 推荐直接使用[C - Linux](examples/linux)入门
 
 ## 示例代码
 
 提供多种语言和平台的示例代码：
 
-- [python 示例(包含模块配置等)](examples/python)
-- [C/STM32 示例](examples/STM32)
-- [ROS (Melodic) 示例](examples/ROS_Melodic)
-- [ROS2 示例](examples/ROS2)
-- [Linux C 示例(包括模块配置,固件,读取示例等，Linux下入门推荐)](examples/linux)
+- [Python](examples/python): 包含数据读取及模块配置
+- [C - STM32](examples/STM32)
+- [ROS Melodic](examples/ROS_Melodic)
+- [ROS2](examples/ROS2)
+- [C - Linux](examples/linux): 包括模块配置,固件,读取示例等，Linux下入门推荐
+- [Matlab](examples/matlab): 包含读取CHCenter记录的log文件以及allan方差分析示例代码.
 
 ## 配置模块
 

@@ -108,7 +108,7 @@ gyr_bi = zeros(3, 1);
 acc_bi = zeros(3, 1);
 gyr_bi_tau = zeros(3, 1);
 acc_bi_tau = zeros(3, 1);
-numPoints = 100;
+numPoints = 200;
 
 % ÍÓÂÝÒÇ×ÓÍ¼
 subplot(2, 1, 1);
@@ -143,7 +143,7 @@ for i = 1:3
     gyr_bi_tau(i) = min_tau_gyr;
 end
 
-title(['Gyroscope Allan Deviation - ', base_name]);
+title('Gyroscope Allan Deviation');
 xlabel('Averaging time, ¦Ó (s)');
 ylabel('Allan Deviation (deg/h)');
 legend(axis_names);
@@ -178,7 +178,7 @@ for i = 1:3
     acc_bi_tau(i) = min_tau_acc;
 end
 
-title(['Accelerometer Allan Deviation - ', base_name]);
+title('Accelerometer Allan Deviation');
 xlabel('Averaging time, ¦Ó (s)');
 ylabel('Allan Deviation (¦Ìg)');
 legend(axis_names);
