@@ -35,7 +35,6 @@
 ```
 parse ok, frame len:76
 tag:            0x91
-sync_time(ms):  5384
 acc(m/s^(2)):   -2.162 2.050 9.299
 gyr(deg/s):     -0.062 -0.006 -0.010
 mag(uT):        7.892 14.625 -60.042

@@ -18,7 +18,7 @@ extern "C"{
 #include <termios.h>
 #include <poll.h>
 
-#include "hipnuc.h"
+#include "hipnuc_dec.h"
 #include "nmea_decode.h"
 
 #define GRA_ACC      (9.8)

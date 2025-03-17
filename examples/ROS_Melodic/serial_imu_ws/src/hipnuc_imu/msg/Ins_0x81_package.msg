@@ -4,7 +4,6 @@ uint16 status
 uint8 ins_status
 uint16 gpst_wn   
 uint32 gpst_tow
-uint16 sync_time
 int16 gyr_b_x
 int16 gyr_b_y
 int16 gyr_b_z

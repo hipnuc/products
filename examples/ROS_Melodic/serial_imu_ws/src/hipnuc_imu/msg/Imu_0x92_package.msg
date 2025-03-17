@@ -1,6 +1,5 @@
 uint32 frame_rate
 uint8 tag
-uint16 pps_sync_stamp
 int8 temperature
 float32 air_pressure
 uint32 system_time
