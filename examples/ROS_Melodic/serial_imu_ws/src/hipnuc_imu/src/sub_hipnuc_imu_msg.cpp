@@ -8,7 +8,7 @@
 #include <hipnuc_imu/hipnuc_imu_msg.h>
 #include <hipnuc_imu/Imu_0x91_package.h>
 #include <hipnuc_imu/Imu_0x92_package.h>
-#include "hipnuc_dec.h"
+#include "hipnuc_lib_package/hipnuc_dec.h"
 
 void imu_callback_hipnuc(const hipnuc_imu::hipnuc_imu_msg imu_msg_hipnuc);
 

@@ -19,7 +19,7 @@ extern "C"{
 #include <fcntl.h>
 #include <termios.h> /* POSIX terminal control definitions */
 #include <poll.h>
-#include "hipnuc_dec.h"
+#include "hipnuc_lib_package/hipnuc_dec.h"
 
 #define GRA_ACC      (9.8)
 #define DEG_TO_RAD   (0.01745329)
@@ -202,7 +202,7 @@ void imu_0x91_data(hipnuc_raw_t *data, hipnuc_imu::hipnuc_imu_msg *data_imu)
 	data_imu->hi91_data.tag = data->hi91.tag;
 
 	data_imu->hi91_data.system_time = data->hi91.system_time;
-	data_imu->hi91_data.air_pressure = data->hi91.prs;
+	data_imu->hi91_data.air_pressure = data->hi91.air_pressure;
 	data_imu->hi91_data.temperature = data->hi91.temp;
 
 	data_imu->hi91_data.acc_x = data->hi91.acc[0];

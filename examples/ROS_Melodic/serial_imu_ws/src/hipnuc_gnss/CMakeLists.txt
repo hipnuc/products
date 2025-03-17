@@ -50,8 +50,8 @@ include_directories(
 )
 
 
-add_executable(serial_gnss src/serial_gnss.cpp src/hipnuc_dec.c src/nmea_decode.c)
-target_link_libraries(serial_gnss ${catkin_LIBRARIES}) 
+add_executable(serial_gnss src/serial_gnss.cpp)
+target_link_libraries(serial_gnss ${catkin_LIBRARIES} hipnuc_lib) 
 
 #add_executable(pub_path src/pub_path.cpp)
 #target_link_libraries(pub_path ${catkin_LIBRARIES})
