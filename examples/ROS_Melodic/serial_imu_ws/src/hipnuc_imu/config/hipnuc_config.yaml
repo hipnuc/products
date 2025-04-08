@@ -1,6 +1,6 @@
 #hipnuc config
-imu_serial: "/dev/ttyUSB1"
-baud_rate: 460800
+imu_serial: "/dev/ttyUSB0"
+baud_rate: 115200
 imu_axes: "ENU"          #hipnuc imu default:"ENU"   ros carrier system:"FLU"
 frame_id: "imu_link"
 
