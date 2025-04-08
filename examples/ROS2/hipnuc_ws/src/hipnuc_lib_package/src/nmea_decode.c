@@ -1,4 +1,4 @@
-#include "nmea_decode.h"
+#include "hipnuc_lib_package/nmea_decode.h"
 
 #define MAXFIELD 64 /* max number of fields in a record */
 

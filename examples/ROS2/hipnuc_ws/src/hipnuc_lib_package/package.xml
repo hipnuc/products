@@ -1,20 +1,14 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
-<package format="2">
-  <name>hipnuc_gnss</name>
+<package format="3">
+  <name>hipnuc_lib_package</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Hipnuc shared library package</description>
   <maintainer email="1637274023@qq.com">linux</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>rclcpp</depend>
-  <depend>std_msgs</depend>
-  <depend>sensor_msgs</depend>
-  <depend>gps_msgs</depend>
-  <depend>hipnuc_lib_package</depend>
-  
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

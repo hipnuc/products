@@ -11,7 +11,8 @@
 extern "C"{
 #endif
 #include <poll.h>
-#include "hipnuc_dec.h"
+
+#include "hipnuc_lib_package/hipnuc_dec.h"
 
 #define GRA_ACC     (9.8)
 #define DEG_TO_RAD  (0.01745329)
