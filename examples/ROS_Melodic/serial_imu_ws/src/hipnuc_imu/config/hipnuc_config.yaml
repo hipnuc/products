@@ -1,7 +1,7 @@
 #hipnuc config
 imu_serial: "/dev/ttyUSB0"
 baud_rate: 115200
-imu_axes: "ENU"          #hipnuc imu default:"ENU"   ros carrier system:"FLU"
+
 frame_id: "imu_link"
 
 imu_topic: "/imu/data"
