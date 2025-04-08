@@ -21,7 +21,4 @@ temp_enable: false
 
 port_timeout_ms: 500
 
-#hipnuc data package 
-frame_id_costom: "base_link_hipnuc"
-imu_topic_costom: "/imu_package_hipnuc"
 
