@@ -6,7 +6,7 @@
 
 * ROS版本：ROS Melodic Morenia
 
-* 测试设备：HI13系列 HI14系列 CH10x系列
+* 测试设备：HI13系列 HI14系列 CH10x系列 
 
 ## 安装USB-UART驱动
 
@@ -38,26 +38,45 @@ hugepages        null          tty12     tty40  ttyS1      udmabuf  vmci
 2. 执行`catkin_make`命令，编译成功后出现完成度100%的信息。
 3. 如果是其他的ROS1系统，只需要把`serial_imu_ws/src/`下的`hipnuc_imu`文件夹移动到其他ROS1的工作空间下，直接编译就可以了。
 
-##  修改串口波特率和设备号
+##  修改串口波特率、设备号和话题
 
-1. 在Ubuntu环境中，支持的波特率为115200, 460800, 921600。本例程使用的默认波特率是115200，默认打开的串口名称是/dev/ttyUSB0。	
+1. 在Ubuntu环境中，支持的波特率为115200, 460800, 921600。本例程使用的默认波特率是115200，默认打开的串口名称是/dev/ttyUSB0，默认输出Sensor_msgs::Imu数据。
 
 2. 如果您需要更高的输出频率，请编辑`hipnuc_imu/config/hipnuc_config.yaml`文件，修改如下两个参数：
 
    imu_serial:IMU对应的设备文件名称
 
    baud_rate:IMU的波特率
+   
+3. 如果要自定义话题名称，请编辑`hipnuc_imu/config/hipnuc_config.yaml`文件，修改相应的参数，
+
+   例如：imu_topic:后边的名称是话题名称，可以自定义任意的字符串。
+
+   ​			imu_enable:后边是使能输出配置，有true、false两种状态可选
 
 ```c
 #hipnuc config
 imu_serial: "/dev/ttyUSB0"
 baud_rate: 115200
-frame_id: "base_link"
-imu_topic: "/IMU_data"
 
-#hipnuc data package ---> 0x91 
-frame_id_costom: "base_0x91_link"
-imu_topic_costom: "/imu_0x91_package"
+frame_id: "imu_link"
+
+imu_topic: "/imu/data"
+imu_enable: true
+
+mag_topic: "/MAG_data"
+mag_enable: false
+
+eul_topic: "/EUL_data"
+eul_enable: false
+
+pre_topic: "/PRE_data"
+pre_enable: false
+
+temp_topic: "/TEMP_data"
+temp_enable: false
+
+port_timeout_ms: 500
 ```
 
 修改完之后，保存，使新配置生效。
@@ -90,7 +109,7 @@ header:
   stamp: 
     secs: 1595829903
     nsecs: 680423746
-  frame_id: "base_link"
+  frame_id: "imu_link"
 orientation: 
   x: 0.0663746222854
   y: -0.611194491386
