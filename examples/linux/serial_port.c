@@ -169,9 +169,9 @@ int serial_port_write(int fd, const void *buffer, int size)
  * @param buffer      Buffer to store received data
  * @param size        Maximum number of bytes to read
  * @param timeout_ms  Idle timeout in milliseconds (timeout between bytes)
+ *                    0 means non-blocking read (return immediately with available data)
  *
  * @return Number of bytes read, or -1 on error
- * @note The timeout is reset each time new data arrives
  */
 static int serial_port_read_timeout(int fd, void *buffer, int size, int timeout_ms)
 {
@@ -189,55 +189,40 @@ static int serial_port_read_timeout(int fd, void *buffer, int size, int timeout_
     struct timeval tv;
     fd_set readfds;
 
-    while (total_read < size)
+    // Configure select timeout based on timeout_ms
+    // For timeout=0, select will return immediately with available data
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    // Prepare select() parameters
+    FD_ZERO(&readfds);
+    FD_SET(fd, &readfds);
+    
+    // Wait for data or timeout
+    ret = select(fd + 1, &readfds, NULL, NULL, &tv);
+
+    if (ret < 0)
     {
-        // Reset select() parameters for each iteration
-        FD_ZERO(&readfds);
-        FD_SET(fd, &readfds);
-        
-        // Configure timeout for this iteration
-        tv.tv_sec = timeout_ms / 1000;
-        tv.tv_usec = (timeout_ms % 1000) * 1000;
-
-        // Wait for data or timeout
-        ret = select(fd + 1, &readfds, NULL, NULL, &tv);
-
-        if (ret < 0)
-        {
-            // Handle interruption by signal
-            if (errno == EINTR)
-                continue;
-            perror("select");
-            return -1;
-        }
-        else if (ret == 0)
-        {
-            // No data received within timeout period
-            // This means the line has been idle for timeout_ms
-            break;
-        }
-        
-        // Data is available, read it
-        ret = read(fd, buf + total_read, size - total_read);
-        if (ret < 0)
-        {
-            // Handle non-blocking operations
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                continue;
-            perror("read");
-            return -1;
-        }
-        else if (ret == 0)
-        {
-            // Port closed or disconnected
-            break;
-        }
-
-        // Update total bytes read
-        total_read += ret;
+        if (errno == EINTR)
+            return 0;  // Interrupted by signal
+        perror("select");
+        return -1;
     }
-
-    return total_read;
+    else if (ret == 0)
+    {
+        // Timeout occurred, no data available
+        return 0;
+    }
+    
+    // Data is available, read it
+    ret = read(fd, buf, size);
+    if (ret < 0)
+    {
+        perror("read");
+        return -1;
+    }
+    
+    return ret;
 }
 
 // Read data from the serial port
