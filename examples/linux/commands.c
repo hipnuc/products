@@ -417,7 +417,7 @@ static int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
 
             for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
                 
-                serial_send_then_recv_str(fd, "AT+EOUT=0\r\n", "OK", recv_buf, sizeof(recv_buf), 20);
+                serial_send_then_recv_str(fd, "AT+EOUT=0\r\n", "OK", recv_buf, sizeof(recv_buf), 200);
 
                 len = serial_send_then_recv_str(fd, "AT+INFO\r\n", "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
 
