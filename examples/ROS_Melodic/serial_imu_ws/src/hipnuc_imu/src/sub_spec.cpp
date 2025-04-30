@@ -10,7 +10,7 @@ int main(int argc, char **argv)
 
 	ros::NodeHandle n;
 
-	execlp("rostopic", "rostopic", "echo", "/imu/data", NULL);
+	execlp("rostopic", "rostopic", "echo", "/IMU_data", NULL);
 
 	ros::spin();
 }

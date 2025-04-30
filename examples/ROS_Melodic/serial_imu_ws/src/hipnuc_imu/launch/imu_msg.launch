@@ -4,9 +4,6 @@
 
 	</node>
 
-	<node pkg="hipnuc_imu" name="sub_spec" type="sub_spec" output="screen"  >
-
-
-	</node>
+	<node pkg="hipnuc_imu" name="sub_spec" type="sub_spec" output="screen"  />
 
 </launch>

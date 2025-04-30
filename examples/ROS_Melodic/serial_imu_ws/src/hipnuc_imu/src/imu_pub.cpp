@@ -10,92 +10,114 @@
 #define QUA_FACTOR   (0.0001)
 
 SerialIMUNode::SerialIMUNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
-    : nh_(nh), pnh_(pnh) {
+    : nh_(nh), pnh_(pnh)
+    {
         instance_ = this;
         memset(&raw, 0, sizeof(raw));
         loadParameters();
         initPublishers();
         initSerialPort();
         initAlarm();
-        
-    }
+    }   
 
 SerialIMUNode::~SerialIMUNode()
 {
-    serial_port_->close();  
+    if (serial_port_)
+        serial_port_->close();  
 }
 
 void SerialIMUNode::run()
 {
+    std::vector<uint8_t> raw_data;
+    raw_data.resize(512); 
+    uint8_t len = 0;
+
     while (ros::ok() && reconnect_count < 20)
     {
-        if (!serial_port_) 
+        try
         {
-            ROS_ERROR("Serial port not initialized");
-            return;
-        }
-
-        std::vector<uint8_t> raw_data;
-        if (serial_port_->read(raw_data))
-        {
-            for (int i = 0; i < raw_data.size(); i++)
+            if (!serial_port_) 
             {
-                uint8_t rev = hipnuc_input(&raw, raw_data[i]);
+                ROS_ERROR("Serial port not initialized");
+                return;
+            }
 
-                if(rev)
+            std::fill(raw_data.begin(), raw_data.end(), 0);
+            if ((len = serial_port_->read(raw_data)) > 0)
+            {
+                for (int i = 0; i < len; i++)
                 {
-                    if (imu_enable)
-                    {
-                        imu_msg.header.stamp = ros::Time::now();
-                        publish_imu_data(&raw, &imu_msg);
-                        imu_pub_.publish(imu_msg);
-                    }
+                    uint8_t rev = hipnuc_input(&raw, raw_data[i]);
                     
-                    if (mag_enable)
+                    if(rev)
                     {
-                        mag_msg.header.stamp = ros::Time::now();
-                        publish_mag_data(&raw, &mag_msg);
-                        mag_pub_.publish(mag_msg);
-                    }
+                        if (imu_enable)
+                        {
+                            imu_msg.header.stamp = ros::Time::now();
+                            publish_imu_data(&raw, &imu_msg);
+                            imu_pub_.publish(imu_msg);
+                        }
+                        
+                        if (mag_enable)
+                        {
+                            mag_msg.header.stamp = ros::Time::now();
+                            publish_mag_data(&raw, &mag_msg);
+                            mag_pub_.publish(mag_msg);
+                        }
 
-                    if (eul_enable)
-                    {
-                        eul_msg.header.stamp = ros::Time::now();
-                        publish_eul_data(&raw, &eul_msg);
-                        eul_pub_.publish(eul_msg);
-                    }
+                        if (eul_enable)
+                        {
+                            eul_msg.header.stamp = ros::Time::now();
+                            publish_eul_data(&raw, &eul_msg);
+                            eul_pub_.publish(eul_msg);
+                        }
 
-                    if (pre_enable)
-                    {
-                        pre_msg.header.stamp = ros::Time::now();
-                        publish_pre_data(&raw, &pre_msg);
-                        pre_pub_.publish(pre_msg);
-                    }
+                        if (pre_enable)
+                        {
+                            pre_msg.header.stamp = ros::Time::now();
+                            publish_pre_data(&raw, &pre_msg);
+                            pre_pub_.publish(pre_msg);
+                        }
 
-                    if (temp_enable)
-                    {
-                        temp_msg.header.stamp = ros::Time::now();
-                        publish_temp_data(&raw, &temp_msg);
-                        temp_pub_.publish(temp_msg);
-                    }
-                    
-                    rev = 0;
-                    if(setitimer(ITIMER_REAL, &timer, NULL) == -1)
-                    {
-                        perror("rev setitimer error");
-                        return;
+                        if (temp_enable)
+                        {
+                            temp_msg.header.stamp = ros::Time::now();
+                            publish_temp_data(&raw, &temp_msg);
+                            temp_pub_.publish(temp_msg);
+                        }
+                        
+                        rev = 0;
+                        if(setitimer(ITIMER_REAL, &timer, NULL) == -1)
+                        {
+                            perror("rev setitimer error");
+                            return;
+                        }
+                        memset(&raw, 0, sizeof(raw));
                     }
                 }
             }
-        }
 
-        ros::spinOnce();
+            ros::spinOnce();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        catch (const SerialPortException& e) 
+        {
+            ROS_ERROR("Serial port error: %s", e.what());
+        }
     }
 }
 
+
+
 void SerialIMUNode::open()
 {
-    if (!serial_port_ || !serial_port_->open()) 
+    if (!serial_port_ && !serial_port_->open()) 
+    {
+        ROS_ERROR("serial port error");
+        return;
+    }
+
+    if (!serial_port_->open())
     {
         ROS_ERROR("Failed to open serial port");
         return;
@@ -116,11 +138,8 @@ void SerialIMUNode::close()
 
 void SerialIMUNode::signal_handler(int sig) 
 {
-    
-
-    if (instance_) {
+    if (instance_) 
         instance_->alarm_handler(sig);
-    }
 }
 
 void SerialIMUNode::alarm_handler(int sig)
@@ -157,6 +176,7 @@ void SerialIMUNode::alarm_handler(int sig)
     {
         ROS_ERROR("Exception during reconnection: %s", e.what());
     }
+        
 
     struct itimerval timer;
     timer.it_value.tv_sec = timeout_sec;
@@ -171,8 +191,8 @@ void SerialIMUNode::alarm_handler(int sig)
 
 void SerialIMUNode::loadParameters() 
 {
-    pnh_.param<std::string>("imu_serial", serial_port_name_, "/dev/ttyUSB1");
-    pnh_.param<int>("baud_rate", baud_rate_, 460800);
+    pnh_.param<std::string>("imu_serial", serial_port_name_, "/dev/ttyUSB0");
+    pnh_.param<int>("baud_rate", baud_rate_, 115200);
     pnh_.param<std::string>("frame_id", frame_id_, "imu_link");
 
     pnh_.param<std::string>("imu_topic", imu_topic_, "/imu/data");
@@ -181,13 +201,12 @@ void SerialIMUNode::loadParameters()
     pnh_.param<std::string>("pre_topic", pre_topic_, "/imu/pre");
     pnh_.param<std::string>("temp_topic", temp_topic_, "/imu/temp");
 
-    pnh_.param<bool>("imu_enable", imu_enable, false);
+    pnh_.param<bool>("imu_enable", imu_enable, true);
     pnh_.param<bool>("mag_enable", mag_enable, false);
     pnh_.param<bool>("eul_enable", eul_enable, false);
     pnh_.param<bool>("pre_enable", pre_enable, false);
     pnh_.param<bool>("temp_enable", temp_enable, false);
-
-    pnh_.param<std::string>("imu_axes", imu_axes, "ENU");    
+  
     pnh_.param<int>("port_timeout_ms", get_port_timeout_ms, 500);
 
     imu_msg.header.frame_id = frame_id_;
@@ -209,20 +228,38 @@ void SerialIMUNode::initPublishers()
     temp_pub_  = pnh_.advertise<sensor_msgs::Temperature>(temp_topic_, 10);         //temp
 }
 
-void SerialIMUNode::initSerialPort()
+bool SerialIMUNode::initSerialPort()
 {
+    serial_config_.port_name = serial_port_name_;
+    serial_config_.baud_rate = baud_rate_;
+    serial_config_.data_bits = 8;
+    serial_config_.stop_bits = 1;
+    serial_config_.Parity = SerialPortConfig::Parity::None;
+    serial_config_.read_timeout = std::chrono::milliseconds(100);
+    serial_config_.write_timeout = std::chrono::milliseconds(100);
+
     try
     {
-        serial_port_ = std::make_unique<SerialPort>(
-            serial_port_name_,
-            baud_rate_
-        );
+        serial_port_ = std::make_unique<SerialPort>(serial_config_);
+        serial_port_->setErrorCallback(
+            std::bind(&SerialIMUNode::handleSerialError, this, std::placeholders::_1));
+        return true;
     }
-    catch(const std::exception& e)
+    catch (const SerialPortException& e) 
     {
-        ROS_ERROR("Failed to initialize: %s", e.what());
-        ros::shutdown();
+        ROS_ERROR("Serial port initialization failed: %s", e.what());
+        return false;
     }
+}
+
+void SerialIMUNode::handleSerialError(const std::error_code& error) 
+{
+    ROS_ERROR("Serial port error: %s (code: %d)", 
+              error.message().c_str(), 
+              error.value());
+    
+    if (error.value() != EAGAIN && error.value() != EWOULDBLOCK) 
+        ROS_ERROR("Stopping IMU node due to serial port error");
 }
 
 void SerialIMUNode::initAlarm()

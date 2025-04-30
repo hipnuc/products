@@ -4,23 +4,18 @@ baud_rate: 115200
 
 frame_id: "imu_link"
 
-#pub acc gyr  quat
-imu_topic: "/imu/data"     
+imu_topic: "/IMU_data"
 imu_enable: true
 
-#pub magnetic
 mag_topic: "/MAG_data"
 mag_enable: false
 
-#pub euler
 eul_topic: "/EUL_data"
 eul_enable: false
 
-#pub pressure
 pre_topic: "/PRE_data"
 pre_enable: false
 
-#pub temperature
 temp_topic: "/TEMP_data"
 temp_enable: false
 
