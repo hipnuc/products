@@ -125,10 +125,10 @@ linux@ubuntu:~$source <hipnuc_ws_dir>/install/setup.bash
 [listener-2] ---
 ```
 
-​	4、另开一个终端窗口，执行`ros2 topic hz /Imu_data`，可以查看话题发布的频率。
+​	4、另开一个终端窗口，执行`ros2 topic hz /IMU_data`，可以查看话题发布的频率。
 
 ```shell
-linux@ubuntu20:~$ ros2 topic hz /Imu_data 
+linux@ubuntu20:~$ ros2 topic hz /IMU_data 
 average rate: 100.032
 	min: 0.008s max: 0.012s std dev: 0.00058s window: 102
 average rate: 100.014
