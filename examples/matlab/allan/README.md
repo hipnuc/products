@@ -59,6 +59,10 @@ bash复制imudata
 - Allan方差分析参考IEEE标准：IEEE-STD-952-1997
 - GJB 10s稳定性参考中国军用标准：GJB 2426A-2004
 
+## 数据集下载
+
+数据集文件尺寸较大,目前可从百度网盘下载: https://pan.baidu.com/s/1Un_lejsY9ZPud71ITFGc8w 提取码: ermt
+
 ## 注意事项
 
 1. 建议使用至少8小时以上的静态数据，以获得可靠的Allan方差分析结果
