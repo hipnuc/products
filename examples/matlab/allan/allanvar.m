@@ -6,7 +6,7 @@ function [sigma, tau] = allanvar(data, dt, numPoints)
     
     N = length(data);
     maxT = floor(N/3) * dt;
-    minT = 1;  % 最小tau就是采样间隔
+    minT = 0.01;  % 最小tau就是采样间隔
     
     % 生成更合理的tau范围（1ms到10000s）
     tau = logspace(log10(minT), log10(min(maxT, 10000)), numPoints)';

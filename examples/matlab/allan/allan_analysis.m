@@ -38,13 +38,12 @@ data = load(file_path);
 [~, base_name, ~] = fileparts(file_path);
 
 % 提取传感器数据
-acc = [data.imudata.AccX, data.imudata.AccY, data.imudata.AccZ];
-gyr = [data.imudata.GyrX, data.imudata.GyrY, data.imudata.GyrZ];
-
+acc = [data.imudata.acc_x, data.imudata.acc_y, data.imudata.acc_z];
+gyr = [data.imudata.gyr_x, data.imudata.gyr_y, data.imudata.gyr_z];
 % 计算时间信息
 total_samples = length(acc);
-total_time = (data.imudata.TimeStamp(end) - data.imudata.TimeStamp(1)) / 1000; % seconds
-imu_dt = mean(diff(data.imudata.TimeStamp)) / 1000;
+total_time = (data.imudata.sys_time(end) - data.imudata.sys_time(1)) / 1000; % seconds
+imu_dt = mean(diff(data.imudata.sys_time)) / 1000;
 Fs = 1 / imu_dt; % sampling frequency
 
 % 准备数据信息结构体
@@ -97,10 +96,7 @@ for i = 1:3
 end
 fprintf('\n');
 
-%% 计算Allan方差并创建图表
-% 创建一个大图形,包含子图
-figure('Name', ['IMU Allan Deviation Analysis - ', base_name], 'Position', [100, 100, 1200, 800]);
-
+%% 计算Allan方差并创建分离的图表
 colors = {'r', 'g', 'b'};
 
 % 存储结果的数组
@@ -108,16 +104,18 @@ gyr_bi = zeros(3, 1);
 acc_bi = zeros(3, 1);
 gyr_bi_tau = zeros(3, 1);
 acc_bi_tau = zeros(3, 1);
+gyr_rw = zeros(3, 1);  % 陀螺仪随机游走
+acc_rw = zeros(3, 1);  % 加速度计随机游走
 numPoints = 200;
-
-% 陀螺仪子图
-subplot(2, 1, 1);
-hold on;
 
 % 存储Allan方差数据
 allan_data = struct();
 allan_data.gyro = cell(3, 1);
 allan_data.accel = cell(3, 1);
+
+% 陀螺仪Allan方差图
+figure('Name', ['Gyroscope Allan Deviation Analysis - ', base_name], 'Position', [100, 100, 800, 600]);
+hold on;
 
 for i = 1:3
     % 计算陀螺仪Allan方差 (deg/h)
@@ -128,7 +126,7 @@ for i = 1:3
     allan_data.gyro{i}.tau = tau_gyr;
     
     % 绘制陀螺仪Allan偏差
-    loglog(tau_gyr, avar_gyr, colors{i});
+    loglog(tau_gyr, avar_gyr, colors{i}, 'LineWidth', 1.5);
     
     % 寻找偏置不稳定性(Allan偏差的最小点)
     % 过滤数据到合理范围(< 1000s)
@@ -138,21 +136,27 @@ for i = 1:3
     [min_avar_gyr, min_idx_gyr] = min(avar_gyr_filtered);
     min_tau_gyr = tau_gyr_filtered(min_idx_gyr);
     
-    % 存储结果
+    % 存储偏置不稳定性结果
     gyr_bi(i) = min_avar_gyr;
     gyr_bi_tau(i) = min_tau_gyr;
+    
+    % 计算随机游走 (在τ=1s处的Allan偏差值)
+    % 寻找最接近τ=1s的点
+    [~, idx_1s] = min(abs(tau_gyr - 1));
+    gyr_rw(i) = avar_gyr(idx_1s) / 60; %单位转换(deg/√h)
 end
 
-title('Gyroscope Allan Deviation');
-xlabel('Averaging time, τ (s)');
-ylabel('Allan Deviation (deg/h)');
-legend(axis_names);
+title('Gyroscope Allan Deviation', 'FontSize', 14, 'FontWeight', 'bold');
+xlabel('Averaging time, τ (s)', 'FontSize', 12);
+ylabel('Allan Deviation (deg/h)', 'FontSize', 12);
+legend(axis_names, 'Location', 'best');
 grid on;
 set(gca, 'XScale', 'log', 'YScale', 'log');
+axis equal;
 hold off;
 
-% 加速度计子图
-subplot(2, 1, 2);
+% 加速度计Allan方差图
+figure('Name', ['Accelerometer Allan Deviation Analysis - ', base_name], 'Position', [150, 150, 800, 600]);
 hold on;
 
 for i = 1:3
@@ -164,7 +168,7 @@ for i = 1:3
     allan_data.accel{i}.tau = tau_acc;
     
     % 绘制加速度计Allan偏差
-    loglog(tau_acc, avar_acc, colors{i});
+    loglog(tau_acc, avar_acc, colors{i}, 'LineWidth', 1.5);
     
     % 加速度计偏置不稳定性
     index = tau_acc < 1e3;
@@ -173,17 +177,22 @@ for i = 1:3
     [min_avar_acc, min_idx_acc] = min(avar_acc_filtered);
     min_tau_acc = tau_acc_filtered(min_idx_acc);
     
-    % 存储结果
+    % 存储偏置不稳定性结果
     acc_bi(i) = min_avar_acc;
     acc_bi_tau(i) = min_tau_acc;
+    
+    % 计算随机游走 (在τ=1s处的Allan偏差值)
+    [~, idx_1s] = min(abs(tau_acc - 1));
+    acc_rw(i) = avar_acc(idx_1s) * 60 * 9.8 / 1e6;%单位转换为(m/s/√h)
 end
 
-title('Accelerometer Allan Deviation');
-xlabel('Averaging time, τ (s)');
-ylabel('Allan Deviation (μg)');
-legend(axis_names);
+title('Accelerometer Allan Deviation', 'FontSize', 14, 'FontWeight', 'bold');
+xlabel('Averaging time, τ (s)', 'FontSize', 12);
+ylabel('Allan Deviation (μg)', 'FontSize', 12);
+legend(axis_names, 'Location', 'best');
 grid on;
 set(gca, 'XScale', 'log', 'YScale', 'log');
+axis equal;
 hold off;
 
 % 保存Allan方差结果到info结构体
@@ -193,16 +202,26 @@ info.allan_data = allan_data;
 fprintf('Allan Variance Analysis Results:\n\n');
 
 % 陀螺仪结果
-fprintf('Gyroscope Bias Instability:\n');
+fprintf('Gyroscope Results:\n');
+fprintf('  Bias Instability:\n');
 for i = 1:3
-    fprintf('  %s-axis: %.6f deg/h at %.1f s\n', axis_names{i}, gyr_bi(i), gyr_bi_tau(i));
+    fprintf('    %s-axis: %.6f deg/h at %.1f s\n', axis_names{i}, gyr_bi(i), gyr_bi_tau(i));
+end
+fprintf('  Random Walk (at τ=1s):\n');
+for i = 1:3
+    fprintf('    %s-axis: %.6f deg/√h\n', axis_names{i}, gyr_rw(i));
 end
 fprintf('\n');
 
 % 加速度计结果
-fprintf('Accelerometer Bias Instability:\n');
+fprintf('Accelerometer Results:\n');
+fprintf('  Bias Instability:\n');
 for i = 1:3
-    fprintf('  %s-axis: %.6f μg at %.1f s\n', axis_names{i}, acc_bi(i), acc_bi_tau(i));
+    fprintf('    %s-axis: %.6f μg at %.1f s\n', axis_names{i}, acc_bi(i), acc_bi_tau(i));
+end
+fprintf('  Random Walk (at τ=1s):\n');
+for i = 1:3
+    fprintf('    %s-axis: %.6f m/s/√h\n', axis_names{i}, acc_rw(i));
 end
 fprintf('\n');
 
@@ -260,6 +279,7 @@ if ~is_script
     allan_results.Axis = [axis_names'; axis_names'];
     allan_results.BiasInstability = [gyr_bi; acc_bi];
     allan_results.BiasInstabilityTau = [gyr_bi_tau; acc_bi_tau];
+    allan_results.RandomWalk = [gyr_rw; acc_rw];  % 添加随机游走列
     allan_results.Unit = [repmat({'deg/h'}, 3, 1); repmat({'μg'}, 3, 1)];
     
     % 创建GJB 10s稳定性结果表格
@@ -273,8 +293,10 @@ if ~is_script
     % 添加Allan方差和GJB稳定性结果到info结构体
     info.gyro_bias_instability = gyr_bi;
     info.gyro_bias_instability_tau = gyr_bi_tau;
+    info.gyro_random_walk = gyr_rw;  % 添加陀螺仪随机游走
     info.accel_bias_instability = acc_bi;
     info.accel_bias_instability_tau = acc_bi_tau;
+    info.accel_random_walk = acc_rw;  % 添加加速度计随机游走
     info.gyro_stability_10s = gyr_std;
     info.accel_stability_10s = acc_std;
     
