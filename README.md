@@ -30,6 +30,7 @@ Example code is provided for multiple languages and platforms:
 
 - [Python Examples (Including module configuration)](examples/python)
 - [C/STM32 Examples](examples/STM32)
+- [Arduino Examples](examples/arduino)
 - [ROS (Melodic) Examples](examples/ROS_Melodic)
 - [ROS2 Examples](examples/ROS2)
 - [Linux C Examples (Includes module configuration, firmware, and reading examples - recommended for Linux users)](examples/linux)
