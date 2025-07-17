@@ -1,0 +1,7 @@
+<launch>
+	<rosparam file="$(find hipnuc_imu)/config/hipnuc_config.yaml" command="load"	/>
+
+	<node pkg="hipnuc_imu" type="serial_hipnuc_msg" name="hipnuc_imu" />
+	<node pkg="hipnuc_imu" name="sub_hipnuc_imu_msg" type="sub_hipnuc_imu_msg" output="screen" />
+
+</launch>

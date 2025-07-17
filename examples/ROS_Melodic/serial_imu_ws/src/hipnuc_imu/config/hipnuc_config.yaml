@@ -1,24 +1,10 @@
 #hipnuc config
 imu_serial: "/dev/ttyUSB0"
 baud_rate: 115200
-
-frame_id: "imu_link"
-
+frame_id: "base_link"
 imu_topic: "/IMU_data"
-imu_enable: true
 
-mag_topic: "/MAG_data"
-mag_enable: false
-
-eul_topic: "/EUL_data"
-eul_enable: false
-
-pre_topic: "/PRE_data"
-pre_enable: false
-
-temp_topic: "/TEMP_data"
-temp_enable: false
-
-port_timeout_ms: 500
-
+#hipnuc data package 
+frame_id_costom: "base_link_hipnuc"
+imu_topic_costom: "/imu_package_hipnuc"
 
