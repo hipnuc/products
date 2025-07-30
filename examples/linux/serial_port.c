@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 
 static const struct {
@@ -186,43 +187,60 @@ static int serial_port_read_timeout(int fd, void *buffer, int size, int timeout_
     int ret;
 
     // Setup for select() timeout
-    struct timeval tv;
+    struct timeval tv, start_time, current_time;
+    gettimeofday(&start_time, NULL);
     fd_set readfds;
 
-    // Configure select timeout based on timeout_ms
-    // For timeout=0, select will return immediately with available data
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    // Read until expected number of bytes are received or timeout occurs
+    while (total_read < size) {
+        // Calculate remaining timeout
+        gettimeofday(&current_time, NULL);
+        long elapsed_ms = (current_time.tv_sec - start_time.tv_sec) * 1000 + 
+                         (current_time.tv_usec - start_time.tv_usec) / 1000;
+        long remaining_ms = timeout_ms - elapsed_ms;
+        
+        // If timeout has already expired, return what we have
+        if (remaining_ms <= 0) {
+            break;
+        }
+        
+        // Set timeout to the remaining time from start
+        tv.tv_sec = remaining_ms / 1000;
+        tv.tv_usec = (remaining_ms % 1000) * 1000;
 
     // Prepare select() parameters
-    FD_ZERO(&readfds);
-    FD_SET(fd, &readfds);
-    
-    // Wait for data or timeout
-    ret = select(fd + 1, &readfds, NULL, NULL, &tv);
+        FD_ZERO(&readfds);
+        FD_SET(fd, &readfds);
 
-    if (ret < 0)
-    {
-        if (errno == EINTR)
-            return 0;  // Interrupted by signal
-        perror("select");
-        return -1;
+    // Wait for data or timeout
+        ret = select(fd + 1, &readfds, NULL, NULL, &tv);
+
+        if (ret < 0)
+        {
+            if (errno == EINTR)
+                return 0;  // Interrupted by signal
+            perror("select");
+            return -1;
+        }
+        else if (ret == 0)
+        {
+            break;
+        }
+
+        // Data is available, read it
+        int bytes_read = read(fd, buf + total_read, size - total_read);
+        if (bytes_read < 0) 
+        {
+            perror("read");
+            return -1;
+        } else if (bytes_read == 0) {
+            // No data read, treat as end of stream
+            break;
+        }
+        total_read += bytes_read;
     }
-    else if (ret == 0)
-    {
-        // Timeout occurred, no data available
-        return 0;
-    }
-    
-    // Data is available, read it
-    ret = read(fd, buf, size);
-    if (ret < 0)
-    {
-        perror("read");
-        return -1;
-    }
-    
-    return ret;
+
+    return total_read;
 }
 
 // Read data from the serial port
