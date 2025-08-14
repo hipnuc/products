@@ -26,8 +26,8 @@
 另外本工程依赖解码库hipnuc_dec.c 和 nmea_decode.c，位于 ../lib下:
 | 文件            | 说明                                                         |
 | --------------- | ------------------------------------------------------------ |
-| hipnuc_dec.c    | 位于../lib下, HiPNUC二进制协议解析器                         |
-| nmea_decode.c   | 位于../lib下, NMEA 消息解析器，支持GGA,RMC以及HiPNUC自定义NMEA 协议SXT 等 |
+| hipnuc_dec.c    | 位于../drivers下, HiPNUC二进制协议解析器                     |
+| nmea_decode.c   | 位于../drivers下, NMEA 消息解析器，支持GGA,RMC以及HiPNUC自定义NMEA 协议SXT 等 |
 | example _data.c | 使用示例                                                     |
 
 

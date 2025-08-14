@@ -407,8 +407,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\lib\hipnuc_dec.c</PathWithFileName>
-      <FilenameWithoutPath>hipnuc_dec.c</FilenameWithoutPath>
+      <PathWithFileName>..\..\drivers\example_data.c</PathWithFileName>
+      <FilenameWithoutPath>example_data.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -419,8 +419,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\lib\example_data.c</PathWithFileName>
-      <FilenameWithoutPath>example_data.c</FilenameWithoutPath>
+      <PathWithFileName>..\..\drivers\hipnuc_can_parser.c</PathWithFileName>
+      <FilenameWithoutPath>hipnuc_can_parser.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -431,7 +431,19 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\lib\nmea_dec.c</PathWithFileName>
+      <PathWithFileName>..\..\drivers\hipnuc_dec.c</PathWithFileName>
+      <FilenameWithoutPath>hipnuc_dec.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>5</GroupNumber>
+      <FileNumber>17</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\drivers\nmea_dec.c</PathWithFileName>
       <FilenameWithoutPath>nmea_dec.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>

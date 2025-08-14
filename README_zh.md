@@ -10,7 +10,7 @@
   -  Linux: Ubuntu 18.04以上版本一般免驱. 如果未能识别请见Silabs[官网](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=overview)安装步骤, 或自行Google”Linux下安装CP210x驱动”解决。
   -  Windows 请直接运行exe驱动安装程序
 
-- examples: 各种平台和语言的示例程序及其源码，包括 STM32, ROS, Linux, MATLAB 等。
+- examples: 各种平台和语言的示例程序及驱动程序，包括 STM32, ROS, Linux, MATLAB 等。
 
 ## 快速开始
 
@@ -22,23 +22,24 @@
 
 ### linux
 
-1. 推荐直接使用[C - Linux](examples/linux)入门
+1. 推荐直接使用[C - Linux](examples/C)入门
 
 ## 示例代码
 
 提供多种语言和平台的示例代码：
 
 - [Python](examples/python): 包含数据读取及模块配置
-- [C - STM32](examples/STM32)
+- [STM32](examples/STM32)
 - [Arduino](examples/arduino)
 - [ROS Melodic](examples/ROS_Melodic)
 - [ROS2](examples/ROS2)
-- [C - Linux](examples/linux): 包括模块配置,固件,读取示例等，Linux下入门推荐
+- [C - Linux](examples/C): 包括模块配置,固件,读取示例等，Linux下入门推荐
 - [Matlab](examples/matlab): 包含读取CHCenter记录的log文件以及allan方差分析示例代码.
+- [CAN](examples/CAN): 包含DBC格式的CAN帧解析文件
 
 ## 配置模块
 
-第一次配置模块强烈建议使用Windows上位机软件 CHCenter， 熟悉后，如果您打算用命令脚本或者在Linux环境下，可以参考python例程，里面包含基于Python的数据读取和模块配置教程。
+第一次配置模块强烈建议使用Windows上位机软件 CHCenter， 熟悉后，如果您打算用命令脚本或者在Linux环境下，可以参考其他example例程
 
 ## 资源
 

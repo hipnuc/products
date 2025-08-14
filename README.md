@@ -22,23 +22,24 @@
 
 ### Linux
 
-1. Recommended to start with the [Linux C examples](examples/linux)
+1. Recommended to start with the [C - Linux examples](examples/C)
 
 ## Example Code
 
 Example code is provided for multiple languages and platforms:
 
-- [Python Examples (Including module configuration)](examples/python)
-- [C/STM32 Examples](examples/STM32)
+- [Python Examples](examples/python): Includes data reading and module configuration
+- [STM32 Examples](examples/STM32)
 - [Arduino Examples](examples/arduino)
-- [ROS (Melodic) Examples](examples/ROS_Melodic)
+- [ROS Melodic Examples](examples/ROS_Melodic)
 - [ROS2 Examples](examples/ROS2)
-- [Linux C Examples (Includes module configuration, firmware, and reading examples - recommended for Linux users)](examples/linux)
-- [Matlab Examples](examples/matlab)
+- [C - Linux Examples](examples/C): Includes module configuration, firmware, and reading examples - recommended for Linux users
+- [Matlab Examples](examples/matlab): Includes reading CHCenter log files and Allan variance analysis example code
+- [CAN Examples](examples/CAN): Includes DBC format CAN frame parsing files
 
 ## Module Configuration
 
-For first-time configuration, it is strongly recommended to use the Windows host software CHCenter. Once familiar, if you plan to use command scripts or work in a Linux environment, refer to the Python examples which include tutorials for Python-based data reading and module configuration.
+For first-time configuration, it is strongly recommended to use the Windows host software CHCenter. Once familiar, if you plan to use command scripts or work in a Linux environment, refer to the other examples.
 
 ## Resources
 

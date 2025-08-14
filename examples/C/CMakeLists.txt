@@ -10,7 +10,7 @@ set(CMAKE_C_STANDARD 99)
 # Add include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fw_downloader)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../lib)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../drivers)
 
 # Define source files
 set(SOURCES
@@ -20,9 +20,9 @@ set(SOURCES
     log.c
     fw_downloader/hex2bin.c
     fw_downloader/kboot.c
-    ../lib/example_data.c
-    ../lib/hipnuc_dec.c
-    ../lib/nmea_dec.c
+    ../drivers/example_data.c
+    ../drivers/hipnuc_dec.c
+    ../drivers/nmea_dec.c
 )
 
 # Create executable
