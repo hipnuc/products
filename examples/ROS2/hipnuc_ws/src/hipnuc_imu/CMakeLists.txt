@@ -21,6 +21,7 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(hipnuc_lib_package REQUIRED)
+find_package(rclcpp_components REQUIRED)
 
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -38,7 +39,7 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(talker src/serial_port.cpp)
-ament_target_dependencies(talker rclcpp std_msgs sensor_msgs hipnuc_lib_package)
+ament_target_dependencies(talker rclcpp std_msgs sensor_msgs hipnuc_lib_package rclcpp_components)
 
 set_target_properties(talker PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -46,7 +47,7 @@ set_target_properties(talker PROPERTIES
 )
 
 add_executable(listener src/sub_spec.cpp)
-ament_target_dependencies(listener rclcpp std_msgs sensor_msgs)
+ament_target_dependencies(listener rclcpp std_msgs sensor_msgs rclcpp_components)
 
 install(TARGETS talker listener  DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
