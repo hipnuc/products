@@ -52,11 +52,37 @@ fprintf('Max: %.4f s\n', max_diff);
 % Identify potential frame drops (if time difference is significantly larger than mean)
 threshold = mean_diff + 3 * std_diff; % 3 sigma threshold
 potential_drops = find(time_diff > threshold);
+
 if ~isempty(potential_drops)
-    fprintf('\nPotential frame drops detected at indices:\n');
+    fprintf('\nPotential frame drops detected:\n');
+    fprintf('%-8s %-8s %-12s %-15s %-15s %-10s\n', 'Index', 'Frames', 'Time Diff', 'Start Time', 'End Time', 'Duration');
+    fprintf('%-8s %-8s %-12s %-15s %-15s %-10s\n', '-----', '------', '---------', '----------', '--------', '--------');
+    
     for i = 1:length(potential_drops)
-        fprintf('Between frames %d and %d, time diff: %.4f s\n', potential_drops(i), potential_drops(i)+1, time_diff(potential_drops(i)));
+        idx = potential_drops(i);
+        frame_before = idx;
+        frame_after = idx + 1;
+        
+        % Calculate time points
+        time_before = time(frame_before);
+        time_after = time(frame_after);
+        gap_duration = time_diff(idx);
+        
+        % Convert to absolute timestamps if needed (optional)
+        abs_time_before = hi91_data.sys_time(frame_before) / 1000;
+        abs_time_after = hi91_data.sys_time(frame_after) / 1000;
+        
+        fprintf('%-8d %-8s %-12.4f %-15.3f %-15.3f %-10.4f\n', ...
+                i, sprintf('%d-%d', frame_before, frame_after), ...
+                gap_duration, time_before, time_after, gap_duration);
     end
+    
+    % Summary
+    total_dropped_time = sum(time_diff(potential_drops) - mean_diff);
+    fprintf('\nSummary:\n');
+    fprintf('Total potential drops: %d\n', length(potential_drops));
+    fprintf('Estimated total dropped time: %.4f s\n', total_dropped_time);
+    
 else
     fprintf('\nNo potential frame drops detected.\n');
 end

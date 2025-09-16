@@ -236,6 +236,7 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
         ret = snprintf(buf + written, buf_size - written,
             "{\n"
             "  \"type\": \"HI91\",\n"
+            "  \"main_status\": [0x%X],\n"
             "  \"system_time\": %d,\n"
             "  \"acc\": [%.3f, %.3f, %.3f],\n"
             "  \"gyr\": [%.3f, %.3f, %.3f],\n"
@@ -246,6 +247,7 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
             "  \"quat\": [%.3f, %.3f, %.3f, %.3f],\n"
             "  \"air_pressure\": %.1f\n"
             "}\n",
+            raw->hi91.main_status,
             raw->hi91.system_time,
             raw->hi91.acc[0]*GRAVITY, raw->hi91.acc[1]*GRAVITY, raw->hi91.acc[2]*GRAVITY,
             raw->hi91.gyr[0], raw->hi91.gyr[1], raw->hi91.gyr[2],
@@ -268,7 +270,7 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
         ret = snprintf(buf + written, buf_size - written,
             "{\n"
             "  \"type\": \"HI92\",\n"
-            "  \"status\": %d,\n"
+            "  \"main_status\": %d,\n"
             "  \"temperature\": %d,\n"
             "  \"acc\": [%.3f, %.3f, %.3f],\n"
             "  \"gyr\": [%.3f, %.3f, %.3f],\n"
@@ -278,7 +280,7 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
             "  \"yaw\": %.2f\n"
             "  \"quat\": [%.3f, %.3f, %.3f, %.3f],\n"
             "}\n",
-            raw->hi92.status,
+            raw->hi92.main_status,
             raw->hi92.temperature,
             raw->hi92.acc_b[0]*0.0048828, raw->hi92.acc_b[1]*0.0048828, raw->hi92.acc_b[2]*0.0048828,
             raw->hi92.gyr_b[0]*(0.001*R2D), raw->hi92.gyr_b[1]*(0.001*R2D), raw->hi92.gyr_b[2]*(0.001*R2D),
@@ -317,7 +319,7 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
     ret = snprintf(buf + written, buf_size - written,
         "{\n"
         "  \"type\": \"HI81\",\n"
-        "  \"status\": %d,\n"
+        "  \"main_status\": %d,\n"
         "  \"ins_status\": %d,\n"
         "  \"gpst_wn\": %d,\n"
         "  \"gpst_tow\": %d,\n"
@@ -345,7 +347,7 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
         "  \"vel_enu\": [%.2f, %.2f, %.2f],\n"
         "  \"acc_enu\": [%.2f, %.2f, %.2f],\n"
         "}\n",
-        raw->hi81.status,
+        raw->hi81.main_status,
         raw->hi81.ins_status,
         raw->hi81.gpst_wn,
         raw->hi81.gpst_tow,
