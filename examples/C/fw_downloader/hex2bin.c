@@ -38,7 +38,7 @@ static int hex_parse_line(const char *line, hex_record_t *record) {
     record->length = hex2byte(line + 1);
     record->address = (hex2byte(line + 3) << 8) | hex2byte(line + 5);
     record->type = hex2byte(line + 7);
-
+ 
     // Calculate checksum
     uint8_t checksum = 0;
     for (int i = 1; i < 9 + record->length * 2; i += 2) {
@@ -60,13 +60,18 @@ static int hex_parse_line(const char *line, hex_record_t *record) {
 static int hex_process_record(const hex_record_t *record, binary_data_t *bin_data) {
     static uint32_t extended_linear_address = 0;
     uint32_t full_address = extended_linear_address + record->address;
+    uint32_t startLinearAddress = 0;
 
     switch (record->type) {
         case 0x00: // Data record
             if (full_address + record->length > bin_data->size) {
                 size_t new_size = full_address + record->length;
                 uint8_t *new_data = realloc(bin_data->data, new_size);
-                if (!new_data) return -1;
+                if (!new_data) 
+                {
+                    printf("new data error\r\n");
+                    return -1;
+                }
                 memset(new_data + bin_data->size, 0xFF, new_size - bin_data->size);
                 bin_data->data = new_data;
                 bin_data->size = new_size;
@@ -82,6 +87,10 @@ static int hex_process_record(const hex_record_t *record, binary_data_t *bin_dat
         case 0x04: // Extended Linear Address Record
             extended_linear_address = ((uint32_t)record->data[0] << 24) | ((uint32_t)record->data[1] << 16);
             break;
+        case 0x05:
+            /* Start Linear Address Record */
+            startLinearAddress = ((uint32_t)record->data[0] << 24) | ((uint32_t)record->data[1] << 16) | ((uint32_t)record->data[2] << 8) | ((uint32_t)record->data[3]);
+            break;
         default:
             return -1; // Unknown record type
     }
@@ -95,6 +104,7 @@ binary_data_t *hex2bin_convert(const char *hex_file) {
     binary_data_t *bin_data = calloc(1, sizeof(binary_data_t));
     if (!bin_data) {
         fclose(in_file);
+        printf("calloc error\r\n");
         return NULL;
     }
 
@@ -105,6 +115,7 @@ binary_data_t *hex2bin_convert(const char *hex_file) {
     if (!bin_data->data) {
         free(bin_data);
         fclose(in_file);
+        printf("malloc error\r\n");
         return NULL;
     }
 
@@ -118,9 +129,11 @@ binary_data_t *hex2bin_convert(const char *hex_file) {
         while (end > start && isspace(*end)) *end-- = '\0';
 
         if (hex_parse_line(start, &record) == 0) {
-            if (hex_process_record(&record, bin_data) != 0) {
+            if (hex_process_record(&record, bin_data) != 0) 
+            {
                 hex2bin_free(bin_data);
                 fclose(in_file);
+                printf("record type = [%d]\r\n", record.type);
                 return NULL;
             }
         }
@@ -129,12 +142,15 @@ binary_data_t *hex2bin_convert(const char *hex_file) {
     fclose(in_file);
 
     // Trim unused space
-    if (bin_data->size > bin_data->start_address) {
+    if (bin_data->size > bin_data->start_address) 
+    {
         size_t actual_size = bin_data->size - bin_data->start_address;
         memmove(bin_data->data, bin_data->data + bin_data->start_address, actual_size);
         bin_data->data = realloc(bin_data->data, actual_size);
         bin_data->size = actual_size;
-    } else {
+    } 
+    else 
+    {
         hex2bin_free(bin_data);
         return NULL;
     }
