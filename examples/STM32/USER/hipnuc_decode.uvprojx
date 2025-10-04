@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_HD,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\HARDWARE\LED;..\SYSTEM\delay;..\SYSTEM\sys;..\SYSTEM\usart;..\USER;..\STM32F10x_FWLib\inc;..\CORE;..\HARDWARE\KEY;..\app\inc;..\..\drivers</IncludePath>
+              <IncludePath>..\HARDWARE\LED;..\SYSTEM\delay;..\SYSTEM\sys;..\SYSTEM\usart;..\USER;..\STM32F10x_FWLib\inc;..\CORE;..\HARDWARE\KEY;..\app\inc;..\..\..\drivers</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -467,27 +467,27 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>hipnuc_parser</GroupName>
+          <GroupName>hipnuc_drivers</GroupName>
           <Files>
             <File>
               <FileName>example_data.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\example_data.c</FilePath>
+              <FilePath>..\..\..\drivers\example_data.c</FilePath>
             </File>
             <File>
               <FileName>hipnuc_can_parser.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\hipnuc_can_parser.c</FilePath>
+              <FilePath>..\..\..\drivers\hipnuc_can_parser.c</FilePath>
             </File>
             <File>
               <FileName>hipnuc_dec.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\hipnuc_dec.c</FilePath>
+              <FilePath>..\..\..\drivers\hipnuc_dec.c</FilePath>
             </File>
             <File>
               <FileName>nmea_dec.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\nmea_dec.c</FilePath>
+              <FilePath>..\..\..\drivers\nmea_dec.c</FilePath>
             </File>
           </Files>
         </Group>

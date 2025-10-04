@@ -34,7 +34,7 @@ extern "C" {
 typedef struct __attribute__((__packed__))
 {
     uint8_t         tag;            /* Data packet tag, if tag = 0x00, means that this packet is null */
-    uint16_t        sttaus;         /* reserved */
+    uint16_t        main_status;    /* reserved */
     int8_t          temp;           /* Temperature */
     float           air_pressure;   /* Pressure */
     uint32_t        system_time;    /* Timestamp */
@@ -53,11 +53,10 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     uint8_t         tag;            /* Data packet tag */
-    uint16_t        status;         /* Status information */
+    uint16_t        main_status;    /* Status information */
     int8_t          temperature;    /* Temperature */
     uint16_t        rev;            /* reserved */
-    int16_t         air_pressure;   /* Air pressure */
-    int16_t         reserved;       /* Reserved field */
+    uint32_t        system_time;    /* Timestamp */ 
     int16_t         gyr_b[3];       /* Gyroscope data (raw) */
     int16_t         acc_b[3];       /* Accelerometer data (raw) */
     int16_t         mag_b[3];       /* Magnetometer data (raw) */
@@ -73,7 +72,7 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     uint8_t         tag;            /* Data packet tag */
-    uint16_t        status;         /* Status information */
+    uint16_t        main_status;    /* Status information */
     uint8_t         ins_status;     /* INS status */
     uint16_t        gpst_wn;        /* GPS time: week number */
     uint32_t        gpst_tow;       /* GPS time: time of week */

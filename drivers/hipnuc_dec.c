@@ -15,16 +15,6 @@
 #define CHSYNC2                 (0xA5)              /* CHAOHE message sync code 2 */
 #define CH_HDR_SIZE             (0x06)              /* CHAOHE protocol header size */
 
-/* legcy support of HI226/HI229 */
-#define HIPNUC_ID_USRID         (0x90)
-#define HIPNUC_ID_ACC_RAW       (0xA0)
-#define HIPNUC_ID_ACC_CAL       (0xA1)
-#define HIPNUC_ID_GYR_RAW       (0xB0)
-#define HIPNUC_ID_GYR_CAL       (0xB1)
-#define HIPNUC_ID_MAG_RAW       (0xC0)
-#define HIPNUC_ID_EUL           (0xD0)
-#define HIPNUC_ID_QUAT          (0xD1)
-#define HIPNUC_ID_PRS           (0xF0)
 
 /* new HiPNUC standard packet */
 #define HIPNUC_ID_HI91        (0x91)
@@ -77,52 +67,6 @@ static int parse_data(hipnuc_raw_t *raw)
     {
         switch (p[ofs])
         {
-        case HIPNUC_ID_USRID:
-            ofs += 2;
-            break;
-        case HIPNUC_ID_ACC_RAW:
-        case HIPNUC_ID_ACC_CAL:
-             raw->hi91.tag = HIPNUC_ID_HI91;
-             raw->hi91.acc[0] = (float)I2(p + ofs + 1) / 1000;
-             raw->hi91.acc[1] = (float)I2(p + ofs + 3) / 1000;
-             raw->hi91.acc[2] = (float)I2(p + ofs + 5) / 1000;
-            ofs += 7;
-            break;
-        case HIPNUC_ID_GYR_RAW:
-        case HIPNUC_ID_GYR_CAL:
-            raw->hi91.tag = HIPNUC_ID_HI91;
-            raw->hi91.gyr[0] = (float)I2(p + ofs + 1) / 10;
-            raw->hi91.gyr[1] = (float)I2(p + ofs + 3) / 10;
-            raw->hi91.gyr[2] = (float)I2(p + ofs + 5) / 10;
-            ofs += 7;
-            break;
-        case HIPNUC_ID_MAG_RAW:
-            raw->hi91.tag = HIPNUC_ID_HI91;
-            raw->hi91.mag[0] = (float)I2(p + ofs + 1) / 10;
-            raw->hi91.mag[1] = (float)I2(p + ofs + 3) / 10;
-            raw->hi91.mag[2] = (float)I2(p + ofs + 5) / 10;
-            ofs += 7;
-            break;
-        case HIPNUC_ID_EUL:
-            raw->hi91.tag = HIPNUC_ID_HI91;
-            raw->hi91.pitch = (float)I2(p + ofs + 1) / 100;
-            raw->hi91.roll = (float)I2(p + ofs + 3) / 100;
-            raw->hi91.yaw = (float)I2(p + ofs + 5) / 10;
-            ofs += 7;
-            break;
-        case HIPNUC_ID_QUAT:
-            raw->hi91.tag = HIPNUC_ID_HI91;
-            raw->hi91.quat[0] = R4(p + ofs + 1);
-            raw->hi91.quat[1] = R4(p + ofs + 5);
-            raw->hi91.quat[2] = R4(p + ofs + 9);
-            raw->hi91.quat[3] = R4(p + ofs + 13);
-            ofs += 17;
-            break;
-        case HIPNUC_ID_PRS:
-            raw->hi91.tag = HIPNUC_ID_HI91;
-            raw->hi91.air_pressure = R4(p + ofs + 1);
-            ofs += 5;
-            break;
         case HIPNUC_ID_HI91:
             memcpy(&raw->hi91, p + ofs, sizeof(hi91_t));
             ofs += sizeof(hi91_t);

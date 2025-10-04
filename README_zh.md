@@ -12,6 +12,8 @@
 
 - examples: 各种平台和语言的示例程序及驱动程序，包括 STM32, ROS, Linux, MATLAB 等。
 
+- drivers: HiPNUC驱动程序源码
+
 ## 快速开始
 
 ### Windows

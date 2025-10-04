@@ -12,6 +12,8 @@
 
 - examples/: Example programs and source code for various platforms and languages, including STM32, ROS, Linux, MATLAB, etc.
 
+- drivers: HiPNUC driver source code
+
 ## Quick Start
 
 ### Windows

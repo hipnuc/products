@@ -56,8 +56,7 @@ typedef struct __attribute__((__packed__))
     uint16_t        main_status;    /* Status information */
     int8_t          temperature;    /* Temperature */
     uint16_t        rev;            /* reserved */
-    int16_t         air_pressure;   /* Air pressure */
-    int16_t         reserved;       /* Reserved field */
+    uint32_t        system_time;    /* Timestamp */ 
     int16_t         gyr_b[3];       /* Gyroscope data (raw) */
     int16_t         acc_b[3];       /* Accelerometer data (raw) */
     int16_t         mag_b[3];       /* Magnetometer data (raw) */
