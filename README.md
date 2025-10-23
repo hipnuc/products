@@ -35,7 +35,7 @@ Example code is provided for multiple languages and platforms:
 - [Arduino Examples](examples/arduino)
 - [ROS Melodic Examples](examples/ROS_Melodic)
 - [ROS2 Examples](examples/ROS2)
-- [C - Linux Examples](examples/C): Includes module configuration, firmware, and reading examples - recommended for Linux users
+- [C - Linux Examples](examples/C): Includes module configuration, firmware, reading examples, and **data recording capabilities** - recommended for Linux users
 - [Matlab Examples](examples/matlab): Includes reading CHCenter log files and Allan variance analysis example code
 - [CAN Examples](examples/CAN): Includes DBC format CAN frame parsing files
 

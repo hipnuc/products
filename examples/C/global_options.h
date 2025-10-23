@@ -7,6 +7,8 @@
 typedef struct {
     char *port_name;
     int baud_rate;
+    char *record_raw_file;   // 原始数据记录文件路径
+    char *record_json_file;  // JSON数据记录文件路径
 } GlobalOptions;
 
 #endif

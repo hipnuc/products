@@ -23,6 +23,14 @@ set(SOURCES
     ../../drivers/example_data.c
     ../../drivers/hipnuc_dec.c
     ../../drivers/nmea_dec.c
+    # new modular command sources
+    commands/cmd_list.c
+    commands/cmd_read.c
+    commands/cmd_write.c
+    commands/cmd_probe.c
+    commands/cmd_update.c
+    commands/cmd_example.c
+    cmd_utils.c
 )
 
 # Create executable

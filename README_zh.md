@@ -35,8 +35,8 @@
 - [Arduino](examples/arduino)
 - [ROS Melodic](examples/ROS_Melodic)
 - [ROS2](examples/ROS2)
-- [C - Linux](examples/C): 包括模块配置,固件,读取示例等，Linux下入门推荐
-- [Matlab](examples/matlab): 包含读取CHCenter记录的log文件以及allan方差分析示例代码.
+- [C - Linux](examples/C): 包括模块配置、固件、读取示例以及**数据记录功能**等，Linux下入门推荐
+- [Matlab](examples/matlab): 包含读取CHCenter记录的log文件以及allan方差分析示例代码
 - [CAN](examples/CAN): 包含DBC格式的CAN帧解析文件
 
 ## 配置模块
