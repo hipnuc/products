@@ -1,153 +1,100 @@
-# Linux下HiPNUC CAN 驱动及example使用指南
+# canhost - HiPNUC CAN 主机工具
 
-## 项目概述
+## 概述
 
-本项目提供了在Linux系统下使用HiPNUC IMU设备的CAN通信驱动程序和示例代码。支持CANopen和J1939两种协议，可以实时接收和解析IMU传感器数据，包括加速度、角速度、姿态角、四元数、气压等信息。
+`canhost` 是一个面向 HiPNUC IMU/ARHS 设备的 SocketCAN 命令行工具。通过统一的 CLI 命令即可完成接口检测、J1939 探测、实时数据展示以及帧速率统计，便于在 Linux/树莓派等平台快速评估产品表现。
 
-## 硬件要求
+## 功能
 
-- **CAN适配器**: PEAK-CAN USB转CAN适配器（推荐）或其他Linux兼容的CAN设备
-- **设备**: HiPNUC系列产品
-- **操作系统**: Linux系统（Ubuntu 20.04+推荐）
+- **接口一览**：`list` 命令以表格展示所有物理 CAN 接口（忽略 `vcan/vxcan`）
+- **实时数据**：`read` 以 ANSI 表格实时刷新 IMU 数据，自动缓存多种帧类型，按 `Ctrl+C` 即可退出。
+- **帧率统计**：`stats` 统计每个 CAN ID 的速率与 DLC，并显示总帧率与活跃 ID 数量。
 
-## 软件依赖
-
-```
-sudo apt update
-sudo apt install build-essential cmake git
-
-# 安装CAN工具包
-sudo apt install can-utils
-
-# 如果使用PEAK-CAN设备，需要安装PEAK驱动
-# 详见: https://www.peak-system.com/fileadmin/media/linux/index.php
-```
-
-## 编译安装
+## 目录结构
 
 ```
-# 创建构建目录
-mkdir build && cd build
+examples/CAN/linux
+├── CMakeLists.txt
+├── README.md
+├── can_interface.c/h       # SocketCAN 枚举 & socket 工具
+├── commands.c/h            # 命令分发
+├── command_handlers.h
+├── commands/
+│   ├── cmd_list.c          # list 命令
+│   ├── cmd_probe.c         # probe 命令
+│   ├── cmd_read.c          # read 命令
+│   └── cmd_stats.c         # stats 命令
+├── global_options.h
+├── log.c/h
+└── utils.c/h
+```
 
-# 编译
+## 构建方法
+
+```bash
+cd examples/CAN/linux
+mkdir -p build && cd build
 cmake ..
-make
-
-# 运行程序
-./imu_can_reader
+make -j$(nproc)
+# 生成的可执行文件为 build/canhost
 ```
 
-## CAN接口配置
+依赖：CMake 3.10+、GCC、libm、Linux SocketCAN 头文件。
 
-### 1. 检查CAN硬件
+## 使用方式
 
+### 全局选项
+
+| 选项 | 说明 |
+| ---- | ---- |
+| `-i, --interface IFACE` | 指定 SocketCAN 接口（如 `can0`、`slcan0`） |
+| `-n, --node-id ID` | 目标节点 ID（0-255，默认 8） |
+| `-h, --help` | 显示英文帮助 |
+| `-v, --version` | 显示版本号 |
+
+### 常用命令
+
+| 命令 | 作用 |
+| ---- | ---- |
+| `list` | 展示接口状态 |
+| `probe` | 设备探测，输出地址及 NAME |
+| `read` | 实时显示 HiPNUC 传感器数据 |
+| `stats` | 监控各 CAN ID 的帧率与 DLC |
+
+示例：
+
+```bash
+./canhost list
+./canhost -i can0 probe
+./canhost -i can0 -n 8 read
+./canhost -i can0 stats
 ```
-ip link show
 
-# 查看CAN设备类型
-cat /sys/class/net/can0/type
-# 输出280表示CAN设备
-```
+## CAN 接口快速配置
 
-### 2. 配置CAN接口
-
-```
-sudo ip link set down can0
-
-# 设置CAN波特率（根据IMU设备配置，通常为500kbps）
+```bash
+sudo ip link set can0 down
 sudo ip link set can0 type can bitrate 500000
-
-# 启动CAN接口
-sudo ip link set up can0
-
-# 验证配置
-ip link show can0
+sudo ip link set can0 up
+ip -details link show can0
 ```
 
-## 程序使用方法
+`list` 命令会读取 `/sys/class/net/<iface>/can_bittiming/*`，若接口 down 或驱动未导出该节点则显示 `N/A`。
 
-### 基本用法
+## 协议与解析
 
-```
-./imu_can_reader
+- **设备探测**：`probe` 发送 PGN 0xEA00（REQUEST）请求 ADDRESS_CLAIMED，并列出所有响应节点。(probe只针对J1939协议设备)
+- **HiPNUC-CAN 数据**：`read` 依赖 `hipnuc_can_parser` 解析 ACCEL/GYRO/MAG/EULER/QUAT/PRESSURE/INCLI/TIME 等帧，10 Hz 刷新终端。
+- **CAN 帧统计**：`stats` 不解析载荷，仅按 ID 聚合频率，适合观察总线负载与丢包情况。
 
-# 示例输出:
-=====================================
-     Available CAN Interfaces       
-=====================================
- *can0      : up
-=====================================
-Selected: can0
-Interface 'can0' is ready!
+## 注意事项
 
-=== HiPNUC IMU CAN Parser ===
-Interface: can0 | Node ID: 8 | Total: 45.2 Hz
+1. 访问 SocketCAN 通常需要 root 权限，若遇到 `Operation not permitted` 请使用 `sudo`.
+2. `list` 仅列出真实物理接口，`vcan`、`vxcan` 默认忽略；`slcan*` 会被视为物理口。
 
-Message Type  | Rate (Hz) | Data
-ACCEL         |     10.1  | X: -0.221 Y:  0.209 Z:  0.949 (m/s²)
-GYRO          |     10.0  | X: -0.062 Y: -0.006 Z: -0.010 (rad/s)
-EULER         |     10.0  | Roll: 13.05 Pitch: 12.19 Yaw: -122.48 (deg)
-QUAT          |     10.0  | W: -0.486 X: -0.150 Y:  0.038 Z:  0.860
-PRESSURE      |      5.0  | 100676.0 Pa
-```
+## 故障排查
 
-## 常见问题排查
-
-### 1. CAN接口问题
-
-**问题**: `RTNETLINK answers: Operation not supported`
-
-```
-sudo modprobe can
-sudo modprobe can-raw
-sudo modprobe can-bcm
-sudo modprobe vcan
-
-# 检查模块是否加载
-lsmod | grep can
-```
-
-**问题**: `Cannot find device "can0"`
-
-```
-lsusb | grep -i peak  # 对于PEAK-CAN设备
-
-# 检查内核日志
-dmesg | grep -i can
-
-# 手动创建虚拟CAN接口（用于测试）
-sudo modprobe vcan
-sudo ip link add dev vcan0 type vcan
-sudo ip link set up vcan0
-```
-
-### 3. 波特率不匹配
-
-**问题**: 接收不到数据或数据错误
-
-```
-# 常见波特率: 125000, 250000, 500000, 1000000
-
-# 重新配置CAN接口波特率
-sudo ip link set down can0
-sudo ip link set can0 type can bitrate 250000  # 尝试不同波特率
-sudo ip link set up can0
-```
-
-### 4. 节点ID问题
-
-**问题**: 程序运行但无数据显示
-
-```
-./imu_can_reader can0 8   # 默认
-./imu_can_reader can0 2   # 尝试ID 2
-```
-
-## 技术支持
-
-- **官方文档**: 参考`指令与编程手册`获取完整的IMU配置和协议说明
-- **官方网站**: [www.hipnuc.com](http://www.hipnuc.com)
-
-------
-
-**注意**: 使用前请确保IMU设备已正确配置CAN输出模式和相应的波特率。如遇到问题，请首先检查硬件连接和CAN接口配置。
+| 现象 | 排查建议 |
+| ---- | -------- |
+| `list` 无接口 | 检查硬件连接并加载驱动(以PeakCAN为例)（如 `sudo modprobe peak_usb`） |
+| `read` 无数据 | 检查节点 ID、波特率与是否确实有 HiPNUC 帧输出 |
