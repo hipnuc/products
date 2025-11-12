@@ -4,13 +4,14 @@
 #include "log.h"
 #include "can_interface.h"
 #include "utils.h"
+#include "config.h"
 #include <string.h>
 
 
 // Command registry entry
 typedef struct {
     const char *name;
-    int (*func)(GlobalOptions*, int, char**);
+    int (*func)(int, char**);
     int needs_interface; // 0: interface optional; 1: enforce readiness
 } command_t;
 
@@ -19,12 +20,11 @@ static command_t commands[] = {
     {"list",   cmd_list, 0},
     {"probe",  cmd_probe, 1},
     {"read",   cmd_read,  1},
-    {"stats",  cmd_stats, 1},
     {NULL, NULL, 0}
 };
 
 // Dispatches the requested command
-int execute_command(const char *command_name, GlobalOptions *opts, int argc, char *argv[])
+int execute_command(const char *command_name, int argc, char *argv[])
 {
     if (!command_name) {
         log_error("Command name cannot be null");
@@ -35,12 +35,13 @@ int execute_command(const char *command_name, GlobalOptions *opts, int argc, cha
         if (strcmp(command_name, commands[i].name) == 0) {
             log_debug("Executing command: %s", command_name);
             if (commands[i].needs_interface) {
-                if (can_ensure_interface_ready(opts->can_interface) < 0) {
-                    utils_print_can_setup_hint(opts->can_interface);
+                const char *ifname = config_get_interface();
+                if (can_ensure_interface_ready(ifname) < 0) {
+                    utils_print_can_setup_hint(ifname);
                     return -1;
                 }
             }
-            return commands[i].func(opts, argc, argv);
+            return commands[i].func(argc, argv);
         }
     }
     
@@ -50,8 +51,8 @@ int execute_command(const char *command_name, GlobalOptions *opts, int argc, cha
         printf("  %s\n", commands[i].name);
     }
     printf("\nHint: run 'canhost --help' for usage.\n");
-    printf("Examples: canhost list | canhost -i can0 probe | canhost -i can0 stats\n");
-    
+    printf("Examples: canhost list | canhost probe | canhost read\n");
+
     return -1;
 }
 

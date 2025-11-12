@@ -6,11 +6,11 @@
 #include <stdbool.h>
 #include <linux/can.h>
 
-#include "../global_options.h"
 #include "../can_interface.h"
 #include "../log.h"
 #include "../utils.h"
 #include "../commands.h"
+#include "../config.h"
 
 #define J1939_PGN_REQUEST_PGN         59904
 #define J1939_PGN_ADDRESS_CLAIMED     60928
@@ -164,18 +164,19 @@ static void update_progress(time_t now, time_t end, int *last_remaining)
     }
 }
 
-int cmd_probe(GlobalOptions *opts, int argc, char *argv[])
+int cmd_probe(int argc, char *argv[])
 {
     (void)argc; (void)argv;
 
     // Interface readiness already validated by the dispatcher (commands.c)
-    int fd = can_open_socket(opts->can_interface);
+    const char *ifname = config_get_interface();
+    int fd = can_open_socket(ifname);
     if (fd < 0) {
-        utils_print_can_setup_hint(opts->can_interface);
+        utils_print_can_setup_hint(ifname);
         return -1;
     }
 
-    printf("Probing J1939 devices on %s (window: %ds)\n", opts->can_interface, PROBE_WINDOW_SECONDS);
+    printf("Probing J1939 devices on %s (window: %ds)\n", ifname, PROBE_WINDOW_SECONDS);
     printf("Press Ctrl+C to stop early.\n\n");
 
     signal(SIGINT, signal_handler);

@@ -20,6 +20,7 @@ int can_check_interface_status(const char *ifname);
 int can_open_socket(const char *ifname);
 void can_close_socket(int sockfd);
 int can_receive_frame(int sockfd, struct can_frame *frame);
+int can_receive_frame_ts(int sockfd, struct can_frame *frame, uint64_t *hw_ts_us);
 
 // Ensures the provided interface exists and is ready
 int can_ensure_interface_ready(const char *ifname);

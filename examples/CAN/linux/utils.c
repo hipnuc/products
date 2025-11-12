@@ -13,11 +13,12 @@ uint32_t utils_get_timestamp_ms(void)
 }
 
 // Convert a Linux CAN frame into the HiPNUC CAN helper struct
-void utils_linux_can_to_hipnuc_can(const struct can_frame *linux_frame, hipnuc_can_frame_t *hipnuc_frame)
+void utils_linux_can_to_hipnuc_can(const struct can_frame *linux_frame, uint64_t hw_ts_us, hipnuc_can_frame_t *hipnuc_frame)
 {
     hipnuc_frame->can_id = linux_frame->can_id;
     hipnuc_frame->can_dlc = linux_frame->can_dlc;
     memcpy(hipnuc_frame->data, linux_frame->data, 8);
+    hipnuc_frame->hw_ts_us = hw_ts_us;
 }
 
 // Print quick setup commands when a CAN interface cannot be opened

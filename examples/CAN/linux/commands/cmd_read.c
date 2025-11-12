@@ -3,177 +3,116 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
-#include <time.h>
-#include <sys/time.h>
 #include <stdbool.h>
-#include "../global_options.h"
+#include <sys/time.h>
 #include "../can_interface.h"
 #include "../log.h"
 #include "../utils.h"
 #include "hipnuc_can_parser.h"
-
-
-#define MAX_MSG_TYPES 15  // Max number of concurrent message types
-
-typedef struct {
-    int msg_type;
-    can_sensor_data_t data;
-    uint32_t last_update_time_ms;
-    bool has_data;
-    int display_line;
-} msg_cache_t;
+#include "../config.h"
 
 static volatile bool running = true;
-static msg_cache_t msg_cache[MAX_MSG_TYPES];
-static int active_msg_count = 0;
 
 static void signal_handler(int sig)
 {
     (void)sig;
     running = false;
-    printf("\nStopping reader...\n");
 }
 
-// Timestamp helper is provided by utils_get_timestamp_ms()
-
-static void init_msg_cache(void)
+static unsigned long long now_ms(void)
 {
-    memset(msg_cache, 0, sizeof(msg_cache));
-    active_msg_count = 0;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (unsigned long long)tv.tv_sec * 1000ULL + (unsigned long long)tv.tv_usec / 1000ULL;
 }
 
-static int find_or_create_msg_cache(int msg_type)
+int cmd_read(int argc, char *argv[])
 {
-    for (int i = 0; i < active_msg_count; i++) {
-        if (msg_cache[i].msg_type == msg_type) {
-            return i;
+    const char *json_path = NULL;
+    FILE *json_fp = NULL;
+    enum { MAX_MSG_TYPES = 32, JSON_CACHE_LEN = 512 };
+    char last_json[MAX_MSG_TYPES][JSON_CACHE_LEN];
+    bool has_json[MAX_MSG_TYPES];
+    for (int i = 0; i < MAX_MSG_TYPES; ++i) has_json[i] = false;
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--json-file") == 0) {
+            if (i + 1 < argc) {
+                json_path = argv[i + 1];
+                i++;
+            } else {
+                log_error("Missing file path for %s", argv[i]);
+                return -1;
+            }
         }
     }
-    
-    if (active_msg_count < MAX_MSG_TYPES) {
-        int index = active_msg_count++;
-        msg_cache[index].msg_type = msg_type;
-        msg_cache[index].has_data = false;
-        msg_cache[index].display_line = index + 4; // Table header consumes first rows
-        return index;
-    }
-    
-    return -1; // Cache exhausted
-}
-
-static void update_msg_cache(int msg_type, const can_sensor_data_t *data)
-{
-    int index = find_or_create_msg_cache(msg_type);
-    if (index >= 0) {
-        msg_cache[index].data = *data;
-        msg_cache[index].last_update_time_ms = utils_get_timestamp_ms();
-        msg_cache[index].has_data = true;
-    }
-}
-
-static void display_sensor_data(const char *ifname, uint8_t node_id, int msg_type, const can_sensor_data_t *data)
-{
-    (void)msg_type;
-    (void)data;
-    
-    static bool first_display = true;
-    
-    if (first_display) {
-        printf("\033[2J\033[H");
-        printf("=== HiPNUC IMU CAN Live View ===\n");
-        printf("Interface: %s | Node ID: %d\n", ifname, node_id);
-        printf("Message Type  | CAN ID   | Latest data\n");
-        printf("--------------+----------+---------------------------------------------------\n");
-        first_display = false;
-    }
-    
-    for (int i = 0; i < active_msg_count; i++) {
-        msg_cache_t *cache = &msg_cache[i];
-        
-        if (!cache->has_data) {
-            continue;
+    if (json_path) {
+        json_fp = fopen(json_path, "w");
+        if (!json_fp) {
+            log_error("Failed to open %s", json_path);
+            return -1;
         }
-        
-        printf("\033[%d;1H", cache->display_line);
-        
-        char data_str[200];
-        hipnuc_can_format_data(cache->msg_type, &cache->data, data_str, sizeof(data_str));
-        
-        printf("\033[K");
-        
-        char can_id_str[12];
-        if (cache->data.is_extended) {
-            snprintf(can_id_str, sizeof(can_id_str), "0x%08X", cache->data.can_id & HIPNUC_CAN_EFF_MASK);
-        } else {
-            snprintf(can_id_str, sizeof(can_id_str), "0x%03X", cache->data.can_id & HIPNUC_CAN_SFF_MASK);
-        }
-        
-        printf("%-12s  | %-8s | %s", 
-               hipnuc_can_get_msg_type_name(cache->msg_type),
-               can_id_str,
-               data_str);
+        log_info("Recording JSON to %s", json_path);
     }
     
-    int status_line = 4 + MAX_MSG_TYPES + 2;
-    printf("\033[%d;1H", status_line);
-    printf("\033[K");
-    printf("Active message types: %d | Press Ctrl+C to exit...", active_msg_count);
-    
-    fflush(stdout);
-}
-
-int cmd_read(GlobalOptions *opts, int argc, char *argv[])
-{
-    (void)argc;
-    (void)argv;
-    
-    // Interface readiness already validated by commands.c
-    
-    int sockfd = can_open_socket(opts->can_interface);
+    const char *ifname = config_get_interface();
+    int sockfd = can_open_socket(ifname);
     if (sockfd < 0) {
-        utils_print_can_setup_hint(opts->can_interface);
+        utils_print_can_setup_hint(ifname);
         return -1;
     }
-    
-    printf("HiPNUC sensor data monitor\n");
-    printf("Interface: %s\n", opts->can_interface);
-    printf("Node ID: %d\n", opts->node_id);
-    printf("Listening for CAN frames and decoding sensor payloads...\n");
-    printf("Tip: run 'canhost stats' for raw frame rates.\n\n");
     
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     
-    init_msg_cache();
-    
-    sleep(2);
-    
-    uint32_t last_display_time = utils_get_timestamp_ms();
+    log_info("Starting CAN read on interface: %s", ifname);
+    unsigned long long last_print = 0ULL;
     
     while (running) {
         struct can_frame frame;
-        int result = can_receive_frame(sockfd, &frame);
-        
-        if (result > 0) {
-            can_sensor_data_t can_sensor_data;
-            hipnuc_can_frame_t hipnuc_frame;
-            utils_linux_can_to_hipnuc_can(&frame, &hipnuc_frame);
-            int msg_type = hipnuc_can_parse_frame(&hipnuc_frame, &can_sensor_data, opts->node_id);
+        uint64_t hw_ts_us = 0;
+        int result = can_receive_frame_ts(sockfd, &frame, &hw_ts_us);
 
+        if (result > 0) {
+            // Convert Linux CAN frame to hipnuc CAN frame
+            hipnuc_can_frame_t hipnuc_frame;
+            utils_linux_can_to_hipnuc_can(&frame, hw_ts_us, &hipnuc_frame);
+            
+            // Parse CAN frame
+            can_sensor_data_t data = {0};
+            int msg_type = hipnuc_can_parse_frame(&hipnuc_frame, &data);
+            
+            // Convert to JSON and output
             if (msg_type != CAN_MSG_UNKNOWN && msg_type != CAN_MSG_ERROR) {
-                update_msg_cache(msg_type, &can_sensor_data);
+                can_json_output_t json_output;
+                if (hipnuc_can_to_json(&data, msg_type, &json_output) > 0) {
+                    unsigned long long t = now_ms();
+                    if (msg_type >= 0 && msg_type < MAX_MSG_TYPES) {
+                        snprintf(last_json[msg_type], JSON_CACHE_LEN, "%s", json_output.buffer);
+                        has_json[msg_type] = true;
+                    }
+                    if (json_fp) {
+                        fputs(json_output.buffer, json_fp);
+                        fflush(json_fp);
+                    }
+                    if (t - last_print >= 50ULL) {
+                        for (int i = 0; i < MAX_MSG_TYPES; ++i) {
+                            if (has_json[i]) {
+                                fputs(last_json[i], stdout);
+                            }
+                        }
+                        fflush(stdout);
+                        last_print = t;
+                    }
+                }
             }
         } else if (result < 0) {
+            log_error("Failed to receive CAN frame");
             break;
-        }
-        
-        uint32_t now = utils_get_timestamp_ms();
-        if (now - last_display_time >= 100) {
-            display_sensor_data(opts->can_interface, opts->node_id, 0, NULL);
-            last_display_time = now;
         }
     }
     
+    log_info("Stopping CAN read");
     can_close_socket(sockfd);
+    if (json_fp) fclose(json_fp);
     return 0;
 }

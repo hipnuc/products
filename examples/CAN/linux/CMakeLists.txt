@@ -18,10 +18,10 @@ set(SOURCES
     commands.c
     log.c
     utils.c
+    config.c
     commands/cmd_list.c
     commands/cmd_probe.c
     commands/cmd_read.c
-    commands/cmd_stats.c
     ../../../drivers/hipnuc_can_parser.c
 )
 
@@ -33,6 +33,9 @@ target_link_libraries(canhost m)
 
 # 设置编译选项
 target_compile_options(canhost PRIVATE -Wall -Wextra)
+
+# Inject source dir macro for config search
+target_compile_definitions(canhost PRIVATE CANHOST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 # 设置调试信息
 set(CMAKE_BUILD_TYPE Debug)

@@ -12,6 +12,7 @@
 #include <net/if.h>
 #include <linux/if_arp.h>
 #include <linux/can/raw.h>
+#include <linux/net_tstamp.h>
 
 static void trim_newline(char *str)
 {
@@ -229,6 +230,11 @@ int can_open_socket(const char *ifname)
         log_warn("Failed to set socket timeout: %s", strerror(errno));
         // continue, not fatal
     }
+
+    int tstamp_flags = SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_RX_HARDWARE | SOF_TIMESTAMPING_RAW_HARDWARE;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_TIMESTAMPING, &tstamp_flags, sizeof(tstamp_flags)) < 0) {
+        log_warn("Failed to enable timestamping: %s", strerror(errno));
+    }
     
     // Resolve interface index
     strcpy(ifr.ifr_name, ifname);
@@ -286,6 +292,57 @@ int can_receive_frame(int sockfd, struct can_frame *frame)
     }
     
     return 1; // Success
+}
+
+int can_receive_frame_ts(int sockfd, struct can_frame *frame, uint64_t *hw_ts_us)
+{
+    if (sockfd < 0 || !frame || !hw_ts_us) {
+        return -1;
+    }
+
+    struct iovec iov;
+    struct msghdr msg;
+    char ctrlmsg[256];
+    memset(&msg, 0, sizeof(msg));
+    iov.iov_base = frame;
+    iov.iov_len = sizeof(struct can_frame);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = ctrlmsg;
+    msg.msg_controllen = sizeof(ctrlmsg);
+
+    ssize_t nbytes = recvmsg(sockfd, &msg, 0);
+    if (nbytes < 0) {
+        if (errno == EINTR) {
+            return 0;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return 0;
+        }
+        log_error("Failed to recvmsg CAN frame: %s", strerror(errno));
+        return -1;
+    }
+    if ((size_t)nbytes < sizeof(struct can_frame)) {
+        log_warn("Received partial CAN frame");
+        return -1;
+    }
+
+    *hw_ts_us = 0;
+    for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_TIMESTAMPING) {
+            struct timespec *ts = (struct timespec *)CMSG_DATA(cmsg);
+            if (ts[2].tv_sec || ts[2].tv_nsec) {
+                *hw_ts_us = (uint64_t)ts[2].tv_sec * 1000000ULL + (uint64_t)ts[2].tv_nsec / 1000ULL;
+            } else if (ts[1].tv_sec || ts[1].tv_nsec) {
+                *hw_ts_us = (uint64_t)ts[1].tv_sec * 1000000ULL + (uint64_t)ts[1].tv_nsec / 1000ULL;
+            } else if (ts[0].tv_sec || ts[0].tv_nsec) {
+                *hw_ts_us = (uint64_t)ts[0].tv_sec * 1000000ULL + (uint64_t)ts[0].tv_nsec / 1000ULL;
+            }
+            break;
+        }
+    }
+
+    return 1;
 }
 
 // Validates the requested interface is available before executing commands

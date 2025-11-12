@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-#include "../global_options.h"
 #include "../can_interface.h"
 #include "../log.h"
 
@@ -32,9 +31,8 @@ static void print_setup_hint(void)
     printf("  ip -details link show can0\n\n");
 }
 
-int cmd_list(GlobalOptions *opts, int argc, char *argv[])
+int cmd_list(int argc, char *argv[])
 {
-    (void)opts;
     (void)argc;
     (void)argv;
 
@@ -57,8 +55,8 @@ int cmd_list(GlobalOptions *opts, int argc, char *argv[])
     }
 
     printf("\nExamples:\n");
-    printf("  canhost -i %s read\n", interfaces[0].name);
-    printf("  canhost -i %s -n <node> probe\n", interfaces[0].name);
+    printf("  canhost read\n");
+    printf("  canhost probe\n");
     printf("\n");
 
     return 0;
