@@ -8,7 +8,9 @@
 #include "../can_interface.h"
 #include "../log.h"
 #include "../utils.h"
-#include "hipnuc_can_parser.h"
+#include "hipnuc_can_common.h"
+#include "hipnuc_j1939_parser.h"
+#include "canopen_parser.h"
 #include "../config.h"
 
 static volatile bool running = true;
@@ -77,9 +79,12 @@ int cmd_read(int argc, char *argv[])
             hipnuc_can_frame_t hipnuc_frame;
             utils_linux_can_to_hipnuc_can(&frame, hw_ts_us, &hipnuc_frame);
             
-            // Parse CAN frame
             can_sensor_data_t data = {0};
-            int msg_type = hipnuc_can_parse_frame(&hipnuc_frame, &data);
+            data.node_id = hipnuc_can_extract_node_id(hipnuc_frame.can_id);
+            data.hw_ts_us = hipnuc_frame.hw_ts_us;
+            int msg_type = (hipnuc_frame.can_id & HIPNUC_CAN_EFF_FLAG)
+                         ? hipnuc_j1939_parse_frame(&hipnuc_frame, &data)
+                         : canopen_parse_frame(&hipnuc_frame, &data);
             
             // Convert to JSON and output
             if (msg_type != CAN_MSG_UNKNOWN && msg_type != CAN_MSG_ERROR) {

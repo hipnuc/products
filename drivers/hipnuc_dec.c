@@ -93,7 +93,7 @@ static int parse_data(hipnuc_raw_t *raw)
         {
             raw->hi83.tag = 0x83;
             raw->hi83.main_status = U2(p + ofs + 1);
-            raw->hi83.reserved = (int8_t)p[ofs + 3];
+            raw->hi83.ins_status = p[ofs + 3];
             raw->hi83.data_bitmap = U4(p + ofs + 4);
             int idx = ofs + 8;
             uint32_t bm = raw->hi83.data_bitmap;
@@ -345,8 +345,10 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
             "{\n"
             "  \"type\": \"HI83\",\n"
             "  \"main_status\": %d,\n"
+            "  \"ins_status\": %u,\n"
             "  \"data_bitmap\": %u\n",
             raw->hi83.main_status,
+            (unsigned)raw->hi83.ins_status,
             (unsigned)raw->hi83.data_bitmap);
         if (ret > 0) written += ret;
 

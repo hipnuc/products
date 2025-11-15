@@ -120,7 +120,7 @@ typedef struct __attribute__((__packed__))
 {
     uint8_t  tag;
     uint16_t main_status;
-    int8_t   reserved;
+    uint8_t  ins_status;
     uint32_t data_bitmap;
 
     float    acc_b[3];

@@ -31,7 +31,7 @@
 Example code is provided for multiple languages and platforms:
 
 - [Python Examples](examples/python): Includes data reading and module configuration
-- [STM32 Examples](examples/STM32)
+- [STM32 Serial Examples](examples/stm32_serial)
 - [Arduino Examples](examples/arduino)
 - [ROS Melodic Examples](examples/ROS_Melodic)
 - [ROS2 Examples](examples/ROS2)
