@@ -2,7 +2,7 @@
 
 ## 概述
 
-`canhost` 是一个面向 HiPNUC IMU/ARHS 设备的 SocketCAN Linux命令行工具。通过统一的 CLI 命令即可完成接口检测、J1939 探测、实时数据展示，便于在 Linux/树莓派等平台快速评估产品表现。
+`canhost` 是一个面向 HiPNUC IMU/ARHS 设备的 SocketCAN Linux 命令行工具。通过统一的 CLI 命令即可完成接口检测、J1939 探测、实时数据展示，便于在 Linux/树莓派等平台快速评估产品表现。
 
 ## 功能
 
@@ -111,8 +111,8 @@ interface=can0
 
 ## 协议与解析
 
-- **设备探测**：`probe` 发送 PGN 0xEA00（REQUEST）请求 ADDRESS_CLAIMED，并列出所有响应节点。(probe只针对J1939协议设备)
-- **HiPNUC-CAN 数据**：`read` 依赖 `hipnuc_can_parser` 解析 ACCEL/GYRO/MAG/EULER/QUAT/PRESSURE/INCLI/TIME 等帧。节点 ID 来自 CAN 帧 ID 解析。
+- **设备探测**：`probe` 发送 PGN 0xEA00（REQUEST）请求 ADDRESS_CLAIMED，并列出所有响应节点。（仅针对 J1939 设备）
+- **HiPNUC-CAN 数据**：`read` 按帧类型自动路由：扩展帧由 `hipnuc_j1939_parser` 解析，标准帧由 `canopen_parser` 解析；统一 JSON 输出由 `hipnuc_can_common` 提供。节点 ID 来自 CAN 帧 ID 解析。
 
 
 ## 注意事项

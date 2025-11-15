@@ -1,0 +1,29 @@
+name: cmake-build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  examples-c:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S examples/C -B examples/C/build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build examples/C/build --config Release --parallel
+
+  examples-can-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S examples/CAN/linux -B examples/CAN/linux/build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build examples/CAN/linux/build --config Release --parallel

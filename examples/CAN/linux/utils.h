@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 #include <linux/can.h>
-#include "hipnuc_can_parser.h"
+#include "hipnuc_can_common.h"
 
 // Millisecond timestamp sourced from CLOCK_MONOTONIC
 uint32_t utils_get_timestamp_ms(void);

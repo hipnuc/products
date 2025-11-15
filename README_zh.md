@@ -31,7 +31,7 @@
 提供多种语言和平台的示例代码：
 
 - [Python](examples/python): 包含数据读取及模块配置
-- [STM32](examples/STM32)
+- [STM32 串口](examples/stm32_serial)
 - [Arduino](examples/arduino)
 - [ROS Melodic](examples/ROS_Melodic)
 - [ROS2](examples/ROS2)

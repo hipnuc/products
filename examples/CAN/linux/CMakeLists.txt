@@ -22,7 +22,9 @@ set(SOURCES
     commands/cmd_list.c
     commands/cmd_probe.c
     commands/cmd_read.c
-    ../../../drivers/hipnuc_can_parser.c
+    ../../../drivers/hipnuc_can_common.c
+    ../../../drivers/hipnuc_j1939_parser.c
+    ../../../drivers/canopen_parser.c
 )
 
 # 创建可执行文件

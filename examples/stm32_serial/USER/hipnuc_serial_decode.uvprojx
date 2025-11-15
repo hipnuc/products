@@ -7,7 +7,7 @@
 
   <Targets>
     <Target>
-      <TargetName>hipnuc_decode</TargetName>
+      <TargetName>hipnuc_serial_decode</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
       <pCCUsed>5060960::V5.06 update 7 (build 960)::.\ARMCC</pCCUsed>
@@ -473,11 +473,6 @@
               <FileName>example_data.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\drivers\example_data.c</FilePath>
-            </File>
-            <File>
-              <FileName>hipnuc_can_parser.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\drivers\hipnuc_can_parser.c</FilePath>
             </File>
             <File>
               <FileName>hipnuc_dec.c</FileName>
