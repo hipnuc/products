@@ -29,6 +29,7 @@
  /* new HiPNUC standard packet */
 #define HIPNUC_ID_HI91        (0x91)
 #define HIPNUC_ID_HI81        (0x81)
+#define HIPNUC_ID_HI83        (0x83)
  
  #ifndef D2R
  #define D2R (0.0174532925199433F)
@@ -54,12 +55,26 @@
      return u;
  }
  
- static float R4(uint8_t *p)
- {
-     float r;
-     memcpy(&r, p, 4);
-     return r;
- }
+static float R4(uint8_t *p)
+{
+    float r;
+    memcpy(&r, p, 4);
+    return r;
+}
+
+static uint32_t U4(uint8_t *p)
+{
+    uint32_t u;
+    memcpy(&u, p, 4);
+    return u;
+}
+
+static double D8(uint8_t *p)
+{
+    double d;
+    memcpy(&d, p, 8);
+    return d;
+}
  
  /* parse the payload of a frame and feed into data section */
  static int parse_data(hipnuc_raw_t *raw)
@@ -70,6 +85,7 @@
     /* ignore all previous data */
     raw->hi91.tag = 0;
     raw->hi81.tag = 0;
+    raw->hi83.tag = 0;
  
      while (ofs < raw->len)
      {
@@ -128,6 +144,38 @@
         case HIPNUC_ID_HI81:
             memcpy(&raw->hi81, p + ofs, sizeof(hi81_t));
             ofs += sizeof(hi81_t);
+            break;
+        case HIPNUC_ID_HI83:
+        {
+            raw->hi83.tag = 0x83;
+            raw->hi83.main_status = U2(p + ofs + 1);
+            raw->hi83.reserved = (int8_t)p[ofs + 3];
+            raw->hi83.data_bitmap = U4(p + ofs + 4);
+            int idx = ofs + 8;
+            uint32_t bm = raw->hi83.data_bitmap;
+
+            if (bm & HI83_BMAP_ACC_B) { raw->hi83.acc_b[0] = R4(p + idx + 0); raw->hi83.acc_b[1] = R4(p + idx + 4); raw->hi83.acc_b[2] = R4(p + idx + 8); idx += 12; }
+            if (bm & HI83_BMAP_GYR_B) { raw->hi83.gyr_b[0] = R4(p + idx + 0); raw->hi83.gyr_b[1] = R4(p + idx + 4); raw->hi83.gyr_b[2] = R4(p + idx + 8); idx += 12; }
+            if (bm & HI83_BMAP_MAG_B) { raw->hi83.mag_b[0] = R4(p + idx + 0); raw->hi83.mag_b[1] = R4(p + idx + 4); raw->hi83.mag_b[2] = R4(p + idx + 8); idx += 12; }
+            if (bm & HI83_BMAP_RPY) { raw->hi83.rpy[0] = R4(p + idx + 0); raw->hi83.rpy[1] = R4(p + idx + 4); raw->hi83.rpy[2] = R4(p + idx + 8); idx += 12; }
+            if (bm & HI83_BMAP_QUAT) { raw->hi83.quat[0] = R4(p + idx + 0); raw->hi83.quat[1] = R4(p + idx + 4); raw->hi83.quat[2] = R4(p + idx + 8); raw->hi83.quat[3] = R4(p + idx + 12); idx += 16; }
+            if (bm & HI83_BMAP_SYSTEM_TIME) { raw->hi83.system_time = U4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_UTC) { raw->hi83.utc.year = p[idx+0]; raw->hi83.utc.month = p[idx+1]; raw->hi83.utc.day = p[idx+2]; raw->hi83.utc.hour = p[idx+3]; raw->hi83.utc.min = p[idx+4]; raw->hi83.utc.sec_ms = U2(p + idx + 5); raw->hi83.utc.rev = p[idx+7]; idx += 8; }
+            if (bm & HI83_BMAP_AIR_PRESSURE) { raw->hi83.air_pressure = R4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_TEMPERATURE) { raw->hi83.temperature = R4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_INCLINATION) { raw->hi83.inclination[0] = R4(p + idx + 0); raw->hi83.inclination[1] = R4(p + idx + 4); raw->hi83.inclination[2] = R4(p + idx + 8); idx += 12; }
+            if (bm & HI83_BMAP_HSS) { raw->hi83.hss[0] = R4(p + idx + 0); raw->hi83.hss[1] = R4(p + idx + 4); raw->hi83.hss[2] = R4(p + idx + 8); idx += 12; }
+            if (bm & HI83_BMAP_HSS_FRQ) { raw->hi83.hss_frq[0] = R4(p + idx + 0); raw->hi83.hss_frq[1] = R4(p + idx + 4); raw->hi83.hss_frq[2] = R4(p + idx + 8); idx += 12; }
+            if (bm & HI83_BMAP_VEL_ENU) { raw->hi83.vel_enu[0] = R4(p + idx + 0); raw->hi83.vel_enu[1] = R4(p + idx + 4); raw->hi83.vel_enu[2] = R4(p + idx + 8); idx += 12; }
+            if (bm & HI83_BMAP_ACC_ENU) { raw->hi83.acc_enu[0] = R4(p + idx + 0); raw->hi83.acc_enu[1] = R4(p + idx + 4); raw->hi83.acc_enu[2] = R4(p + idx + 8); idx += 12; }
+            if (bm & HI83_BMAP_INS_LON_LAT_MSL) { raw->hi83.ins_lon_lat_msl[0] = D8(p + idx + 0); raw->hi83.ins_lon_lat_msl[1] = D8(p + idx + 8); raw->hi83.ins_lon_lat_msl[2] = D8(p + idx + 16); idx += 24; }
+            if (bm & HI83_BMAP_GNSS_QUALITY_NV) { raw->hi83.solq_pos = p[idx+0]; raw->hi83.nv_pos = p[idx+1]; raw->hi83.solq_heading = p[idx+2]; raw->hi83.nv_heading = p[idx+3]; idx += 4; }
+            if (bm & HI83_BMAP_OD_SPEED) { raw->hi83.od_speed = R4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_GNSS_LON_LAT_MSL) { raw->hi83.gnss_lon_lat_msl[0] = D8(p + idx + 0); raw->hi83.gnss_lon_lat_msl[1] = D8(p + idx + 8); raw->hi83.gnss_lon_lat_msl[2] = D8(p + idx + 16); idx += 24; }
+            if (bm & HI83_BMAP_GNSS_VEL) { raw->hi83.gnss_vel[0] = R4(p + idx + 0); raw->hi83.gnss_vel[1] = R4(p + idx + 4); raw->hi83.gnss_vel[2] = R4(p + idx + 8); idx += 12; }
+
+            ofs = idx;
+        }
             break;
          default:
              ofs++;
@@ -252,7 +300,7 @@
     
  
      /* dump 0x81 packet */
- else if(raw->hi81.tag == HIPNUC_ID_HI81)
+else if(raw->hi81.tag == HIPNUC_ID_HI81)
  {
      /* Format:
       * status: device status
@@ -341,8 +389,100 @@
          raw->hi81.diff_age,
          raw->hi81.undulation*0.01,
          raw->hi81.vel_enu[0]*0.01, raw->hi81.vel_enu[1]*0.01, raw->hi81.vel_enu[2]*0.01,
-         raw->hi81.acc_enu[0]*0.0048828, raw->hi81.acc_enu[1]*0.0048828, raw->hi81.acc_enu[2]*0.0048828);
-     }
+        raw->hi81.acc_enu[0]*0.0048828, raw->hi81.acc_enu[1]*0.0048828, raw->hi81.acc_enu[2]*0.0048828);
+    }
+
+    else if (raw->hi83.tag == HIPNUC_ID_HI83)
+    {
+        ret = snprintf(buf + written, buf_size - written,
+            "{\n"
+            "  \"type\": \"HI83\",\n"
+            "  \"main_status\": %d,\n"
+            "  \"data_bitmap\": %u\n",
+            raw->hi83.main_status,
+            (unsigned)raw->hi83.data_bitmap);
+        if (ret > 0) written += ret;
+
+        if (raw->hi83.data_bitmap & HI83_BMAP_ACC_B) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"acc\": [%.3f, %.3f, %.3f]\n", raw->hi83.acc_b[0]*GRAVITY, raw->hi83.acc_b[1]*GRAVITY, raw->hi83.acc_b[2]*GRAVITY);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_GYR_B) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"gyr\": [%.3f, %.3f, %.3f]\n", raw->hi83.gyr_b[0], raw->hi83.gyr_b[1], raw->hi83.gyr_b[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_MAG_B) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"mag\": [%.3f, %.3f, %.3f]\n", raw->hi83.mag_b[0], raw->hi83.mag_b[1], raw->hi83.mag_b[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_RPY) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"pitch\": %.2f\n  ,\"roll\": %.2f\n  ,\"yaw\": %.2f\n", raw->hi83.rpy[1], raw->hi83.rpy[0], raw->hi83.rpy[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_QUAT) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"quat\": [%.3f, %.3f, %.3f, %.3f]\n", raw->hi83.quat[0], raw->hi83.quat[1], raw->hi83.quat[2], raw->hi83.quat[3]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_SYSTEM_TIME) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"system_time\": %u\n", (unsigned)raw->hi83.system_time);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_UTC) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"utc\": \"20%02u-%02u-%02u %02u:%02u:%02u.%03u\"\n", (unsigned)raw->hi83.utc.year, (unsigned)raw->hi83.utc.month, (unsigned)raw->hi83.utc.day, (unsigned)raw->hi83.utc.hour, (unsigned)raw->hi83.utc.min, (unsigned)(raw->hi83.utc.sec_ms/1000), (unsigned)(raw->hi83.utc.sec_ms%1000));
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_AIR_PRESSURE) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"air_pressure\": %.1f\n", raw->hi83.air_pressure);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_TEMPERATURE) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"temperature\": %.2f\n", raw->hi83.temperature);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_INCLINATION) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"inclination\": [%.2f, %.2f, %.2f]\n", raw->hi83.inclination[0], raw->hi83.inclination[1], raw->hi83.inclination[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_HSS) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"hss\": [%.3f, %.3f, %.3f]\n", raw->hi83.hss[0], raw->hi83.hss[1], raw->hi83.hss[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_HSS_FRQ) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"hss_frq\": [%.3f, %.3f, %.3f]\n", raw->hi83.hss_frq[0], raw->hi83.hss_frq[1], raw->hi83.hss_frq[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_VEL_ENU) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"vel_enu\": [%.3f, %.3f, %.3f]\n", raw->hi83.vel_enu[0], raw->hi83.vel_enu[1], raw->hi83.vel_enu[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_ACC_ENU) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"acc_enu\": [%.3f, %.3f, %.3f]\n", raw->hi83.acc_enu[0], raw->hi83.acc_enu[1], raw->hi83.acc_enu[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_INS_LON_LAT_MSL) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"ins_lon_lat_msl\": [%.7f, %.7f, %.3f]\n", raw->hi83.ins_lon_lat_msl[0], raw->hi83.ins_lon_lat_msl[1], raw->hi83.ins_lon_lat_msl[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_GNSS_QUALITY_NV) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"solq_pos\": %u\n  ,\"nv_pos\": %u\n  ,\"solq_heading\": %u\n  ,\"nv_heading\": %u\n", (unsigned)raw->hi83.solq_pos, (unsigned)raw->hi83.nv_pos, (unsigned)raw->hi83.solq_heading, (unsigned)raw->hi83.nv_heading);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_OD_SPEED) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"od_speed\": %.3f\n", raw->hi83.od_speed);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_GNSS_LON_LAT_MSL) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"gnss_lon_lat_msl\": [%.7f, %.7f, %.3f]\n", raw->hi83.gnss_lon_lat_msl[0], raw->hi83.gnss_lon_lat_msl[1], raw->hi83.gnss_lon_lat_msl[2]);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_GNSS_VEL) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"gnss_vel\": [%.3f, %.3f, %.3f]\n", raw->hi83.gnss_vel[0], raw->hi83.gnss_vel[1], raw->hi83.gnss_vel[2]);
+            if (ret > 0) written += ret;
+        }
+
+        ret = snprintf(buf + written, buf_size - written, "}\n");
+        if (ret > 0) written += ret;
+    }
  
      if (ret > 0) written += ret;
      return written;
