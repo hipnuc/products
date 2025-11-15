@@ -228,45 +228,13 @@ void imu_0x91_data(hipnuc_raw_t *data, hipnuc_imu::hipnuc_imu_msg *data_imu)
 
 }
 
-void imu_0x92_data(hipnuc_raw_t *data, hipnuc_imu::hipnuc_imu_msg *data_imu)
-{
-	frame_count_0x92++;
-	data_imu->hi92_data.frame_rate = frame_rate_0x92;
-
-	data_imu->hi92_data.tag = data->hi92.tag;
-
-	data_imu->hi92_data.air_pressure = data->hi92.air_pressure;
-	data_imu->hi92_data.temperature = data->hi92.temperature;
-
-	data_imu->hi92_data.acc_x = data->hi92.acc_b[0] * ACC_FACTOR;
-	data_imu->hi92_data.acc_y = data->hi92.acc_b[1] * ACC_FACTOR;
-	data_imu->hi92_data.acc_z = data->hi92.acc_b[2] * ACC_FACTOR;
-
-	data_imu->hi92_data.gyr_x = data->hi92.gyr_b[0] * GYR_FACTOR;
-	data_imu->hi92_data.gyr_y = data->hi92.gyr_b[1] * GYR_FACTOR;
-	data_imu->hi92_data.gyr_z = data->hi92.gyr_b[2] * GYR_FACTOR;
-
-	data_imu->hi92_data.mag_x = data->hi92.mag_b[0] * MAG_FACTOR;
-	data_imu->hi92_data.mag_y = data->hi92.mag_b[1] * MAG_FACTOR;
-	data_imu->hi92_data.mag_z = data->hi92.mag_b[2] * MAG_FACTOR;
-
-	data_imu->hi92_data.eul_r = data->hi92.roll * EUL_FACTOR;
-	data_imu->hi92_data.eul_p = data->hi92.pitch * EUL_FACTOR;
-	data_imu->hi92_data.eul_y = data->hi92.yaw * EUL_FACTOR;
-
-	data_imu->hi92_data.quat_w = data->hi92.quat[0] * QUA_FACTOR;
-	data_imu->hi92_data.quat_x = data->hi92.quat[1] * QUA_FACTOR;
-	data_imu->hi92_data.quat_y = data->hi92.quat[2] * QUA_FACTOR;
-	data_imu->hi92_data.quat_z = data->hi92.quat[3] * QUA_FACTOR;
-}
 
 
 void publish_data_package(hipnuc_raw_t *data, hipnuc_imu::hipnuc_imu_msg *data_imu)
 {
 	if(data->hi91.tag == 0x91)
 		imu_0x91_data(data, data_imu);
-	if(data->hi92.tag == 0x92)
-		imu_0x92_data(data, data_imu);
+    
 
 	Hipnuc_imu_pub.publish(*data_imu);
 	memset(data_imu, 0, sizeof(data_imu));

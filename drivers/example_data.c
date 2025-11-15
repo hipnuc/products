@@ -39,13 +39,6 @@ int process_example_data(void)
         0x5C, 0x3F
     };
 
-    // HI92 example data
-    uint8_t example_data_hi92[] = {
-        0x5A, 0xA5, 0x30, 0x00, 0xE3, 0xA4, 0x92, 0x23, 0x23, 0x1C, 0x7C, 0x11, 0x61, 0xFF, 0x23, 0x23,
-        0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xEB, 0xFE, 0x7B, 0x00, 0xB6, 0x07, 0xCD, 0x03, 0x70, 0xFC,
-        0xA3, 0xFC, 0x56, 0x1F, 0x00, 0x00, 0xCF, 0x0D, 0x00, 0x00, 0xC4, 0x07, 0x00, 0x00, 0xF0, 0x26,
-        0x27, 0x01, 0xC0, 0x02, 0xC2, 0x00
-    };
 
     // HI81 example data
     uint8_t example_data_hi81[] = {
@@ -68,15 +61,6 @@ int process_example_data(void)
         }
     }
 
-    printf("\nProcessing HI92 example data:\n");
-    print_raw_data(example_data_hi92, sizeof(example_data_hi92));
-    printf("Decoded data:\n");
-    for (size_t i = 0; i < sizeof(example_data_hi92); i++) {
-        if (hipnuc_input(&hipnuc_raw, example_data_hi92[i])) {
-            hipnuc_dump_packet(&hipnuc_raw, log_buf, sizeof(log_buf));
-            printf("%s\n", log_buf);
-        }
-    }
 
     printf("\nProcessing HI81 example data:\n");
     print_raw_data(example_data_hi81, sizeof(example_data_hi81));

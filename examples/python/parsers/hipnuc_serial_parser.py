@@ -15,7 +15,6 @@ R2D = 57.29577951308232
 
 # Data item identifiers
 FRAME_TAG_HI91 = 0x91
-FRAME_TAG_HI92 = 0x92
 FRAME_TAG_HI81 = 0x81
 
 class hipnuc_frame:
@@ -84,9 +83,6 @@ class hipnuc_parser:
             if item_type == FRAME_TAG_HI91:
                 self._parse_hi91(data, ofs)
                 return ofs + 76
-            elif item_type == FRAME_TAG_HI92:
-                self._parse_hi92(data, ofs)
-                return ofs + 48
             elif item_type == FRAME_TAG_HI81:
                 self._parse_hi81(data, ofs)
                 return ofs + 104
@@ -109,18 +105,6 @@ class hipnuc_parser:
         self.frame.yaw = struct.unpack_from('<f', data, ofs + 56)[0]
         self.frame.quat = struct.unpack_from('<4f', data, ofs + 60)
 
-    def _parse_hi92(self, data, ofs):
-        # self.frame.status = struct.unpack_from('<H', data, ofs + 1)[0]
-        self.frame.temperature = struct.unpack_from('<b', data, ofs + 3)[0]
-        self.frame.pressure = struct.unpack_from('<h', data, ofs + 6)[0] + 100000
-        self.frame.gyr = [x * 0.001 * R2D for x in struct.unpack_from('<3h', data, ofs + 10)]
-        self.frame.acc = [x * 0.0048828 / GRAVITY for x in struct.unpack_from('<3h', data, ofs + 16)]
-        self.frame.mag = [x * 0.030517 for x in struct.unpack_from('<3h', data, ofs + 22)]
-        self.frame.roll = struct.unpack_from('<i', data, ofs + 28)[0] * 0.001
-        self.frame.pitch = struct.unpack_from('<i', data, ofs + 32)[0] * 0.001
-        self.frame.yaw = struct.unpack_from('<i', data, ofs + 36)[0] * 0.001
-        self.frame.quat = [x * 0.0001 for x in struct.unpack_from('<4h', data, ofs + 40)]
-        
     def _parse_hi81(self, data, ofs):
         self.frame.ins_status = struct.unpack_from('<B', data, ofs + 3)[0]
         self.frame.gpst_wn = struct.unpack_from('<H', data, ofs + 4)[0]
@@ -238,7 +222,6 @@ if __name__ == "__main__":
     decoder = hipnuc_parser()
     
     example_data_hi91 = bytes.fromhex('5A A5 4C 00 14 BB 91 08 15 23 09 A2 C4 47 08 15 1C 00 CC E8 61 BE 9A 35 56 3E 65 EA 72 3F 31 D0 7C BD 75 DD C5 BB 6B D7 24 BC 89 88 FC 40 01 00 6A 41 AB 2A 70 C2 96 D4 50 41 ED 03 43 41 41 F4 F4 C2 CC CA F8 BE 73 6A 19 BE F0 00 1C 3D 8D 37 5C 3F')
-    example_data_hi92 = bytes.fromhex('5A A5 30 00 E3 A4 92 23 23 1C 7C 11 61 FF 23 23 00 00 01 00 00 00 EB FE 7B 00 B6 07 CD 03 70 FC A3 FC 56 1F 00 00 CF 0D 00 00 C4 07 00 00 F0 26 27 01 C0 02 C2 00 ')
     example_data_hi81 = bytes.fromhex('5A A5 68 00 70 04 81 00 02 01 15 09 43 C8 3E 02 00 00 83 00 3C 00 36 01 8F FB E8 04 31 04 7C 02 B2 F9 BF FE 60 79 00 10 24 18 07 1C 0A 1B EB 74 9A 0E 8A 0E 2E 18 20 20 3B 10 19 04 65 F1 99 6A 5D 45 31 61 CE 17 06 D1 00 00 0C 07 01 1C 00 00 00 B9 FC 01 00 00 02 00 00 00 C6 FF 08 01 E7 FF 7F 12 41 00 4E 61 CE 17 04 CF 00 00 00 00')
     
 
@@ -248,11 +231,6 @@ if __name__ == "__main__":
     for i, frame in enumerate(frames_hi91):
         hipnuc_parser.print_parsed_data(frame)
     
-    print("Input binary data length for HI92:", len(example_data_hi92))
-    frames_hi92 = decoder.parse(example_data_hi92)
-    print(f"Total frames parsed for HI91: {len(example_data_hi92)}")
-    for i, frame in enumerate(frames_hi92):
-        hipnuc_parser.print_parsed_data(frame)
 
     print("Input binary data length for HI81:", len(example_data_hi81))
     frames_hi81 = decoder.parse(example_data_hi81)

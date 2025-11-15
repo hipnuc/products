@@ -28,7 +28,6 @@
 
 /* new HiPNUC standard packet */
 #define HIPNUC_ID_HI91        (0x91)
-#define HIPNUC_ID_HI92        (0x92)
 #define HIPNUC_ID_HI81        (0x81)
 
 #ifndef D2R
@@ -71,7 +70,6 @@ static int parse_data(hipnuc_raw_t *raw)
     /* ignore all previous data */
     raw->hi91.tag = 0;
     raw->hi81.tag = 0;
-    raw->hi92.tag = 0;
 
     while (ofs < raw->len)
     {
@@ -130,10 +128,6 @@ static int parse_data(hipnuc_raw_t *raw)
         case HIPNUC_ID_HI81:
             memcpy(&raw->hi81, p + ofs, sizeof(hi81_t));
             ofs += sizeof(hi81_t);
-            break;
-        case HIPNUC_ID_HI92:
-            memcpy(&raw->hi92, p + ofs, sizeof(hi92_t));
-            ofs += sizeof(hi92_t);
             break;
         default:
             ofs++;
@@ -255,37 +249,7 @@ int hipnuc_dump_packet(hipnuc_raw_t *raw, char *buf, size_t buf_size)
             raw->hi91.air_pressure);
     }
     
-    /* dump 0x92 packet */
-    else if(raw->hi92.tag == HIPNUC_ID_HI92)
-    {
-        /* Format:
-         * temperature: °C
-         * acc: m/s²
-         * gyr: deg/s
-         * mag: uT
-         * pitch/roll/yaw: deg
-         */
-        ret = snprintf(buf + written, buf_size - written,
-            "{\n"
-            "  \"type\": \"HI92\",\n"
-            "  \"status\": %d,\n"
-            "  \"temperature\": %d,\n"
-            "  \"acc\": [%.3f, %.3f, %.3f],\n"
-            "  \"gyr\": [%.3f, %.3f, %.3f],\n"
-            "  \"mag\": [%.3f, %.3f, %.3f],\n"
-            "  \"pitch\": %.2f,\n"
-            "  \"roll\": %.2f,\n"
-            "  \"yaw\": %.2f\n"
-            "  \"quat\": [%.3f, %.3f, %.3f, %.3f],\n"
-            "}\n",
-            raw->hi92.status,
-            raw->hi92.temperature,
-            raw->hi92.acc_b[0]*0.0048828, raw->hi92.acc_b[1]*0.0048828, raw->hi92.acc_b[2]*0.0048828,
-            raw->hi92.gyr_b[0]*(0.001*R2D), raw->hi92.gyr_b[1]*(0.001*R2D), raw->hi92.gyr_b[2]*(0.001*R2D),
-            raw->hi92.mag_b[0]*0.030517, raw->hi92.mag_b[1]*0.030517, raw->hi92.mag_b[2]*0.030517,
-            raw->hi92.pitch*0.001, raw->hi92.roll*0.001, raw->hi92.yaw*0.001,
-            raw->hi91.quat[0], raw->hi91.quat[1], raw->hi91.quat[2], raw->hi91.quat[3]);
-    }
+    
 
     /* dump 0x81 packet */
 else if(raw->hi81.tag == HIPNUC_ID_HI81)
