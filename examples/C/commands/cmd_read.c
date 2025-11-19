@@ -71,8 +71,7 @@ int cmd_read(GlobalOptions *opts, int argc, char *argv[]) {
     }
     printf("\nStarting data recording and display...\n\n");
 
-    // Enable data output
-    serial_send_then_recv_str(fd, "AT+EOUT=1\r\n", "OK\r\n", recv_buf, sizeof(recv_buf), 200);
+    serial_send_then_recv_str(fd, "LOG ENABLE\r\n", "OK\r\n", recv_buf, sizeof(recv_buf), 200);
 
     clock_gettime(CLOCK_MONOTONIC, &last_time);
     last_display_time = last_time;

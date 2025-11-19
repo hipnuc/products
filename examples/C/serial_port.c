@@ -127,7 +127,7 @@ int serial_port_configure(int fd, int baud_rate)
 
     // Set read timeout and minimum character count
     options.c_cc[VMIN] = 0;  // Minimum number of characters
-    options.c_cc[VTIME] = 10;  // Timeout in deciseconds (1 second)
+    options.c_cc[VTIME] = 1;  // Timeout in deciseconds (100 ms)
 
     // Apply the new settings
     if (tcsetattr(fd, TCSANOW, &options) != 0) {
@@ -293,7 +293,9 @@ int serial_send_then_recv_str(int fd, const char *send_str, const char *expected
     }
 
     int send_len = strlen(send_str);
-    int total_bytes_read = serial_send_then_recv(fd, (const uint8_t *)send_str, send_len, (uint8_t *)recv_buf, recv_buf_size - 1, timeout_ms);
+    int read_cap = (int)recv_buf_size - 1;
+    if (read_cap > 256) read_cap = 256;
+    int total_bytes_read = serial_send_then_recv(fd, (const uint8_t *)send_str, send_len, (uint8_t *)recv_buf, read_cap, timeout_ms);
 
     if (total_bytes_read < 0)
     {

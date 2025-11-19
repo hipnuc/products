@@ -6,17 +6,11 @@
 #include "log.h"
 #include "cmd_utils.h"
 
-#define CMD_REPLAY_TIMEOUT_MS (100)
+#define CMD_REPLAY_TIMEOUT_MS (300)
 #define MAX_ATTEMPTS 2
 
 static int save_device_info(const char *port, int baud) {
-    FILE *tmp_file = fopen(TMP_CONFIG_FILE, "w");
-    if (!tmp_file) {
-        return -1;
-    }
-    fprintf(tmp_file, "%s %d", port, baud);
-    fclose(tmp_file);
-    return 0;
+    return ini_update_serial(HIHOST_INI_ABS_PATH, port, baud);
 }
 
 int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
@@ -56,7 +50,10 @@ int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
             log_info("Probing %s at %d baud...", ports[port_index].name, baud_rates[i]);
 
             for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-                serial_send_then_recv_str(fd, "AT+EOUT=0\r\n", "OK", recv_buf, sizeof(recv_buf), 200);
+                for (int k = 0; k < 3; k++) {
+                    serial_send_then_recv_str(fd, "LOG DISABLE\r\n", "OK", recv_buf, sizeof(recv_buf), 200);
+                    safe_sleep(50);
+                }
                 len = serial_send_then_recv_str(fd, "AT+INFO\r\n", "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
                 if (len > 0 && strstr((char *)recv_buf, "OK") != NULL) {
                     log_info("Device found on %s at %d baud! (Attempt %d)", ports[port_index].name, baud_rates[i], attempt + 1);
@@ -65,11 +62,11 @@ int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
                     found_baud = baud_rates[i];
                     strncpy(device_info, (char *)recv_buf, sizeof(device_info) - 1);
 
-                    serial_send_then_recv_str(fd, "AT+EOUT=1\r\n", "OK", recv_buf, sizeof(recv_buf), 10);
+                    serial_send_then_recv_str(fd, "LOG ENABLE\r\n", "OK", recv_buf, sizeof(recv_buf), 10);
                     break;
                 }
                 if (attempt < MAX_ATTEMPTS - 1) {
-                    safe_sleep(1 * 1000);
+                    safe_sleep(300);
                 }
             }
 

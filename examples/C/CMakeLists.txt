@@ -38,3 +38,6 @@ add_executable(hihost ${SOURCES})
 
 # Link required libraries (if any)
 target_link_libraries(hihost m)  # Link math library
+
+# Provide source dir to runtime for locating hihost.ini
+target_compile_definitions(hihost PRIVATE HIHOST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

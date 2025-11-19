@@ -79,9 +79,8 @@ int cmd_write(GlobalOptions *opts, int argc, char *argv[]) {
         return -1;
     }
 
-    // Disable data output before sending command
     uint8_t recv_buf[2048];
-    serial_send_then_recv_str(fd, "AT+EOUT=0\r\n", "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
+    serial_send_then_recv_str(fd, "LOG DISABLE\r\n", "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
 
     int result = 0;
 

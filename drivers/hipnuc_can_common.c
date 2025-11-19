@@ -40,13 +40,22 @@ int hipnuc_can_to_json(const can_sensor_data_t *data, int msg_type, can_json_out
             json_append(output, "\"imu_yaw\":%.6f", data->imu_yaw);
             break;
         case CAN_MSG_PRESSURE:
-            json_append(output, "\"pressure\":%.2f", data->pressure);
+            json_append(output, "\"temperature\":%.2f,\"pressure\":%.2f", data->temperature, data->pressure);
             break;
         case CAN_MSG_INCLI:
             json_append(output, "\"incli_x\":%.2f,\"incli_y\":%.2f", data->incli_x, data->incli_y);
             break;
         case CAN_MSG_TIME:
             json_append(output, "\"utc_year\":%d,\"utc_month\":%d,\"utc_day\":%d,\"hours\":%d,\"minutes\":%d,\"seconds\":%d,\"milliseconds\":%d,\"timestamp_ms\":%u", data->utc_year, data->utc_month, data->utc_day, data->hours, data->minutes, data->seconds, data->milliseconds, data->timestamp_ms);
+            break;
+        case CAN_MSG_GNSS_POS:
+            json_append(output, "\"ins_lon\":%.8f,\"ins_lat\":%.8f,\"ins_msl\":%.3f,\"undulation\":%.2f,\"diff_age_s\":%.2f", data->ins_lon, data->ins_lat, data->ins_msl, data->undulation, data->diff_age_s);
+            break;
+        case CAN_MSG_GNSS_VEL:
+            json_append(output, "\"ins_vel_e\":%.3f,\"ins_vel_n\":%.3f,\"ins_vel_u\":%.3f,\"ins_speed\":%.3f", data->ins_vel_e, data->ins_vel_n, data->ins_vel_u, data->ins_speed);
+            break;
+        case CAN_MSG_GNSS_STATUS:
+            json_append(output, "\"solq_pos\":%d,\"solq_heading\":%d,\"nv_pos\":%d,\"nv_heading\":%d,\"ins_status\":%d", data->solq_pos, data->solq_heading, data->nv_pos, data->nv_heading, data->ins_status);
             break;
         default:
             json_append(output, "\"error\":\"unknown message type\"");

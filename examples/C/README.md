@@ -33,6 +33,7 @@
 - `commands.c`：仅维护命令注册表与分发函数 `execute_command(...)`。
 - `commands/cmd_list.c`：列出可用串口。
 - `commands/cmd_probe.c`：自动探测设备端口与波特率，并保存到 `device_setup.ini`。
+- `commands/cmd_probe.c`：自动探测设备端口与波特率，并保存到 `hihost.ini`。
 - `commands/cmd_read.c`：读取 HipNuc/NMEA 数据，支持原始与 JSON 录制、FPS 统计与实时显示。
 - `commands/cmd_write.c`：发送单条或批量（从文件） AT 命令并处理响应。
 - `commands/cmd_update.c`：固件升级（HEX→BIN 转换、KBOOT 交互、写入与进度显示）。
@@ -49,6 +50,18 @@ cmake ..
 make
 ```
 生成可执行文件 `hihost`。
+
+## 配置文件（hihost.ini）
+
+程序使用源码目录下的配置文件 `examples/C/hihost.ini` 来存储串口与波特率，键值为：
+
+```
+port=/dev/ttyUSB0
+baud=115200
+```
+
+- 固定路径：仅识别 `examples/C/hihost.ini`
+- 自动更新：`probe` 成功后会写回探测到的 `port` 与 `baud`
 
 ### Windows（可选）
 请安装以下工具之一：
@@ -72,7 +85,7 @@ hihost [全局选项] <命令> [命令参数]
 
 ### 全局选项
 - `-p, --port PORT`：指定串口设备（例如：`/dev/ttyUSB0`）
-- `-b, --baud RATE`：指定波特率（默认：`115200`）
+- `-b, --baud RATE`：指定波特率
 - `-r, --record-raw FILE`：记录原始串口数据到二进制文件
 - `-j, --record-json FILE`：记录解析后的 JSON 数据到文本文件
 - `-h, --help`：显示帮助信息
@@ -97,11 +110,15 @@ sudo ./hihost list
 ```sh
 sudo ./hihost probe
 ```
-探测成功后，可在后续命令中省略 `-p`、`-b` 参数。若修改了设备波特率，请重新执行 `probe`。
+探测成功后，会把结果写入 `examples/C/hihost.ini`，后续命令可省略 `-p`、`-b` 参数。若修改了设备波特率，请重新执行 `probe`。
 
 #### 读取 IMU 数据
 ```sh
 sudo ./hihost -p /dev/ttyUSB0 -b 115200 read
+```
+或在已配置 `hihost.ini` 的情况下：
+```sh
+sudo ./hihost read
 ```
 示例输出：
 ```

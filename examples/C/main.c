@@ -10,11 +10,12 @@
 
 #include "commands.h"
 #include "global_options.h"
+#include "cmd_utils.h"
 #include "log.h"
 
 
 #define PROGRAM_NAME "hihost"
-#define VERSION "1.0.4"
+#define VERSION "1.0.5"
 
 
 static void print_usage(const char *program_name);
@@ -32,21 +33,18 @@ static void signal_handler(int signum);
 int main(int argc, char *argv[]) {
     GlobalOptions opts = {
         .port_name = NULL,
-        .baud_rate = 115200,
+        .baud_rate = 0,
         .record_raw_file = NULL,
         .record_json_file = NULL
     };
 
-    FILE *tmp_file = fopen(TMP_CONFIG_FILE, "r");
-    if (tmp_file) {
+    {
         char port_buf[256];
-        int baud;
-        if (fscanf(tmp_file, "%255s %d", port_buf, &baud) == 2) {
+        int baud = 0;
+        if (ini_load_serial(HIHOST_INI_ABS_PATH, port_buf, sizeof(port_buf), &baud) == 0) {
             opts.port_name = strdup(port_buf);
             opts.baud_rate = baud;
-            printf("opts.port_name:%s, %d\r\n", opts.port_name, opts.baud_rate);
         }
-        fclose(tmp_file);
     }
 
     static struct option long_options[] = {
@@ -103,6 +101,10 @@ int main(int argc, char *argv[]) {
 
     const char *command = argv[optind];
     optind++;
+    if ((!opts.port_name || opts.baud_rate <= 0) && strcmp(command, "probe") != 0 && strcmp(command, "list") != 0) {
+        fprintf(stderr, "Missing port/baud. Please edit %s or provide -p/-b.\n", HIHOST_INI_ABS_PATH);
+        return 1;
+    }
     return execute_command(command, &opts, argc - optind, argv + optind);
 }
 
@@ -116,7 +118,7 @@ static void print_usage(const char *program_name) {
 
     printf("Global Options:\n");
     printf("  -p, --port PORT         Specify the serial port (e.g., /dev/ttyUSB0)\n");
-    printf("  -b, --baud RATE         Set the baud rate (default: 115200)\n");
+    printf("  -b, --baud RATE         Set the baud rate\n");
     printf("  -r, --record-raw FILE   Record raw serial data to binary file\n");
     printf("  -j, --record-json FILE  Record parsed JSON data to text file\n");
     printf("  -h, --help              Display this help message and exit\n");

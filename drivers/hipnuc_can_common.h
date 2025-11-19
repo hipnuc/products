@@ -65,9 +65,17 @@ typedef struct {
     double ins_lat;
     double ins_lon;
     double ins_msl;
+    float undulation;
+    float diff_age_s;
     float ins_vel_e;
     float ins_vel_n;
     float ins_vel_u;
+    float ins_speed;
+    uint8_t solq_pos;
+    uint8_t solq_heading;
+    uint8_t nv_pos;
+    uint8_t nv_heading;
+    uint8_t ins_status;
 } can_sensor_data_t;
 
 typedef struct {
@@ -77,5 +85,7 @@ typedef struct {
 
 int hipnuc_can_to_json(const can_sensor_data_t *data, int msg_type, can_json_output_t *output);
 uint8_t hipnuc_can_extract_node_id(uint32_t can_id);
+
+#define CAN_MSG_GNSS_STATUS 14
 
 #endif
