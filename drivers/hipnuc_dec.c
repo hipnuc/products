@@ -353,7 +353,7 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
         if (ret > 0) written += ret;
 
         if (raw->hi83.data_bitmap & HI83_BMAP_ACC_B) {
-            ret = snprintf(buf + written, buf_size - written, "  ,\"acc\": [%.3f, %.3f, %.3f]\n", raw->hi83.acc_b[0]*GRAVITY, raw->hi83.acc_b[1]*GRAVITY, raw->hi83.acc_b[2]*GRAVITY);
+            ret = snprintf(buf + written, buf_size - written, "  ,\"acc\": [%.3f, %.3f, %.3f]\n", raw->hi83.acc_b[0], raw->hi83.acc_b[1], raw->hi83.acc_b[2]);
             if (ret > 0) written += ret; first = 0;
         }
         if (raw->hi83.data_bitmap & HI83_BMAP_GYR_B) {
