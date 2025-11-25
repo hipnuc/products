@@ -22,6 +22,7 @@
   - 扩展帧（`IDE == Extended`）→ `hipnuc_j1939_parser`
   - 标准帧（`IDE == Standard`）→ `canopen_parser`
 - 未识别帧自动回退为原始 JSON（包含 `id/ide/dlc/data[]`）。
+- 输出节流：主循环每 20 ms 打印一次最新帧，保证串口稳定。
 
 ## 工程结构
 - `examples/CAN/stm32/USER/main.c`：示例主程序（初始化、ISR、环形队列、解析打印）。
@@ -73,6 +74,5 @@
   - 默认值：`Stack_Size EQU 0x00000800`（2KB）
   - 建议在含较多解析与字符串处理的配置下提升到 `0x1000`（4KB）或 `0x2000`（8KB），依据实际内存余量与功能选择。
 - 队列大小：`CAN_RX_FIFO_SIZE` 默认 `32`，可在 `main.c` 中按总线负载调节。
-
 
 

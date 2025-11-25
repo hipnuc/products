@@ -20,6 +20,7 @@ static command_t commands[] = {
     {"list",   cmd_list, 0},
     {"probe",  cmd_probe, 1},
     {"read",   cmd_read,  1},
+    {"record", cmd_record, 1},
     {NULL, NULL, 0}
 };
 
@@ -51,8 +52,7 @@ int execute_command(const char *command_name, int argc, char *argv[])
         printf("  %s\n", commands[i].name);
     }
     printf("\nHint: run 'canhost --help' for usage.\n");
-    printf("Examples: canhost list | canhost probe | canhost read\n");
+    printf("Examples: canhost list | canhost probe | canhost read | canhost record\n");
 
     return -1;
 }
-

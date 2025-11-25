@@ -22,6 +22,7 @@ set(SOURCES
     commands/cmd_list.c
     commands/cmd_probe.c
     commands/cmd_read.c
+    commands/cmd_record.c
     ../../../drivers/hipnuc_can_common.c
     ../../../drivers/hipnuc_j1939_parser.c
     ../../../drivers/canopen_parser.c
@@ -31,7 +32,7 @@ set(SOURCES
 add_executable(canhost ${SOURCES})
 
 # 链接数学库
-target_link_libraries(canhost m)
+target_link_libraries(canhost m pthread)
 
 # 设置编译选项
 target_compile_options(canhost PRIVATE -Wall -Wextra)

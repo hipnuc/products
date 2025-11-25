@@ -2,12 +2,14 @@
 
 ## 概述
 
-`canhost` 是一个面向 HiPNUC IMU/ARHS 设备的 SocketCAN Linux 命令行工具。通过统一的 CLI 命令即可完成接口检测、J1939 探测、实时数据展示，便于在 Linux/树莓派等平台快速评估产品表现。
+`canhost` 是一个面向 HiPNUC IMU/ARHS 设备的 SocketCAN Linux 命令行工具。通过统一的 CLI 命令即可完成接口检测、J1939 探测、实时数据展示与记录，便于在 Linux/树莓派等平台快速评估产品表现。
 
 ## 功能
 
 - **接口一览**：`list` 命令以表格展示所有物理 CAN 接口（忽略 `vcan/vxcan`）
-- **实时数据**：`read` 输出解析后的 JSON 行，自动缓存多种帧类型，按 `Ctrl+C` 退出。
+- **设备探测**：`probe` 发送 J1939 REQUEST 并在 2 s 窗口内列出响应设备地址与 NAME。
+- **实时数据**：`read` 输出解析后的 JSON 行；内部以类型为粒度缓存最新帧，输出节流约 20 Hz，`Ctrl+C` 退出。
+- **数据记录**：`record` 将解析后的 NDJSON 追加写入文件，同时在终端打印速率与队列占用。
 
 
 ## 目录结构
@@ -23,6 +25,7 @@ examples/CAN/linux
 │   ├── cmd_list.c          # list 命令
 │   ├── cmd_probe.c         # probe 命令
 │   ├── cmd_read.c          # read 命令
+│   ├── cmd_record.c        # record 命令
 ├── config.c/h
 ├── log.c/h
 └── utils.c/h
@@ -38,7 +41,7 @@ make -j$(nproc)
 # 生成的可执行文件为 build/canhost
 ```
 
-依赖：CMake 3.10+、GCC、libm、Linux SocketCAN 头文件。
+依赖：CMake 3.10+、GCC、pthread、libm、Linux SocketCAN 头文件。
 
 ## 快速开始（适合新用户）
 
@@ -62,15 +65,15 @@ interface=can0
 
 ```bash
 ./canhost list      # 查看接口状态
-./canhost read      # 终端显示（约10 Hz，各类型最新帧）
-./canhost read -o imu.json  # 同时完整记录到文件
+./canhost read      # 终端显示（约20 Hz，按类型输出最新帧）
+./canhost record -o imu.jsonl  # 记录到 NDJSON 文件并显示速率
 ```
 
 ## 使用方式
 
 ### 配置文件
 
-程序不再通过命令行指定接口，而是从简单的初始化配置文件读取：
+程序不通过命令行指定接口，而是从初始化配置文件读取：
 
 - 搜索顺序：`$CANHOST_CONF` → `examples/CAN/linux/canhost.ini` → `./canhost.ini` → `~/.canhost.ini` → `/etc/canhost.ini`
 - 配置格式（ini 风格，键值对）：
@@ -96,9 +99,10 @@ interface=can0
 
 | 命令 | 作用 |
 | ---- | ---- |
-| `list` | 展示接口状态 |
-| `probe` | 设备探测，输出地址及 NAME |
-| `read` | 实时显示 HiPNUC 传感器数据（JSON 行） |
+| `list`   | 展示接口状态 |
+| `probe`  | 设备探测，输出地址及 NAME |
+| `read`   | 实时显示解析后的传感器数据（JSON 行，约 20 Hz） |
+| `record` | 记录解析后的 NDJSON 到文件，并显示 fps/队列 |
 
 示例：
 
@@ -106,7 +110,7 @@ interface=can0
 ./canhost list
 ./canhost probe
 ./canhost read
-./canhost read -o imu.json
+./canhost record -o imu.jsonl
 ```
 
 ## 协议与解析
@@ -120,6 +124,7 @@ interface=can0
 1. 访问 SocketCAN 通常需要 root 权限，若遇到 `Operation not permitted` 请使用 `sudo`.
 2. `list` 仅列出真实物理接口，`vcan`、`vxcan` 默认忽略；`slcan*` 会被视为物理口。
 3. 若未提供配置文件，则默认 `interface=can0`。
+4. `record` 支持参数：`-o/--out FILE`、`--buf-frames N`（默认 100 帧）。
 
 ## 故障排查
 
@@ -127,3 +132,4 @@ interface=can0
 | ---- | -------- |
 | `list` 无接口 | 检查硬件连接并加载驱动(以PeakCAN为例)（如 `sudo modprobe peak_usb`） |
 | `read` 无数据 | 检查接口是否 UP、波特率匹配、设备是否确实输出帧 |
+| `record` 报错 | 确认提供了 `-o FILE`，并有写入权限 |

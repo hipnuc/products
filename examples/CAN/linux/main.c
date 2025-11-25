@@ -93,15 +93,21 @@ static void print_usage(const char *program_name)
     printf("Commands:\n");
     printf("  list    Show detected CAN interfaces with state\n");
     printf("  probe   Send a 2 s probe and print responding nodes\n");
-    printf("  read    Stream and format HiPNUC sensor data frames\n\n");
+    printf("  read    Stream and format HiPNUC sensor data frames\n");
+    printf("  record  Record parsed JSON (NDJSON) to file, print frames/fps\n\n");
 
-    printf("Read options:\n");
-    printf("  -o, --json-file FILE    Record parsed JSON to file\n\n");
+    printf("Read options:\n\n");
+    
+    printf("Record options:\n");
+    printf("  -o, --out FILE          Output NDJSON file\n");
+    printf("      --buf-frames N      Buffer capacity in frames (default 65536)\n");
+    printf("      --sync-ms MS        fdatasync interval in ms (default 1000)\n\n");
 
     printf("Examples:\n");
     printf("  %s list\n", program_name);
     printf("  %s probe\n", program_name);
-    printf("  %s read\n\n", program_name);
+    printf("  %s read\n", program_name);
+    printf("  %s record -o out.jsonl\n\n", program_name);
 
     printf("CAN interface quick setup:\n");
     printf("  sudo ip link set can0 down\n");

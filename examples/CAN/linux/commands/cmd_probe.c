@@ -115,43 +115,23 @@ static void record_device(discovered_device_t *devices, uint8_t addr, uint64_t n
     slot->name = name;
     slot->found = true;
 }
-
 static void display_devices(const discovered_device_t *devices, size_t len)
 {
-    // Single-line summary of discovered J1939 devices using INFO log
+    // 为每一个发现的设备单独输出一条 INFO 日志
     int cnt = 0;
     for (size_t i = 0; i < len; ++i) {
         if (devices[i].found) {
+            log_info("Discovered J1939 device: addr=%u name=0x%016llX",
+                     (unsigned int)devices[i].address,
+                     (unsigned long long)devices[i].name);
             ++cnt;
         }
     }
 
     if (cnt == 0) {
         log_info("No J1939 devices discovered");
-        return;
     }
-
-    char summary[512];
-    summary[0] = '\0';
-
-    for (size_t i = 0; i < len; ++i) {
-        if (devices[i].found) {
-            size_t cur = strlen(summary);
-            char seg[32];
-            int n = snprintf(seg, sizeof(seg), "%u:0x%016llX ",
-                             (unsigned int)devices[i].address,
-                             (unsigned long long)devices[i].name);
-            if (cur + (size_t)n + 1 >= sizeof(summary)) {
-                break; // avoid overflow
-            }
-            memcpy(summary + cur, seg, (size_t)n);
-            summary[cur + (size_t)n] = '\0';
-        }
-    }
-
-    log_info("Discovered J1939 devices (%d): %s", cnt, summary);
 }
-
 static void update_progress(time_t now, time_t end, int *last_remaining)
 {
     int remaining = (int)(end - now);
@@ -203,7 +183,8 @@ int cmd_probe(int argc, char *argv[])
         update_progress(now, end, &last_remaining);
 
         struct can_frame f;
-        int r = can_receive_frame(fd, &f);
+        uint64_t hw_ts_us = 0;
+        int r = can_receive_frame_ts(fd, &f, &hw_ts_us);
         if (r > 0) {
             uint8_t addr; uint64_t name;
             if (parse_address_claimed(&f, &addr, &name)) {

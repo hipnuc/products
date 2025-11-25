@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <sys/time.h>
+#include <stdint.h>
 #include "../can_interface.h"
 #include "../log.h"
 #include "../utils.h"
@@ -30,31 +31,11 @@ static unsigned long long now_ms(void)
 
 int cmd_read(int argc, char *argv[])
 {
-    const char *json_path = NULL;
-    FILE *json_fp = NULL;
+    (void)argc; (void)argv;
     enum { MAX_MSG_TYPES = 32, JSON_CACHE_LEN = 512 };
     char last_json[MAX_MSG_TYPES][JSON_CACHE_LEN];
     bool has_json[MAX_MSG_TYPES];
     for (int i = 0; i < MAX_MSG_TYPES; ++i) has_json[i] = false;
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--json-file") == 0) {
-            if (i + 1 < argc) {
-                json_path = argv[i + 1];
-                i++;
-            } else {
-                log_error("Missing file path for %s", argv[i]);
-                return -1;
-            }
-        }
-    }
-    if (json_path) {
-        json_fp = fopen(json_path, "w");
-        if (!json_fp) {
-            log_error("Failed to open %s", json_path);
-            return -1;
-        }
-        log_info("Recording JSON to %s", json_path);
-    }
     
     const char *ifname = config_get_interface();
     int sockfd = can_open_socket(ifname);
@@ -95,10 +76,6 @@ int cmd_read(int argc, char *argv[])
                         snprintf(last_json[msg_type], JSON_CACHE_LEN, "%s", json_output.buffer);
                         has_json[msg_type] = true;
                     }
-                    if (json_fp) {
-                        fputs(json_output.buffer, json_fp);
-                        fflush(json_fp);
-                    }
                     if (t - last_print >= 50ULL) {
                         for (int i = 0; i < MAX_MSG_TYPES; ++i) {
                             if (has_json[i]) {
@@ -118,6 +95,5 @@ int cmd_read(int argc, char *argv[])
     
     log_info("Stopping CAN read");
     can_close_socket(sockfd);
-    if (json_fp) fclose(json_fp);
     return 0;
 }

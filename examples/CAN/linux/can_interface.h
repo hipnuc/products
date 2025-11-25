@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <linux/can.h>
 
 // Metadata collected for each physical CAN interface
@@ -19,8 +20,12 @@ int can_list_interfaces(can_interface_info_t *interfaces, int max_count);
 int can_check_interface_status(const char *ifname);
 int can_open_socket(const char *ifname);
 void can_close_socket(int sockfd);
-int can_receive_frame(int sockfd, struct can_frame *frame);
 int can_receive_frame_ts(int sockfd, struct can_frame *frame, uint64_t *hw_ts_us);
+int can_receive_frames_ts(int sockfd,
+                          struct can_frame *frames,
+                          uint64_t *hw_ts_us,
+                          size_t max_frames,
+                          int timeout_ms);
 
 // Ensures the provided interface exists and is ready
 int can_ensure_interface_ready(const char *ifname);
