@@ -31,18 +31,18 @@ static int parse_j1939_time(const hipnuc_can_frame_t *frame, can_sensor_data_t *
 static int parse_j1939_accel(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
     int16_t *raw = (int16_t*)frame->data;
-    data->acc_x = raw[0] * 0.00048828f * 9.81f;
-    data->acc_y = raw[1] * 0.00048828f * 9.81f;
-    data->acc_z = raw[2] * 0.00048828f * 9.81f;
+    data->acc_x = raw[0] * 0.00048828f;
+    data->acc_y = raw[1] * 0.00048828f;
+    data->acc_z = raw[2] * 0.00048828f;
     return CAN_MSG_ACCEL;
 }
 
 static int parse_j1939_gyro(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
     int16_t *raw = (int16_t*)frame->data;
-    data->gyr_x = raw[0] * 0.061035f * 0.017453f;
-    data->gyr_y = raw[1] * 0.061035f * 0.017453f;
-    data->gyr_z = raw[2] * 0.061035f * 0.017453f;
+    data->gyr_x = raw[0] * 0.061035f;
+    data->gyr_y = raw[1] * 0.061035f;
+    data->gyr_z = raw[2] * 0.061035f;
     return CAN_MSG_GYRO;
 }
 
@@ -58,15 +58,15 @@ static int parse_j1939_mag(const hipnuc_can_frame_t *frame, can_sensor_data_t *d
 static int parse_j1939_pitch_roll(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
     int32_t *raw = (int32_t*)frame->data;
-    data->roll = raw[0] * 0.001f * 0.017453f;
-    data->pitch = raw[1] * 0.001f * 0.017453f;
+    data->roll = raw[0] * 0.001f;
+    data->pitch = raw[1] * 0.001f;
     return CAN_MSG_PITCH_ROLL;
 }
 
 static int parse_j1939_yaw(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
     int32_t *raw = (int32_t*)frame->data;
-    data->imu_yaw = raw[0] * 0.001f * 0.017453f;
+    data->imu_yaw = raw[0] * 0.001f;
     return CAN_MSG_YAW;
 }
 
@@ -83,8 +83,8 @@ static int parse_j1939_quat(const hipnuc_can_frame_t *frame, can_sensor_data_t *
 static int parse_j1939_inclination(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
     int32_t *raw = (int32_t*)frame->data;
-    data->incli_x = raw[0] * 0.01f;
-    data->incli_y = raw[1] * 0.01f;
+    data->incli_x = raw[0] * 0.001f;
+    data->incli_y = raw[1] * 0.001f;
     return CAN_MSG_INCLI;
 }
 

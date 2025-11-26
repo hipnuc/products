@@ -29,6 +29,7 @@ typedef struct {
 #define CAN_MSG_TIME        11
 #define CAN_MSG_PITCH_ROLL  12
 #define CAN_MSG_YAW         13
+#define CAN_MSG_GNSS_STATUS 14
 #define CAN_MSG_UNKNOWN     99
 
 typedef struct {
@@ -86,6 +87,5 @@ typedef struct {
 int hipnuc_can_to_json(const can_sensor_data_t *data, int msg_type, can_json_output_t *output);
 uint8_t hipnuc_can_extract_node_id(uint32_t can_id);
 
-#define CAN_MSG_GNSS_STATUS 14
 
 #endif

@@ -99,9 +99,7 @@ static void print_usage(const char *program_name)
     printf("Read options:\n\n");
     
     printf("Record options:\n");
-    printf("  -o, --out FILE          Output NDJSON file\n");
-    printf("      --buf-frames N      Buffer capacity in frames (default 65536)\n");
-    printf("      --sync-ms MS        fdatasync interval in ms (default 1000)\n\n");
+    printf("  -o, --out FILE          Output NDJSON file\n\n");
 
     printf("Examples:\n");
     printf("  %s list\n", program_name);
