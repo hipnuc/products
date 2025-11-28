@@ -48,9 +48,9 @@ BO_ 2015 ODB2: 8 Vector__XXX
  SG_ Odometer : 0|64@1- (1,0) [0|0] "km/h" Vector__XXX
 
 BO_ 2365539080 PGN65347: 8 Vector__XXX
- SG_ Pressure : 32|32@1- (0.01,0) [0|0] "pa" Vector__XXX
- SG_ PGN65347Res : 16|16@1- (1,0) [0|0] "" Vector__XXX
- SG_ Temperature : 0|16@1- (0.01,0) [0|0] "¡æ" Vector__XXX
+ SG_ Pressure : 32|32@1- (0.01,0) [0|0] "Pa" Vector__XXX
+SG_ PGN65347Res : 16|16@1- (1,0) [0|0] "" Vector__XXX
+ SG_ Temperature : 0|16@1- (0.01,0) [0|0] "degC" Vector__XXX
 
 BO_ 2365538568 PGN65345: 8 Vector__XXX
  SG_ PGN65345Res : 32|32@1- (1,0) [0|0] "" Vector__XXX
@@ -93,8 +93,23 @@ BO_ 2365527048 PGN65300: 8 Vector__XXX
  SG_ Altitude : 0|32@1- (0.01,0) [0|0] "m" Vector__XXX
 
 BO_ 2365526024 PGN65296: 8 Vector__XXX
- SG_ Longitude : 32|32@1- (1E-007,0) [0|0] "deg" Vector__XXX
- SG_ Latitude : 0|32@1- (1E-007,0) [0|0] "deg" Vector__XXX
+SG_ Longitude : 32|32@1- (1E-007,0) [0|0] "deg" Vector__XXX
+SG_ Latitude : 0|32@1- (1E-007,0) [0|0] "deg" Vector__XXX
+
+BO_ 2365536776 PGN65338: 8 Vector__XXX
+ SG_ Magnetic_Z : 32|16@1- (0.030517,0) [0|0] "uT" Vector__XXX
+ SG_ Magnetic_Y : 16|16@1- (0.030517,0) [0|0] "uT" Vector__XXX
+ SG_ Magnetic_X : 0|16@1- (0.030517,0) [0|0] "uT" Vector__XXX
+
+BO_ 2365538824 PGN65346: 8 Vector__XXX
+ SG_ Quaternion_Z : 48|16@1- (0.0001,0) [0|0] "" Vector__XXX
+ SG_ Quaternion_Y : 32|16@1- (0.0001,0) [0|0] "" Vector__XXX
+ SG_ Quaternion_X : 16|16@1- (0.0001,0) [0|0] "" Vector__XXX
+ SG_ Quaternion_W : 0|16@1- (0.0001,0) [0|0] "" Vector__XXX
+
+BO_ 2365540872 PGN65354: 8 Vector__XXX
+ SG_ Inclination_Y : 32|32@1- (0.001,0) [0|0] "deg" Vector__XXX
+ SG_ Inclination_X : 0|32@1- (0.001,0) [0|0] "deg" Vector__XXX
 
 
 
@@ -102,4 +117,3 @@ BA_DEF_ BO_  "New_AttrDef_13" ENUM  "Cyclic","Enent";
 BA_DEF_  "BusType" STRING ;
 BA_DEF_DEF_  "New_AttrDef_13" "Cyclic";
 BA_DEF_DEF_  "BusType" "CAN";
-

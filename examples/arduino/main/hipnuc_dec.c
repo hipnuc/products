@@ -115,6 +115,9 @@ static int parse_data(hipnuc_raw_t *raw)
             if (bm & HI83_BMAP_INS_LON_LAT_MSL) { raw->hi83.ins_lon_lat_msl[0] = D8(p + idx + 0); raw->hi83.ins_lon_lat_msl[1] = D8(p + idx + 8); raw->hi83.ins_lon_lat_msl[2] = D8(p + idx + 16); idx += 24; }
             if (bm & HI83_BMAP_GNSS_QUALITY_NV) { raw->hi83.solq_pos = p[idx+0]; raw->hi83.nv_pos = p[idx+1]; raw->hi83.solq_heading = p[idx+2]; raw->hi83.nv_heading = p[idx+3]; idx += 4; }
             if (bm & HI83_BMAP_OD_SPEED) { raw->hi83.od_speed = R4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_UNDULATION) { raw->hi83.undulation = R4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_DIFF_AGE) { raw->hi83.diff_age = R4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_NODE_ID) { raw->hi83.node.node_id = p[idx+0]; raw->hi83.node.reserved[0] = p[idx+1]; raw->hi83.node.reserved[1] = p[idx+2]; raw->hi83.node.reserved[2] = p[idx+3]; idx += 4; }
             if (bm & HI83_BMAP_GNSS_LON_LAT_MSL) { raw->hi83.gnss_lon_lat_msl[0] = D8(p + idx + 0); raw->hi83.gnss_lon_lat_msl[1] = D8(p + idx + 8); raw->hi83.gnss_lon_lat_msl[2] = D8(p + idx + 16); idx += 24; }
             if (bm & HI83_BMAP_GNSS_VEL) { raw->hi83.gnss_vel[0] = R4(p + idx + 0); raw->hi83.gnss_vel[1] = R4(p + idx + 4); raw->hi83.gnss_vel[2] = R4(p + idx + 8); idx += 12; }
 
@@ -417,6 +420,18 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
         }
         if (raw->hi83.data_bitmap & HI83_BMAP_OD_SPEED) {
             ret = snprintf(buf + written, buf_size - written, "  ,\"od_speed\": %.3f\n", raw->hi83.od_speed);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_UNDULATION) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"undulation\": %.3f\n", raw->hi83.undulation);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_DIFF_AGE) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"diff_age\": %.3f\n", raw->hi83.diff_age);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_NODE_ID) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"node_id\": %u\n", (unsigned)raw->hi83.node.node_id);
             if (ret > 0) written += ret;
         }
         if (raw->hi83.data_bitmap & HI83_BMAP_GNSS_LON_LAT_MSL) {

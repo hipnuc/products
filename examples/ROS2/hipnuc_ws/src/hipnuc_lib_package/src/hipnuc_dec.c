@@ -15,16 +15,7 @@
  #define CHSYNC2                 (0xA5)              /* CHAOHE message sync code 2 */
  #define CH_HDR_SIZE             (0x06)              /* CHAOHE protocol header size */
  
- /* legcy support of HI226/HI229 */
- #define HIPNUC_ID_USRID         (0x90)
- #define HIPNUC_ID_ACC_RAW       (0xA0)
- #define HIPNUC_ID_ACC_CAL       (0xA1)
- #define HIPNUC_ID_GYR_RAW       (0xB0)
- #define HIPNUC_ID_GYR_CAL       (0xB1)
- #define HIPNUC_ID_MAG_RAW       (0xC0)
- #define HIPNUC_ID_EUL           (0xD0)
- #define HIPNUC_ID_QUAT          (0xD1)
- #define HIPNUC_ID_PRS           (0xF0)
+ /* new HiPNUC standard packet only */
  
  /* new HiPNUC standard packet */
 #define HIPNUC_ID_HI91        (0x91)
@@ -91,52 +82,6 @@ static double D8(uint8_t *p)
      {
          switch (p[ofs])
          {
-         case HIPNUC_ID_USRID:
-             ofs += 2;
-             break;
-         case HIPNUC_ID_ACC_RAW:
-         case HIPNUC_ID_ACC_CAL:
-              raw->hi91.tag = HIPNUC_ID_HI91;
-              raw->hi91.acc[0] = (float)I2(p + ofs + 1) / 1000;
-              raw->hi91.acc[1] = (float)I2(p + ofs + 3) / 1000;
-              raw->hi91.acc[2] = (float)I2(p + ofs + 5) / 1000;
-             ofs += 7;
-             break;
-         case HIPNUC_ID_GYR_RAW:
-         case HIPNUC_ID_GYR_CAL:
-             raw->hi91.tag = HIPNUC_ID_HI91;
-             raw->hi91.gyr[0] = (float)I2(p + ofs + 1) / 10;
-             raw->hi91.gyr[1] = (float)I2(p + ofs + 3) / 10;
-             raw->hi91.gyr[2] = (float)I2(p + ofs + 5) / 10;
-             ofs += 7;
-             break;
-         case HIPNUC_ID_MAG_RAW:
-             raw->hi91.tag = HIPNUC_ID_HI91;
-             raw->hi91.mag[0] = (float)I2(p + ofs + 1) / 10;
-             raw->hi91.mag[1] = (float)I2(p + ofs + 3) / 10;
-             raw->hi91.mag[2] = (float)I2(p + ofs + 5) / 10;
-             ofs += 7;
-             break;
-         case HIPNUC_ID_EUL:
-             raw->hi91.tag = HIPNUC_ID_HI91;
-             raw->hi91.pitch = (float)I2(p + ofs + 1) / 100;
-             raw->hi91.roll = (float)I2(p + ofs + 3) / 100;
-             raw->hi91.yaw = (float)I2(p + ofs + 5) / 10;
-             ofs += 7;
-             break;
-         case HIPNUC_ID_QUAT:
-             raw->hi91.tag = HIPNUC_ID_HI91;
-             raw->hi91.quat[0] = R4(p + ofs + 1);
-             raw->hi91.quat[1] = R4(p + ofs + 5);
-             raw->hi91.quat[2] = R4(p + ofs + 9);
-             raw->hi91.quat[3] = R4(p + ofs + 13);
-             ofs += 17;
-             break;
-         case HIPNUC_ID_PRS:
-             raw->hi91.tag = HIPNUC_ID_HI91;
-             raw->hi91.air_pressure = R4(p + ofs + 1);
-             ofs += 5;
-             break;
          case HIPNUC_ID_HI91:
              memcpy(&raw->hi91, p + ofs, sizeof(hi91_t));
              ofs += sizeof(hi91_t);
@@ -171,6 +116,9 @@ static double D8(uint8_t *p)
             if (bm & HI83_BMAP_INS_LON_LAT_MSL) { raw->hi83.ins_lon_lat_msl[0] = D8(p + idx + 0); raw->hi83.ins_lon_lat_msl[1] = D8(p + idx + 8); raw->hi83.ins_lon_lat_msl[2] = D8(p + idx + 16); idx += 24; }
             if (bm & HI83_BMAP_GNSS_QUALITY_NV) { raw->hi83.solq_pos = p[idx+0]; raw->hi83.nv_pos = p[idx+1]; raw->hi83.solq_heading = p[idx+2]; raw->hi83.nv_heading = p[idx+3]; idx += 4; }
             if (bm & HI83_BMAP_OD_SPEED) { raw->hi83.od_speed = R4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_UNDULATION) { raw->hi83.undulation = R4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_DIFF_AGE) { raw->hi83.diff_age = R4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_NODE_ID) { raw->hi83.node.node_id = p[idx+0]; raw->hi83.node.reserved[0] = p[idx+1]; raw->hi83.node.reserved[1] = p[idx+2]; raw->hi83.node.reserved[2] = p[idx+3]; idx += 4; }
             if (bm & HI83_BMAP_GNSS_LON_LAT_MSL) { raw->hi83.gnss_lon_lat_msl[0] = D8(p + idx + 0); raw->hi83.gnss_lon_lat_msl[1] = D8(p + idx + 8); raw->hi83.gnss_lon_lat_msl[2] = D8(p + idx + 16); idx += 24; }
             if (bm & HI83_BMAP_GNSS_VEL) { raw->hi83.gnss_vel[0] = R4(p + idx + 0); raw->hi83.gnss_vel[1] = R4(p + idx + 4); raw->hi83.gnss_vel[2] = R4(p + idx + 8); idx += 12; }
 
@@ -277,8 +225,9 @@ static double D8(uint8_t *p)
           */
          ret = snprintf(buf + written, buf_size - written,
              "{\n"
-             "  \"type\": \"HI91\",\n"
-             "  \"system_time\": %d,\n"
+            "  \"type\": \"HI91\",\n"
+            "  \"main_status\": [0x%X],\n"
+            "  \"system_time\": %d,\n"
              "  \"acc\": [%.3f, %.3f, %.3f],\n"
              "  \"gyr\": [%.3f, %.3f, %.3f],\n"
              "  \"mag\": [%.3f, %.3f, %.3f],\n"
@@ -288,7 +237,8 @@ static double D8(uint8_t *p)
              "  \"quat\": [%.3f, %.3f, %.3f, %.3f],\n"
              "  \"air_pressure\": %.1f\n"
              "}\n",
-             raw->hi91.system_time,
+            raw->hi91.main_status,
+            raw->hi91.system_time,
              raw->hi91.acc[0]*GRAVITY, raw->hi91.acc[1]*GRAVITY, raw->hi91.acc[2]*GRAVITY,
              raw->hi91.gyr[0], raw->hi91.gyr[1], raw->hi91.gyr[2],
              raw->hi91.mag[0], raw->hi91.mag[1], raw->hi91.mag[2],
@@ -328,8 +278,8 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
       */
      ret = snprintf(buf + written, buf_size - written,
          "{\n"
-         "  \"type\": \"HI81\",\n"
-         "  \"status\": %d,\n"
+        "  \"type\": \"HI81\",\n"
+        "  \"main_status\": %d,\n"
          "  \"ins_status\": %d,\n"
          "  \"gpst_wn\": %d,\n"
          "  \"gpst_tow\": %d,\n"
@@ -357,7 +307,7 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
          "  \"vel_enu\": [%.2f, %.2f, %.2f],\n"
          "  \"acc_enu\": [%.2f, %.2f, %.2f],\n"
          "}\n",
-         raw->hi81.status,
+        raw->hi81.main_status,
          raw->hi81.ins_status,
          raw->hi81.gpst_wn,
          raw->hi81.gpst_tow,
@@ -406,7 +356,7 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
         if (ret > 0) written += ret;
 
         if (raw->hi83.data_bitmap & HI83_BMAP_ACC_B) {
-            ret = snprintf(buf + written, buf_size - written, "  ,\"acc\": [%.3f, %.3f, %.3f]\n", raw->hi83.acc_b[0]*GRAVITY, raw->hi83.acc_b[1]*GRAVITY, raw->hi83.acc_b[2]*GRAVITY);
+            ret = snprintf(buf + written, buf_size - written, "  ,\"acc\": [%.3f, %.3f, %.3f]\n", raw->hi83.acc_b[0], raw->hi83.acc_b[1], raw->hi83.acc_b[2]);
             if (ret > 0) written += ret;
         }
         if (raw->hi83.data_bitmap & HI83_BMAP_GYR_B) {
@@ -471,6 +421,18 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
         }
         if (raw->hi83.data_bitmap & HI83_BMAP_OD_SPEED) {
             ret = snprintf(buf + written, buf_size - written, "  ,\"od_speed\": %.3f\n", raw->hi83.od_speed);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_UNDULATION) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"undulation\": %.3f\n", raw->hi83.undulation);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_DIFF_AGE) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"diff_age\": %.3f\n", raw->hi83.diff_age);
+            if (ret > 0) written += ret;
+        }
+        if (raw->hi83.data_bitmap & HI83_BMAP_NODE_ID) {
+            ret = snprintf(buf + written, buf_size - written, "  ,\"node_id\": %u\n", (unsigned)raw->hi83.node.node_id);
             if (ret > 0) written += ret;
         }
         if (raw->hi83.data_bitmap & HI83_BMAP_GNSS_LON_LAT_MSL) {

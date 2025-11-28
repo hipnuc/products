@@ -34,7 +34,7 @@
  typedef struct __attribute__((__packed__))
  {
      uint8_t         tag;            /* Data packet tag, if tag = 0x00, means that this packet is null */
-     uint16_t        sttaus;         /* reserved */
+    uint16_t        main_status;    /* reserved */
      int8_t          temp;           /* Temperature */
      float           air_pressure;   /* Pressure */
      uint32_t        system_time;    /* Timestamp */
@@ -54,7 +54,7 @@
  typedef struct __attribute__((__packed__))
  {
      uint8_t         tag;            /* Data packet tag */
-     uint16_t        status;         /* Status information */
+    uint16_t        main_status;    /* Status information */
      uint8_t         ins_status;     /* INS status */
      uint16_t        gpst_wn;        /* GPS time: week number */
      uint32_t        gpst_tow;       /* GPS time: time of week */
@@ -113,6 +113,9 @@
 #define HI83_BMAP_INS_LON_LAT_MSL    (1u << 14)
 #define HI83_BMAP_GNSS_QUALITY_NV    (1u << 15)
 #define HI83_BMAP_OD_SPEED           (1u << 16)
+#define HI83_BMAP_UNDULATION         (1u << 17)
+#define HI83_BMAP_DIFF_AGE           (1u << 18)
+#define HI83_BMAP_NODE_ID            (1u << 19)
 #define HI83_BMAP_GNSS_LON_LAT_MSL   (1u << 30)
 #define HI83_BMAP_GNSS_VEL           (1u << 31)
 
@@ -151,6 +154,12 @@ typedef struct __attribute__((__packed__))
     uint8_t  solq_heading;
     uint8_t  nv_heading;
     float    od_speed;
+    float    undulation;
+    float    diff_age;
+    struct __attribute__((__packed__)) {
+        uint8_t node_id;
+        uint8_t reserved[3];
+    } node;
     double   gnss_lon_lat_msl[3];
     float    gnss_vel[3];
 } hi83_t;
