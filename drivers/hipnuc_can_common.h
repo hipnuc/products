@@ -87,5 +87,15 @@ typedef struct {
 int hipnuc_can_to_json(const can_sensor_data_t *data, int msg_type, can_json_output_t *output);
 uint8_t hipnuc_can_extract_node_id(uint32_t can_id);
 
+typedef enum {
+    HIPNUC_J1939_CMD_READ = 0x03,
+    HIPNUC_J1939_CMD_WRITE = 0x06
+} hipnuc_j1939_cmd_t;
+
+uint32_t hipnuc_j1939_make_cfg_id(uint8_t da, uint8_t sa);
+void hipnuc_j1939_build_cfg_write(uint8_t da, uint8_t sa, uint16_t addr, uint32_t val, hipnuc_can_frame_t *out);
+void hipnuc_j1939_build_cfg_read(uint8_t da, uint8_t sa, uint16_t addr, uint32_t len_regs, hipnuc_can_frame_t *out);
+int hipnuc_j1939_parse_cfg(const hipnuc_can_frame_t *frame, uint16_t *addr, hipnuc_j1939_cmd_t *cmd, uint8_t *status, uint32_t *val);
+
 
 #endif

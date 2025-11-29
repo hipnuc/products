@@ -8,9 +8,13 @@
 
 typedef struct {
     char interface[32];
+    uint8_t sync_node;
+    uint8_t sync_sa;
+    struct { uint32_t pgn; uint32_t period_ms; } sync_items[32];
+    int sync_count;
 } canhost_config_t;
 
-static canhost_config_t G = { .interface = "can0" };
+static canhost_config_t G = { .interface = "can0", .sync_node = 8, .sync_sa = 0x55, .sync_count = 0 };
 static int initialized = 0;
 static char source_path[256] = {0};
 
@@ -39,6 +43,28 @@ static void apply_kv(const char *key_in, const char *val_in)
     }
     if (strcmp(key, "interface") == 0) {
         snprintf(G.interface, sizeof(G.interface), "%.*s", (int)(sizeof(G.interface) - 1), val);
+        return;
+    }
+    if (strcmp(key, "sync.node") == 0 || strcmp(key, "sync_node") == 0) {
+        unsigned long v = strtoul(val, NULL, 0);
+        G.sync_node = (uint8_t)v;
+        return;
+    }
+    if (strcmp(key, "sync.sa") == 0 || strcmp(key, "sync_sa") == 0) {
+        unsigned long v = strtoul(val, NULL, 0);
+        G.sync_sa = (uint8_t)v;
+        return;
+    }
+    if (strncmp(key, "sync.", 5) == 0) {
+        const char *pgn_str = key + 5;
+        unsigned long pgn = strtoul(pgn_str, NULL, 0);
+        unsigned long period = strtoul(val, NULL, 0);
+        if (pgn != 0 && period >= 5 && G.sync_count < (int)(sizeof(G.sync_items)/sizeof(G.sync_items[0]))) {
+            G.sync_items[G.sync_count].pgn = (uint32_t)pgn;
+            G.sync_items[G.sync_count].period_ms = (uint32_t)period;
+            G.sync_count++;
+        }
+        return;
     }
 }
 
@@ -137,4 +163,33 @@ void config_log_summary(void)
     } else {
         log_info("Config defaults used | interface=%s", G.interface);
     }
+    if (G.sync_count > 0) {
+        log_info("Sync: node=%u sa=%u items=%d", (unsigned)G.sync_node, (unsigned)G.sync_sa, G.sync_count);
+    }
+}
+
+int config_get_sync_items(config_sync_item_t *items, int max_count)
+{
+    if (!items || max_count <= 0) return 0;
+    int n = (G.sync_count < max_count) ? G.sync_count : max_count;
+    for (int i = 0; i < n; ++i) {
+        items[i].pgn = G.sync_items[i].pgn;
+        items[i].period_ms = G.sync_items[i].period_ms;
+    }
+    return n;
+}
+
+int config_get_sync_count(void)
+{
+    return G.sync_count;
+}
+
+uint8_t config_get_sync_node(void)
+{
+    return G.sync_node;
+}
+
+uint8_t config_get_sync_sa(void)
+{
+    return G.sync_sa;
 }

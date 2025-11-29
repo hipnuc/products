@@ -9,6 +9,7 @@
 #include "../can_interface.h"
 #include "../log.h"
 #include "../utils.h"
+#include "../help.h"
 #include "../commands.h"
 #include "../config.h"
 
@@ -152,7 +153,7 @@ int cmd_probe(int argc, char *argv[])
     const char *ifname = config_get_interface();
     int fd = can_open_socket(ifname);
     if (fd < 0) {
-        utils_print_can_setup_hint(ifname);
+        help_print_can_setup(ifname);
         return -1;
     }
 

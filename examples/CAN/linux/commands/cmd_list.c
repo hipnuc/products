@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "../can_interface.h"
 #include "../log.h"
+#include "../help.h"
 
 // bitrate column removed for a simpler list output
 
@@ -23,12 +24,7 @@ static void print_interface_row(const can_interface_info_t *iface)
 
 static void print_setup_hint(void)
 {
-    printf("\nNo physical CAN interfaces detected.\n");
-    printf("Quick checklist:\n");
-    printf("  sudo ip link set can0 down\n");
-    printf("  sudo ip link set can0 type can bitrate 500000\n");
-    printf("  sudo ip link set can0 up\n");
-    printf("  ip -details link show can0\n\n");
+    help_print_no_interfaces_hint();
 }
 
 int cmd_list(int argc, char *argv[])

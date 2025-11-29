@@ -4,6 +4,7 @@
 #include "log.h"
 #include "can_interface.h"
 #include "utils.h"
+#include "help.h"
 #include "config.h"
 #include <string.h>
 
@@ -21,6 +22,7 @@ static command_t commands[] = {
     {"probe",  cmd_probe, 1},
     {"read",   cmd_read,  1},
     {"record", cmd_record, 1},
+    {"sync",   cmd_sync,  1},
     {NULL, NULL, 0}
 };
 
@@ -38,7 +40,7 @@ int execute_command(const char *command_name, int argc, char *argv[])
             if (commands[i].needs_interface) {
                 const char *ifname = config_get_interface();
                 if (can_ensure_interface_ready(ifname) < 0) {
-                    utils_print_can_setup_hint(ifname);
+                    help_print_can_setup(ifname);
                     return -1;
                 }
             }
@@ -47,12 +49,7 @@ int execute_command(const char *command_name, int argc, char *argv[])
     }
     
     log_error("Unknown command: %s", command_name);
-    printf("Available commands:\n");
-    for (int i = 0; commands[i].name != NULL; i++) {
-        printf("  %s\n", commands[i].name);
-    }
-    printf("\nHint: run 'canhost --help' for usage.\n");
-    printf("Examples: canhost list | canhost probe | canhost read | canhost record\n");
+    help_print_unknown_command("canhost");
 
     return -1;
 }

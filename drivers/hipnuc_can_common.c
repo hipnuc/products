@@ -70,3 +70,61 @@ uint8_t hipnuc_can_extract_node_id(uint32_t can_id)
     if (can_id & HIPNUC_CAN_EFF_FLAG) return (uint8_t)(can_id & 0xFF);
     return (uint8_t)(can_id & 0x7F);
 }
+
+static void le16_encode(uint16_t v, uint8_t *o)
+{
+    o[0] = (uint8_t)(v & 0xFF);
+    o[1] = (uint8_t)((v >> 8) & 0xFF);
+}
+
+static void le32_encode(uint32_t v, uint8_t *o)
+{
+    o[0] = (uint8_t)(v & 0xFF);
+    o[1] = (uint8_t)((v >> 8) & 0xFF);
+    o[2] = (uint8_t)((v >> 16) & 0xFF);
+    o[3] = (uint8_t)((v >> 24) & 0xFF);
+}
+
+uint32_t hipnuc_j1939_make_cfg_id(uint8_t da, uint8_t sa)
+{
+    return 0x0CEF0000U | ((uint32_t)da << 8) | (uint32_t)sa;
+}
+
+void hipnuc_j1939_build_cfg_write(uint8_t da, uint8_t sa, uint16_t addr, uint32_t val, hipnuc_can_frame_t *out)
+{
+    out->can_id = HIPNUC_CAN_EFF_FLAG | hipnuc_j1939_make_cfg_id(da, sa);
+    out->can_dlc = 8;
+    le16_encode(addr, &out->data[0]);
+    out->data[2] = (uint8_t)HIPNUC_J1939_CMD_WRITE;
+    out->data[3] = 0;
+    le32_encode(val, &out->data[4]);
+    out->hw_ts_us = 0;
+}
+
+void hipnuc_j1939_build_cfg_read(uint8_t da, uint8_t sa, uint16_t addr, uint32_t len_regs, hipnuc_can_frame_t *out)
+{
+    out->can_id = HIPNUC_CAN_EFF_FLAG | hipnuc_j1939_make_cfg_id(da, sa);
+    out->can_dlc = 8;
+    le16_encode(addr, &out->data[0]);
+    out->data[2] = (uint8_t)HIPNUC_J1939_CMD_READ;
+    out->data[3] = 0;
+    le32_encode(len_regs, &out->data[4]);
+    out->hw_ts_us = 0;
+}
+
+int hipnuc_j1939_parse_cfg(const hipnuc_can_frame_t *frame, uint16_t *addr, hipnuc_j1939_cmd_t *cmd, uint8_t *status, uint32_t *val)
+{
+    if (!frame || frame->can_dlc != 8) return -1;
+    if (!(frame->can_id & HIPNUC_CAN_EFF_FLAG)) return -1;
+    if (((frame->can_id & HIPNUC_CAN_EFF_MASK) >> 16) != 0x0CEF) return -1;
+    if (addr) *addr = (uint16_t)(frame->data[0] | ((uint16_t)frame->data[1] << 8));
+    if (cmd) *cmd = (hipnuc_j1939_cmd_t)frame->data[2];
+    if (status) *status = frame->data[3];
+    if (val) {
+        *val = (uint32_t)frame->data[4]
+             | ((uint32_t)frame->data[5] << 8)
+             | ((uint32_t)frame->data[6] << 16)
+             | ((uint32_t)frame->data[7] << 24);
+    }
+    return 0;
+}

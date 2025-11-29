@@ -66,7 +66,7 @@ interface=can0
 ```bash
 ./canhost list      # 查看接口状态
 ./canhost read      # 终端显示（约20 Hz，按类型输出最新帧）
-./canhost record -o imu.jsonl  # 记录到 NDJSON 文件并显示速率
+./canhost record -o imu.json  # 记录到 NDJSON 文件并显示速率
 ```
 
 ## 使用方式
@@ -111,6 +111,16 @@ interface=can0
 ./canhost probe
 ./canhost read
 ./canhost record -o imu.jsonl
+```
+
+### Sync 用法
+
+支持按配置周期触发或限定次数触发：
+
+```bash
+./canhost sync                 # 周期触发（按配置）
+./canhost sync -c 1            # 每个配置的 PGN 仅触发一次
+./canhost sync --pgn 0xF100    # 仅触发指定 PGN
 ```
 
 ## 协议与解析

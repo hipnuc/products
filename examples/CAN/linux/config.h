@@ -21,4 +21,14 @@ const char* config_get_source(void);
 // Log a one-line summary of config source and values
 void config_log_summary(void);
 
+typedef struct {
+    uint32_t pgn;
+    uint32_t period_ms;
+} config_sync_item_t;
+
+int config_get_sync_items(config_sync_item_t *items, int max_count);
+int config_get_sync_count(void);
+uint8_t config_get_sync_node(void);
+uint8_t config_get_sync_sa(void);
+
 #endif // CANHOST_CONFIG_H

@@ -7,6 +7,7 @@
 #include "../can_interface.h"
 #include "../log.h"
 #include "../utils.h"
+#include "../help.h"
 #include "hipnuc_can_common.h"
 #include "hipnuc_j1939_parser.h"
 #include "canopen_parser.h"
@@ -27,7 +28,7 @@ int cmd_read(int argc, char *argv[])
     const char *ifname = config_get_interface();
     int sockfd = can_open_socket(ifname);
     if (sockfd < 0) {
-        utils_print_can_setup_hint(ifname);
+        help_print_can_setup(ifname);
         return -1;
     }
     

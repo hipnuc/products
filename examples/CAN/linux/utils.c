@@ -2,7 +2,6 @@
 #include "utils.h"
 #include <time.h>
 #include <string.h>
-#include <stdio.h>
 
 // Millisecond timestamp based on CLOCK_MONOTONIC
 uint32_t utils_get_timestamp_ms(void)
@@ -21,16 +20,10 @@ void utils_linux_can_to_hipnuc_can(const struct can_frame *linux_frame, uint64_t
     hipnuc_frame->hw_ts_us = hw_ts_us;
 }
 
-// Print quick setup commands when a CAN interface cannot be opened
-void utils_print_can_setup_hint(const char *ifname)
+void utils_hipnuc_can_to_linux_can(const hipnuc_can_frame_t *hipnuc_frame, struct can_frame *linux_frame)
 {
-    const char *iface = (ifname && *ifname) ? ifname : "can0";
-    fprintf(stderr,
-            "Error: cannot open CAN interface '%s'\n",
-            ifname ? ifname : "(null)");
-    fprintf(stderr, "Try: sudo ip link set %s down\n", iface);
-    fprintf(stderr, "     sudo ip link set %s type can bitrate 500000\n", iface);
-    fprintf(stderr, "     sudo ip link set %s up\n", iface);
-    fprintf(stderr, "     ip -details link show %s\n", iface);
-    fprintf(stderr, "Tip: run 'canhost list' to see available interfaces\n");
+    linux_frame->can_id = hipnuc_frame->can_id;
+    linux_frame->can_dlc = hipnuc_frame->can_dlc;
+    memcpy(linux_frame->data, hipnuc_frame->data, 8);
 }
+
