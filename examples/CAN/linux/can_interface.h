@@ -12,7 +12,6 @@ typedef struct {
     char name[16];           // Interface name (e.g. can0)
     char state[16];          // Up/down/unknown
     bool is_can_device;      // True when backed by a CAN controller
-    uint32_t bitrate;        // Configured bitrate in bit/s (0 when unavailable)
 } can_interface_info_t;
 
 // API

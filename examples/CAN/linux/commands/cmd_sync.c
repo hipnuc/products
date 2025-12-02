@@ -67,7 +67,7 @@ int cmd_sync(int argc, char *argv[])
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    printf("Sync config: if=%s node=%u sa=%u items=%d\n", ifname, (unsigned)node_id, (unsigned)host_sa, item_cnt);
+    printf("Sync config: if=%s node_id=%u sa=%u items=%d\n", ifname, (unsigned)node_id, (unsigned)host_sa, item_cnt);
     for (int i = 0; i < item_cnt; ++i) {
         printf("  PGN=0x%X period=%ums\n", (unsigned)items[i].pgn, (unsigned)items[i].period_ms);
     }
@@ -88,7 +88,7 @@ int cmd_sync(int argc, char *argv[])
         for (int i = 0; i < item_cnt; ++i) {
             if ((int32_t)(now_ms - next_due[i]) >= 0) {
                 hipnuc_can_frame_t cfg;
-                hipnuc_j1939_build_cfg_write(node_id, host_sa, 0x0096, items[i].pgn, &cfg);
+                hipnuc_j1939_build_sync(node_id, host_sa, items[i].pgn, &cfg);
                 struct can_frame f;
                 utils_hipnuc_can_to_linux_can(&cfg, &f);
                 ssize_t w = write(fd, &f, sizeof(f));

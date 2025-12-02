@@ -5,6 +5,7 @@
 #include <time.h>
 #include <stdbool.h>
 #include <linux/can.h>
+#include <sys/time.h>
 
 #include "../can_interface.h"
 #include "../log.h"
@@ -18,7 +19,7 @@
 #define J1939_BROADCAST_ADDRESS       255
 #define J1939_HOST_ADDRESS            254
 #define J1939_PDU1_FORMAT_CUTOFF      240
-#define PROBE_WINDOW_SECONDS          2
+#define PROBE_IDLE_TIMEOUT_MS         500
 #define MAX_J1939_ADDRESSES           256
 
 typedef union {
@@ -46,6 +47,12 @@ static void signal_handler(int sig)
 {
     (void)sig;
     keep_running = 0;
+}
+
+static uint64_t now_ms(void)
+{
+    struct timeval tv; gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)tv.tv_usec / 1000ULL;
 }
 
 static uint32_t j1939_pgn_to_can_id(uint16_t pgn, uint8_t sa, uint8_t da)
@@ -118,30 +125,16 @@ static void record_device(discovered_device_t *devices, uint8_t addr, uint64_t n
 }
 static void display_devices(const discovered_device_t *devices, size_t len)
 {
-    // 为每一个发现的设备单独输出一条 INFO 日志
     int cnt = 0;
     for (size_t i = 0; i < len; ++i) {
         if (devices[i].found) {
-            log_info("Discovered J1939 device: addr=%u name=0x%016llX",
-                     (unsigned int)devices[i].address,
-                     (unsigned long long)devices[i].name);
             ++cnt;
         }
     }
-
     if (cnt == 0) {
         log_info("No J1939 devices discovered");
-    }
-}
-static void update_progress(time_t now, time_t end, int *last_remaining)
-{
-    int remaining = (int)(end - now);
-    if (remaining < 0) remaining = 0;
-
-    if (remaining != *last_remaining) {
-        printf("\rScanning ... %ds left ", remaining);
-        fflush(stdout);
-        *last_remaining = remaining;
+    } else {
+        log_info("J1939 devices discovered: %d", cnt);
     }
 }
 
@@ -157,7 +150,7 @@ int cmd_probe(int argc, char *argv[])
         return -1;
     }
 
-    printf("Probing J1939 devices on %s (window: %ds)\n", ifname, PROBE_WINDOW_SECONDS);
+    printf("Probing J1939 devices on %s (idle timeout: %dms)\n", ifname, PROBE_IDLE_TIMEOUT_MS);
     printf("Press Ctrl+C to stop early.\n\n");
 
     signal(SIGINT, signal_handler);
@@ -171,25 +164,26 @@ int cmd_probe(int argc, char *argv[])
         return -1;
     }
 
-    time_t end = time(NULL) + PROBE_WINDOW_SECONDS;
     int frames = 0;
-    int last_remaining = -1;
+    uint64_t last_claim_ms = now_ms();
 
     while (keep_running) {
-        time_t now = time(NULL);
-        if (now >= end) {
+        if (now_ms() - last_claim_ms > PROBE_IDLE_TIMEOUT_MS) {
             break;
         }
-
-        update_progress(now, end, &last_remaining);
-
         struct can_frame f;
         uint64_t hw_ts_us = 0;
         int r = can_receive_frame_ts(fd, &f, &hw_ts_us);
         if (r > 0) {
             uint8_t addr; uint64_t name;
             if (parse_address_claimed(&f, &addr, &name)) {
-                record_device(devices, addr, name);
+                if (!devices[addr].found) {
+                    record_device(devices, addr, name);
+                    log_info("Discovered J1939 device: addr=%u name=0x%016llX",
+                             (unsigned int)addr,
+                             (unsigned long long)name);
+                    last_claim_ms = now_ms();
+                }
             }
             ++frames;
         } else if (r < 0) {

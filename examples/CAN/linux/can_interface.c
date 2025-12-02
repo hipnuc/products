@@ -47,45 +47,8 @@ static int read_sysfs_string(const char *path, char *buf, size_t len)
     return 0;
 }
 
-static bool read_uint32_from_file(const char *path, uint32_t *value)
-{
-    if (!value) {
-        return false;
-    }
-    char buf[32];
-    if (read_sysfs_string(path, buf, sizeof(buf)) < 0) {
-        return false;
-    }
-    char *end = NULL;
-    errno = 0;
-    unsigned long val = strtoul(buf, &end, 0);
-    if (errno != 0 || end == buf) {
-        return false;
-    }
-    *value = (uint32_t)val;
-    return true;
-}
 
-static uint32_t read_bitrate_for_interface(const char *ifname)
-{
-    static const char *paths[] = {
-        "/sys/class/net/%s/can_bittiming/bitrate",
-        "/sys/class/net/%s/can_bittiming/nominal_bitrate",
-        "/sys/class/net/%s/can_ext_bittiming/bitrate"
-    };
-    char path[256];
-    for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
-        int ret = snprintf(path, sizeof(path), paths[i], ifname);
-        if (ret < 0 || (size_t)ret >= sizeof(path)) {
-            continue;
-        }
-        uint32_t bitrate = 0;
-        if (read_uint32_from_file(path, &bitrate)) {
-            return bitrate;
-        }
-    }
-    return 0;
-}
+
 
 static bool is_virtual_can(const char *ifname)
 {
@@ -115,10 +78,6 @@ static bool is_real_can_interface(const char *ifname)
     return atoi(type_buf) == ARPHRD_CAN;
 }
 
-static bool state_is_down(const char *state)
-{
-    return state && strncmp(state, "down", 4) == 0;
-}
 
 // Enumerate physical CAN interfaces exposed by SocketCAN
 int can_list_interfaces(can_interface_info_t *interfaces, int max_count)
@@ -157,12 +116,6 @@ int can_list_interfaces(can_interface_info_t *interfaces, int max_count)
             if (read_sysfs_string(state_path, state_buf, sizeof(state_buf)) == 0) {
                 strncpy(info->state, state_buf, sizeof(info->state) - 1);
             }
-        }
-
-        if (!state_is_down(info->state)) {
-            info->bitrate = read_bitrate_for_interface(entry->d_name);
-        } else {
-            info->bitrate = 0;
         }
         ++count;
     }

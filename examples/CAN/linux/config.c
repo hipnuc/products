@@ -45,7 +45,7 @@ static void apply_kv(const char *key_in, const char *val_in)
         snprintf(G.interface, sizeof(G.interface), "%.*s", (int)(sizeof(G.interface) - 1), val);
         return;
     }
-    if (strcmp(key, "sync.node") == 0 || strcmp(key, "sync_node") == 0) {
+    if (strcmp(key, "node_id") == 0) {
         unsigned long v = strtoul(val, NULL, 0);
         G.sync_node = (uint8_t)v;
         return;
@@ -164,7 +164,7 @@ void config_log_summary(void)
         log_info("Config defaults used | interface=%s", G.interface);
     }
     if (G.sync_count > 0) {
-        log_info("Sync: node=%u sa=%u items=%d", (unsigned)G.sync_node, (unsigned)G.sync_sa, G.sync_count);
+        log_info("Sync: node_id=%u sa=%u items=%d", (unsigned)G.sync_node, (unsigned)G.sync_sa, G.sync_count);
     }
 }
 

@@ -85,34 +85,33 @@ static void le32_encode(uint32_t v, uint8_t *o)
     o[3] = (uint8_t)((v >> 24) & 0xFF);
 }
 
-uint32_t hipnuc_j1939_make_cfg_id(uint8_t da, uint8_t sa)
+static uint32_t hipnuc_j1939_make_cmd_id(uint8_t da, uint8_t sa)
 {
     return 0x0CEF0000U | ((uint32_t)da << 8) | (uint32_t)sa;
 }
 
-void hipnuc_j1939_build_cfg_write(uint8_t da, uint8_t sa, uint16_t addr, uint32_t val, hipnuc_can_frame_t *out)
+static void hipnuc_j1939_build_cmd(uint8_t da, uint8_t sa, uint16_t addr, hipnuc_j1939_cmd_t cmd, uint32_t val, hipnuc_can_frame_t *out)
 {
-    out->can_id = HIPNUC_CAN_EFF_FLAG | hipnuc_j1939_make_cfg_id(da, sa);
+    out->can_id = HIPNUC_CAN_EFF_FLAG | hipnuc_j1939_make_cmd_id(da, sa);
     out->can_dlc = 8;
     le16_encode(addr, &out->data[0]);
-    out->data[2] = (uint8_t)HIPNUC_J1939_CMD_WRITE;
+    out->data[2] = (uint8_t)cmd;
     out->data[3] = 0;
     le32_encode(val, &out->data[4]);
     out->hw_ts_us = 0;
 }
 
-void hipnuc_j1939_build_cfg_read(uint8_t da, uint8_t sa, uint16_t addr, uint32_t len_regs, hipnuc_can_frame_t *out)
+void hipnuc_j1939_build_reg_write_cmd(uint8_t da, uint8_t sa, uint16_t addr, uint32_t val, hipnuc_can_frame_t *out)
 {
-    out->can_id = HIPNUC_CAN_EFF_FLAG | hipnuc_j1939_make_cfg_id(da, sa);
-    out->can_dlc = 8;
-    le16_encode(addr, &out->data[0]);
-    out->data[2] = (uint8_t)HIPNUC_J1939_CMD_READ;
-    out->data[3] = 0;
-    le32_encode(len_regs, &out->data[4]);
-    out->hw_ts_us = 0;
+    hipnuc_j1939_build_cmd(da, sa, addr, HIPNUC_J1939_CMD_WRITE, val, out);
 }
 
-int hipnuc_j1939_parse_cfg(const hipnuc_can_frame_t *frame, uint16_t *addr, hipnuc_j1939_cmd_t *cmd, uint8_t *status, uint32_t *val)
+void hipnuc_j1939_build_reg_read_cmd(uint8_t da, uint8_t sa, uint16_t addr, hipnuc_can_frame_t *out)
+{
+    hipnuc_j1939_build_cmd(da, sa, addr, HIPNUC_J1939_CMD_READ, 1, out);
+}
+
+int hipnuc_j1939_parse_cmd(const hipnuc_can_frame_t *frame, uint16_t *addr, hipnuc_j1939_cmd_t *cmd, uint8_t *status, uint32_t *val)
 {
     if (!frame || frame->can_dlc != 8) return -1;
     if (!(frame->can_id & HIPNUC_CAN_EFF_FLAG)) return -1;
@@ -127,4 +126,16 @@ int hipnuc_j1939_parse_cfg(const hipnuc_can_frame_t *frame, uint16_t *addr, hipn
              | ((uint32_t)frame->data[7] << 24);
     }
     return 0;
+}
+
+int hipnuc_j1939_is_cfg_frame(const hipnuc_can_frame_t *frame)
+{
+    if (!frame) return 0;
+    if (!(frame->can_id & HIPNUC_CAN_EFF_FLAG)) return 0;
+    return (((frame->can_id & HIPNUC_CAN_EFF_MASK) >> 16) == 0x0CEF) ? 1 : 0;
+}
+
+void hipnuc_j1939_build_sync(uint8_t da, uint8_t sa, uint32_t pgn, hipnuc_can_frame_t *out)
+{
+    hipnuc_j1939_build_cmd(da, sa, 0x0096, HIPNUC_J1939_CMD_WRITE, pgn, out);
 }

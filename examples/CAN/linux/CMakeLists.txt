@@ -24,6 +24,8 @@ set(SOURCES
     commands/cmd_read.c
     commands/cmd_record.c
     commands/cmd_sync.c
+    commands/cmd_reg.c
+    j1939_reg_api.c
     help.c
     ../../../drivers/hipnuc_can_common.c
     ../../../drivers/hipnuc_j1939_parser.c

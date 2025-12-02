@@ -12,7 +12,9 @@ static const char *examples[] = {
     PROGRAM_NAME " read",
     PROGRAM_NAME " record -o imu.json",
     PROGRAM_NAME " sync",
-    PROGRAM_NAME " sync -c 1"
+    PROGRAM_NAME " sync -c 1",
+    PROGRAM_NAME " reg read 0x70",
+    PROGRAM_NAME " reg write 0x06 1"
 };
 
 void help_print_version(void)
@@ -36,11 +38,16 @@ void help_print_usage(const char *program_name)
     printf("  read    Stream and format HiPNUC sensor data frames\n");
     printf("  record  Record parsed JSON (NDJSON) to file, print frames/fps\n");
     printf("  sync    Periodically trigger data via J1939 config PGN sync\n");
+    printf("  reg     Read/Write J1939 config registers mapped to RS485 Modbus\n");
     printf("Sync options:\n");
     printf("  -c, --count N          Trigger each configured PGN N times then exit\n");
     printf("  -p, --pgn PGN          Restrict to a single PGN (hex or dec)\n");
     printf("Record options:\n");
     printf("  -o, --out FILE          Output JSON file\n");
+    printf("Reg usage:\n");
+    printf("  reg read <addr>         Read register at address <addr> (dec or 0xHEX)\n");
+    printf("  reg write <addr> <val>  Write value <val> to <addr> (dec or 0xHEX)\n");
+    printf("  -n, --node ID           Destination node ID (default from config)\n");
     printf("Examples:\n");
     for (size_t i = 0; i < sizeof(examples)/sizeof(examples[0]); ++i) {
     printf("  %s\n", examples[i]);
@@ -62,9 +69,9 @@ void help_print_unknown_command(const char *program_name)
 {
     const char *pn = program_name && *program_name ? program_name : PROGRAM_NAME;
     printf("Available commands:\n");
-    printf("  list\n  probe\n  read\n  record\n  sync\n");
+    printf("  list\n  probe\n  read\n  record\n  sync\n  reg\n");
     printf("\nHint: run '%s --help' for usage.\n", pn);
-    printf("Examples: %s list | %s probe | %s read | %s record | %s sync\n", pn, pn, pn, pn, pn);
+    printf("Examples: %s list | %s probe | %s read | %s record | %s sync | %s reg\n", pn, pn, pn, pn, pn, pn);
 }
 
 void help_print_can_setup(const char *ifname)

@@ -23,6 +23,7 @@ static command_t commands[] = {
     {"read",   cmd_read,  1},
     {"record", cmd_record, 1},
     {"sync",   cmd_sync,  1},
+    {"reg",    cmd_reg,   1},
     {NULL, NULL, 0}
 };
 
