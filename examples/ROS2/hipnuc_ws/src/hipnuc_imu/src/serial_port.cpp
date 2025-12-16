@@ -81,25 +81,50 @@ namespace hipnuc_driver
 				{
 					int rev = hipnuc_input(&raw, buf[i]);
 					
-					if(rev)
-					{
-						auto imu_data = std::make_unique<sensor_msgs::msg::Imu>();
-						imu_data->orientation.w = raw.hi91.quat[0];
-						imu_data->orientation.x = raw.hi91.quat[1];	
-						imu_data->orientation.y = raw.hi91.quat[2];
-						imu_data->orientation.z = raw.hi91.quat[3];
-						imu_data->angular_velocity.x = raw.hi91.gyr[0] * DEG_TO_RAD;
-						imu_data->angular_velocity.y = raw.hi91.gyr[1] * DEG_TO_RAD;
-						imu_data->angular_velocity.z = raw.hi91.gyr[2] * DEG_TO_RAD;
-						imu_data->linear_acceleration.x = raw.hi91.acc[0] * GRA_ACC;
-						imu_data->linear_acceleration.y = raw.hi91.acc[1] * GRA_ACC;
-						imu_data->linear_acceleration.z = raw.hi91.acc[2] * GRA_ACC;
+                    if(rev)
+                    {
+                        auto imu_msg = std::make_unique<sensor_msgs::msg::Imu>();
+                        if (raw.hi83.tag == 0x83)
+                        {
+                            uint32_t bm = raw.hi83.data_bitmap;
+                            if (bm & HI83_BMAP_QUAT)
+                            {
+                                imu_msg->orientation.w = raw.hi83.quat[0];
+                                imu_msg->orientation.x = raw.hi83.quat[1];
+                                imu_msg->orientation.y = raw.hi83.quat[2];
+                                imu_msg->orientation.z = raw.hi83.quat[3];
+                            }
+                            if (bm & HI83_BMAP_GYR_B)
+                            {
+                                imu_msg->angular_velocity.x = raw.hi83.gyr_b[0];
+                                imu_msg->angular_velocity.y = raw.hi83.gyr_b[1];
+                                imu_msg->angular_velocity.z = raw.hi83.gyr_b[2];
+                            }
+                            if (bm & HI83_BMAP_ACC_B)
+                            {
+                                imu_msg->linear_acceleration.x = raw.hi83.acc_b[0];
+                                imu_msg->linear_acceleration.y = raw.hi83.acc_b[1];
+                                imu_msg->linear_acceleration.z = raw.hi83.acc_b[2];
+                            }
+                        }
+                        else if (raw.hi91.tag == 0x91)
+                        {
+                            imu_msg->orientation.w = raw.hi91.quat[0];
+                            imu_msg->orientation.x = raw.hi91.quat[1]; 
+                            imu_msg->orientation.y = raw.hi91.quat[2];
+                            imu_msg->orientation.z = raw.hi91.quat[3];
+                            imu_msg->angular_velocity.x = raw.hi91.gyr[0] * DEG_TO_RAD;
+                            imu_msg->angular_velocity.y = raw.hi91.gyr[1] * DEG_TO_RAD;
+                            imu_msg->angular_velocity.z = raw.hi91.gyr[2] * DEG_TO_RAD;
+                            imu_msg->linear_acceleration.x = raw.hi91.acc[0] * GRA_ACC;
+                            imu_msg->linear_acceleration.y = raw.hi91.acc[1] * GRA_ACC;
+                            imu_msg->linear_acceleration.z = raw.hi91.acc[2] * GRA_ACC;
+                        }
 
-						imu_data->header.frame_id = frame_id;
-						imu_data->header.stamp = rclcpp::Clock().now();
-						
-						imu_pub->publish(std::move(imu_data));
-					}
+                        imu_msg->header.frame_id = frame_id;
+                        imu_msg->header.stamp = rclcpp::Clock().now();
+                        imu_pub->publish(std::move(imu_msg));
+                    }
 				}
 
 				memset(buf,0,sizeof(buf));

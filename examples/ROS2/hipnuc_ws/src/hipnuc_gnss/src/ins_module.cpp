@@ -239,20 +239,7 @@ void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::msg::Imu *imu_data)
 		imu_data->linear_acceleration.x = data->hi91.acc[0] * GRA_ACC;
 		imu_data->linear_acceleration.y = data->hi91.acc[1] * GRA_ACC;
 		imu_data->linear_acceleration.z = data->hi91.acc[2] * GRA_ACC;
-	}  
-	if(data->hi92.tag == 0x92)
-	{
-		imu_data->orientation.x = (float)data->hi92.quat[1] * QUA_FACTOR;
-		imu_data->orientation.y = (float)data->hi92.quat[2] * QUA_FACTOR;
-		imu_data->orientation.z = (float)data->hi92.quat[3] * QUA_FACTOR;
-		imu_data->orientation.w = (float)data->hi92.quat[0] * QUA_FACTOR;
-		imu_data->angular_velocity.x = (float)data->hi92.gyr_b[0] * GYR_FACTOR;
-		imu_data->angular_velocity.y = (float)data->hi92.gyr_b[1] * GYR_FACTOR;
-		imu_data->angular_velocity.z = (float)data->hi92.gyr_b[2] * GYR_FACTOR;
-		imu_data->linear_acceleration.x = (float)data->hi92.acc_b[0] * ACC_FACTOR;
-		imu_data->linear_acceleration.y = (float)data->hi92.acc_b[1] * ACC_FACTOR;
-		imu_data->linear_acceleration.z = (float)data->hi92.acc_b[2] * ACC_FACTOR;
-	}
+    }
 }
 
 void publish_gps_data(nmea_raw_t *data, sensor_msgs::msg::NavSatFix *NavSatFix_data)

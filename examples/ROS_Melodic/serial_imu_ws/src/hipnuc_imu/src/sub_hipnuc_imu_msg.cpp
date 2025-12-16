@@ -53,23 +53,5 @@ void imu_callback_hipnuc(const hipnuc_imu::hipnuc_imu_msg imu_msg_hipnuc)
 		putchar(10);
 	}
 
-	if(imu_msg_hipnuc.hi92_data.tag == 0x92)
-	{
-		printf("%16s %#8x\n", "DataPackage Tag:", imu_msg_hipnuc.hi92_data.tag);
-		printf("%16s %6dHz\r\n","Frame Rate:", imu_msg_hipnuc.hi92_data.frame_rate);
-		printf("%16s %8f\n", "Prs(hPa):", imu_msg_hipnuc.hi92_data.air_pressure);
-
-		printf("%16s %8d\n", "Temperature:", imu_msg_hipnuc.hi92_data.temperature);
-
-		printf("%16s %8.3f %8.3f %8.3f\r\n", "Acc(G):", imu_msg_hipnuc.hi92_data.acc_x, imu_msg_hipnuc.hi92_data.acc_y, imu_msg_hipnuc.hi92_data.acc_z);
-
-		printf("%16s %8.2f %8.2f %8.2f\r\n", "Gyr(deg/s):", imu_msg_hipnuc.hi92_data.gyr_x, imu_msg_hipnuc.hi92_data.gyr_y, imu_msg_hipnuc.hi92_data.gyr_z);
-
-		printf("%16s %8.3f %8.3f %8.3f\r\n", "Mag(uT):", imu_msg_hipnuc.hi92_data.mag_x, imu_msg_hipnuc.hi92_data.mag_y, imu_msg_hipnuc.hi92_data.mag_z);
-
-		printf("%16s %8.3f %8.3f %8.3f\r\n", "Eul(R P Y):", imu_msg_hipnuc.hi92_data.eul_r, imu_msg_hipnuc.hi92_data.eul_p, imu_msg_hipnuc.hi92_data.eul_y);
-
-		printf("%16s %8.6f %8.6f %8.6f %8.6f\r\n", "Quat(W X Y Z):", imu_msg_hipnuc.hi92_data.quat_w, imu_msg_hipnuc.hi92_data.quat_x, imu_msg_hipnuc.hi92_data.quat_y, imu_msg_hipnuc.hi92_data.quat_z);
-		putchar(10);
-	}
+    
 }

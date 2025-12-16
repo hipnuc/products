@@ -1,0 +1,101 @@
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "example_data.h"
+#include "nmea_dec.h"
+#include "hipnuc_dec.h"
+
+
+static hipnuc_raw_t hipnuc_raw = {0};
+static nmea_raw_t nmea_raw = {0};
+static char log_buf[1024];
+
+// Function to print raw data in hexadecimal format
+void print_raw_data(const uint8_t* data, size_t length) {
+    printf("Raw data (size: %zu bytes):\n", length);
+    for (size_t i = 0; i < length; i++) {
+        printf("%02X ", data[i]);
+        if ((i + 1) % 16 == 0) printf("\n");
+    }
+    if (length % 16 != 0) printf("\n");
+}
+
+
+int process_example_data(void) 
+{
+    // HI91 example data
+    uint8_t example_data_hi91[] = {
+        0x5A, 0xA5,     /* header */
+        0x4C, 0x00,     /* len */
+        0x14, 0xBB,     /* CRC */
+        0x91,           /* package tag */
+        0x08, 0x15, 0x23, 0x09, 0xA2, 0xC4, 0x47, 0x08, 0x15,   /* data */
+        0x1C, 0x00, 0xCC, 0xE8, 0x61, 0xBE, 0x9A, 0x35, 0x56, 0x3E, 0x65, 0xEA, 0x72, 0x3F, 0x31, 0xD0,
+        0x7C, 0xBD, 0x75, 0xDD, 0xC5, 0xBB, 0x6B, 0xD7, 0x24, 0xBC, 0x89, 0x88, 0xFC, 0x40, 0x01, 0x00,
+        0x6A, 0x41, 0xAB, 0x2A, 0x70, 0xC2, 0x96, 0xD4, 0x50, 0x41, 0xED, 0x03, 0x43, 0x41, 0x41, 0xF4,
+        0xF4, 0xC2, 0xCC, 0xCA, 0xF8, 0xBE, 0x73, 0x6A, 0x19, 0xBE, 0xF0, 0x00, 0x1C, 0x3D, 0x8D, 0x37,
+        0x5C, 0x3F
+    };
+
+
+    // HI81 example data
+    uint8_t example_data_hi81[] = {
+        0x5A, 0xA5, 0x68, 0x00, 0x70, 0x04, 0x81, 0x00, 0x02, 0x01, 0x15, 0x09, 0x43, 0xC8, 0x3E, 0x02,
+        0x00, 0x00, 0x83, 0x00, 0x3C, 0x00, 0x36, 0x01, 0x8F, 0xFB, 0xE8, 0x04, 0x31, 0x04, 0x7C, 0x02,
+        0xB2, 0xF9, 0xBF, 0xFE, 0x60, 0x79, 0x00, 0x10, 0x24, 0x18, 0x07, 0x1C, 0x0A, 0x1B, 0xEB, 0x74,
+        0x9A, 0x0E, 0x8A, 0x0E, 0x2E, 0x18, 0x20, 0x20, 0x3B, 0x10, 0x19, 0x04, 0x65, 0xF1, 0x99, 0x6A,
+        0x5D, 0x45, 0x31, 0x61, 0xCE, 0x17, 0x06, 0xD1, 0x00, 0x00, 0x0C, 0x07, 0x01, 0x1C, 0x00, 0x00,
+        0x00, 0xB9, 0xFC, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xC6, 0xFF, 0x08, 0x01, 0xE7, 0xFF,
+        0x7F, 0x12, 0x41, 0x00, 0x4E, 0x61, 0xCE, 0x17, 0x04, 0xCF, 0x00, 0x00, 0x00, 0x00
+    };
+
+    printf("Processing HI91 example data:\n");
+    print_raw_data(example_data_hi91, sizeof(example_data_hi91));
+    printf("Decoded data:\n");
+    for (size_t i = 0; i < sizeof(example_data_hi91); i++) {
+        if (hipnuc_input(&hipnuc_raw, example_data_hi91[i])) {
+            hipnuc_dump_packet(&hipnuc_raw, log_buf, sizeof(log_buf));
+            printf("%s\n", log_buf);
+        }
+    }
+
+
+    printf("\nProcessing HI81 example data:\n");
+    print_raw_data(example_data_hi81, sizeof(example_data_hi81));
+    printf("Decoded data:\n");
+    for (size_t i = 0; i < sizeof(example_data_hi81); i++) {
+        if (hipnuc_input(&hipnuc_raw, example_data_hi81[i])) {
+            hipnuc_dump_packet(&hipnuc_raw, log_buf, sizeof(log_buf));
+            printf("%s\n", log_buf);
+        }
+    }
+
+    // NMEA example data
+    const char *nmea_examples[] = {
+        "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n",
+        "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A\r\n",
+        "$GPSXT,20230310090529.59,116.45784882,39.90572287,158.2289,359.87,-4.99,359.87,0.001,171.25,1,0,15,15,0.056,-0.040,0.017,-0.001,-0.000,0.002,8,0*43\r\n"
+    };
+
+    // Process NMEA data
+    printf("\nProcessing NMEA example data:\n");
+    for (int i = 0; i < sizeof(nmea_examples) / sizeof(nmea_examples[0]); i++) 
+    {
+        const char *nmea_str = nmea_examples[i];
+        size_t nmea_length = strlen(nmea_str);
+        printf("Raw data (size: %zu bytes):\n%s", nmea_length, nmea_str);
+        printf("Decoded data:\n");
+        for (size_t j = 0; j < nmea_length; j++) 
+        {
+            if (input_nmea(&nmea_raw, nmea_str[j]) > 0) 
+            {
+                nmea_dec_dump_msg(&nmea_raw, log_buf, sizeof(log_buf));
+                printf("%s\n", log_buf);
+            }
+        }
+    }
+
+    return 0;
+}

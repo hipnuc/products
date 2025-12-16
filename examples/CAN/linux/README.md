@@ -1,153 +1,145 @@
-# Linux下HiPNUC CAN 驱动及example使用指南
+# canhost - HiPNUC CAN 主机工具
 
-## 项目概述
+## 概述
 
-本项目提供了在Linux系统下使用HiPNUC IMU设备的CAN通信驱动程序和示例代码。支持CANopen和J1939两种协议，可以实时接收和解析IMU传感器数据，包括加速度、角速度、姿态角、四元数、气压等信息。
+`canhost` 是一个面向 HiPNUC IMU/ARHS 设备的 SocketCAN Linux 命令行工具。通过统一的 CLI 命令即可完成接口检测、J1939 探测、实时数据展示与记录，便于在 Linux/树莓派等平台快速评估产品表现。
 
-## 硬件要求
+## 功能
 
-- **CAN适配器**: PEAK-CAN USB转CAN适配器（推荐）或其他Linux兼容的CAN设备
-- **设备**: HiPNUC系列产品
-- **操作系统**: Linux系统（Ubuntu 20.04+推荐）
+- **接口一览**：`list` 命令以表格展示所有物理 CAN 接口（忽略 `vcan/vxcan`）
+- **设备探测**：`probe` 发送 J1939 REQUEST 并在 2 s 窗口内列出响应设备地址与 NAME。
+- **实时数据**：`read` 输出解析后的 JSON 行；内部以类型为粒度缓存最新帧，输出节流约 20 Hz，`Ctrl+C` 退出。
+- **数据记录**：`record` 将解析后的 NDJSON 追加写入文件，同时在终端打印速率与队列占用。
 
-## 软件依赖
 
-```
-sudo apt update
-sudo apt install build-essential cmake git
-
-# 安装CAN工具包
-sudo apt install can-utils
-
-# 如果使用PEAK-CAN设备，需要安装PEAK驱动
-# 详见: https://www.peak-system.com/fileadmin/media/linux/index.php
-```
-
-## 编译安装
+## 目录结构
 
 ```
-# 创建构建目录
-mkdir build && cd build
+examples/CAN/linux
+├── CMakeLists.txt
+├── README.md
+├── can_interface.c/h       # SocketCAN 枚举 & socket 工具
+├── commands.c/h            # 命令分发
+├── command_handlers.h
+├── commands/
+│   ├── cmd_list.c          # list 命令
+│   ├── cmd_probe.c         # probe 命令
+│   ├── cmd_read.c          # read 命令
+│   ├── cmd_record.c        # record 命令
+├── config.c/h
+├── log.c/h
+└── utils.c/h
+```
 
-# 编译
+## 构建方法
+
+```bash
+cd examples/CAN/linux
+mkdir -p build && cd build
 cmake ..
-make
-
-# 运行程序
-./imu_can_reader
+make -j$(nproc)
+# 生成的可执行文件为 build/canhost
 ```
 
-## CAN接口配置
+依赖：CMake 3.10+、GCC、pthread、libm、Linux SocketCAN 头文件。
 
-### 1. 检查CAN硬件
+## 快速开始（适合新用户）
 
-```
-ip link show
+- 准备 CAN 接口：确保物理连接；若为 USB 适配器，加载对应驱动后应出现 `can0/slcan0` 等接口。
+- 手动拉起接口（示例 500 kbit/s）：
 
-# 查看CAN设备类型
-cat /sys/class/net/can0/type
-# 输出280表示CAN设备
-```
-
-### 2. 配置CAN接口
-
-```
-sudo ip link set down can0
-
-# 设置CAN波特率（根据IMU设备配置，通常为500kbps）
+```bash
+sudo ip link set can0 down
 sudo ip link set can0 type can bitrate 500000
-
-# 启动CAN接口
-sudo ip link set up can0
-
-# 验证配置
-ip link show can0
+sudo ip link set can0 up
+ip -details link show can0
 ```
 
-## 程序使用方法
-
-### 基本用法
+- 配置文件写入接口名：在源码同级或当前目录提供 `canhost.ini`，内容为：
 
 ```
-./imu_can_reader
-
-# 示例输出:
-=====================================
-     Available CAN Interfaces       
-=====================================
- *can0      : up
-=====================================
-Selected: can0
-Interface 'can0' is ready!
-
-=== HiPNUC IMU CAN Parser ===
-Interface: can0 | Node ID: 8 | Total: 45.2 Hz
-
-Message Type  | Rate (Hz) | Data
-ACCEL         |     10.1  | X: -0.221 Y:  0.209 Z:  0.949 (m/s²)
-GYRO          |     10.0  | X: -0.062 Y: -0.006 Z: -0.010 (rad/s)
-EULER         |     10.0  | Roll: 13.05 Pitch: 12.19 Yaw: -122.48 (deg)
-QUAT          |     10.0  | W: -0.486 X: -0.150 Y:  0.038 Z:  0.860
-PRESSURE      |      5.0  | 100676.0 Pa
+interface=can0
 ```
 
-## 常见问题排查
+- 运行并观察：
 
-### 1. CAN接口问题
-
-**问题**: `RTNETLINK answers: Operation not supported`
-
-```
-sudo modprobe can
-sudo modprobe can-raw
-sudo modprobe can-bcm
-sudo modprobe vcan
-
-# 检查模块是否加载
-lsmod | grep can
+```bash
+./canhost list      # 查看接口状态
+./canhost read      # 终端显示（约20 Hz，按类型输出最新帧）
+./canhost record -o imu.json  # 记录到 NDJSON 文件并显示速率
 ```
 
-**问题**: `Cannot find device "can0"`
+## 使用方式
+
+### 配置文件
+
+程序不通过命令行指定接口，而是从初始化配置文件读取：
+
+- 搜索顺序：`$CANHOST_CONF` → `examples/CAN/linux/canhost.ini` → `./canhost.ini` → `~/.canhost.ini` → `/etc/canhost.ini`
+- 配置格式（ini 风格，键值对）：
 
 ```
-lsusb | grep -i peak  # 对于PEAK-CAN设备
-
-# 检查内核日志
-dmesg | grep -i can
-
-# 手动创建虚拟CAN接口（用于测试）
-sudo modprobe vcan
-sudo ip link add dev vcan0 type vcan
-sudo ip link set up vcan0
+interface=can0
 ```
 
-### 3. 波特率不匹配
+#### 示例配置文件
 
-**问题**: 接收不到数据或数据错误
+- 仓库建议将配置文件放置在源码同级目录：`examples/CAN/linux/canhost.ini`
 
+说明：如果未提供配置文件，程序使用默认值 `interface=can0`。
+
+命令行仅保留：
+
+| 选项 | 说明 |
+| ---- | ---- |
+| `-h, --help` | 显示英文帮助 |
+| `-v, --version` | 显示版本号 |
+
+### 命令
+
+| 命令 | 作用 |
+| ---- | ---- |
+| `list`   | 展示接口状态 |
+| `probe`  | 设备探测，输出地址及 NAME |
+| `read`   | 实时显示解析后的传感器数据（JSON 行，约 20 Hz） |
+| `record` | 记录解析后的 NDJSON 到文件，并显示 fps/队列 |
+
+示例：
+
+```bash
+./canhost list
+./canhost probe
+./canhost read
+./canhost record -o imu.jsonl
 ```
-# 常见波特率: 125000, 250000, 500000, 1000000
 
-# 重新配置CAN接口波特率
-sudo ip link set down can0
-sudo ip link set can0 type can bitrate 250000  # 尝试不同波特率
-sudo ip link set up can0
+### Sync 用法
+
+支持按配置周期触发或限定次数触发：
+
+```bash
+./canhost sync                 # 周期触发（按配置）
+./canhost sync -c 1            # 每个配置的 PGN 仅触发一次
+./canhost sync --pgn 0xF100    # 仅触发指定 PGN
 ```
 
-### 4. 节点ID问题
+## 协议与解析
 
-**问题**: 程序运行但无数据显示
+- **设备探测**：`probe` 发送 PGN 0xEA00（REQUEST）请求 ADDRESS_CLAIMED，并列出所有响应节点。（仅针对 J1939 设备）
+- **HiPNUC-CAN 数据**：`read` 按帧类型自动路由：扩展帧由 `hipnuc_j1939_parser` 解析，标准帧由 `canopen_parser` 解析；统一 JSON 输出由 `hipnuc_can_common` 提供。节点 ID 来自 CAN 帧 ID 解析。
 
-```
-./imu_can_reader can0 8   # 默认
-./imu_can_reader can0 2   # 尝试ID 2
-```
 
-## 技术支持
+## 注意事项
 
-- **官方文档**: 参考`指令与编程手册`获取完整的IMU配置和协议说明
-- **官方网站**: [www.hipnuc.com](http://www.hipnuc.com)
+1. 访问 SocketCAN 通常需要 root 权限，若遇到 `Operation not permitted` 请使用 `sudo`.
+2. `list` 仅列出真实物理接口，`vcan`、`vxcan` 默认忽略；`slcan*` 会被视为物理口。
+3. 若未提供配置文件，则默认 `interface=can0`。
+4. `record` 支持参数：`-o/--out FILE`、`--buf-frames N`（默认 100 帧）。
 
-------
+## 故障排查
 
-**注意**: 使用前请确保IMU设备已正确配置CAN输出模式和相应的波特率。如遇到问题，请首先检查硬件连接和CAN接口配置。
+| 现象 | 排查建议 |
+| ---- | -------- |
+| `list` 无接口 | 检查硬件连接并加载驱动(以PeakCAN为例)（如 `sudo modprobe peak_usb`） |
+| `read` 无数据 | 检查接口是否 UP、波特率匹配、设备是否确实输出帧 |
+| `record` 报错 | 确认提供了 `-o FILE`，并有写入权限 |

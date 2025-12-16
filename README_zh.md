@@ -12,6 +12,8 @@
 
 - examples: 各种平台和语言的示例程序及驱动程序，包括 STM32, ROS, Linux, MATLAB 等。
 
+- drivers: HiPNUC驱动程序源码
+
 ## 快速开始
 
 ### Windows
@@ -29,12 +31,12 @@
 提供多种语言和平台的示例代码：
 
 - [Python](examples/python): 包含数据读取及模块配置
-- [STM32](examples/STM32)
+- [STM32 串口](examples/stm32_serial)
 - [Arduino](examples/arduino)
 - [ROS Melodic](examples/ROS_Melodic)
 - [ROS2](examples/ROS2)
-- [C - Linux](examples/C): 包括模块配置,固件,读取示例等，Linux下入门推荐
-- [Matlab](examples/matlab): 包含读取CHCenter记录的log文件以及allan方差分析示例代码.
+- [C - Linux](examples/C): 包括模块配置、固件、读取示例以及**数据记录功能**等，Linux下入门推荐
+- [Matlab](examples/matlab): 包含读取CHCenter记录的log文件以及allan方差分析示例代码
 - [CAN](examples/CAN): 包含DBC格式的CAN帧解析文件
 
 ## 配置模块
