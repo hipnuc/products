@@ -131,7 +131,7 @@ typedef struct __attribute__((__packed__))
     float    mag_b[3];
     float    rpy[3];
     float    quat[4];
-    uint32_t system_time;
+    uint64_t system_time_us;
     struct __attribute__((__packed__)) {
         uint8_t  year;
         uint8_t  month;

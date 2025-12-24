@@ -66,6 +66,13 @@ static double D8(uint8_t *p)
     return d;
 }
 
+static uint64_t U8(uint8_t *p)
+{
+    uint64_t u;
+    memcpy(&u, p, 8);
+    return u;
+}
+
 /* parse the payload of a frame and feed into data section */
 static int parse_data(hipnuc_raw_t *raw)
 {
@@ -103,7 +110,7 @@ static int parse_data(hipnuc_raw_t *raw)
             if (bm & HI83_BMAP_MAG_B) { raw->hi83.mag_b[0] = R4(p + idx + 0); raw->hi83.mag_b[1] = R4(p + idx + 4); raw->hi83.mag_b[2] = R4(p + idx + 8); idx += 12; }
             if (bm & HI83_BMAP_RPY) { raw->hi83.rpy[0] = R4(p + idx + 0); raw->hi83.rpy[1] = R4(p + idx + 4); raw->hi83.rpy[2] = R4(p + idx + 8); idx += 12; }
             if (bm & HI83_BMAP_QUAT) { raw->hi83.quat[0] = R4(p + idx + 0); raw->hi83.quat[1] = R4(p + idx + 4); raw->hi83.quat[2] = R4(p + idx + 8); raw->hi83.quat[3] = R4(p + idx + 12); idx += 16; }
-            if (bm & HI83_BMAP_SYSTEM_TIME) { raw->hi83.system_time = U4(p + idx); idx += 4; }
+            if (bm & HI83_BMAP_SYSTEM_TIME) { raw->hi83.system_time_us = U8(p + idx); idx += 8; }
             if (bm & HI83_BMAP_UTC) { raw->hi83.utc.year = p[idx+0]; raw->hi83.utc.month = p[idx+1]; raw->hi83.utc.day = p[idx+2]; raw->hi83.utc.hour = p[idx+3]; raw->hi83.utc.min = p[idx+4]; raw->hi83.utc.sec_ms = U2(p + idx + 5); raw->hi83.utc.rev = p[idx+7]; idx += 8; }
             if (bm & HI83_BMAP_AIR_PRESSURE) { raw->hi83.air_pressure = R4(p + idx); idx += 4; }
             if (bm & HI83_BMAP_TEMPERATURE) { raw->hi83.temperature = R4(p + idx); idx += 4; }
@@ -375,7 +382,7 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
             if (ret > 0) written += ret;
         }
         if (raw->hi83.data_bitmap & HI83_BMAP_SYSTEM_TIME) {
-            ret = snprintf(buf + written, buf_size - written, "  ,\"system_time\": %u\n", (unsigned)raw->hi83.system_time);
+            ret = snprintf(buf + written, buf_size - written, "  ,\"system_time_us\": %llu\n", (unsigned long long)raw->hi83.system_time_us);
             if (ret > 0) written += ret;
         }
         if (raw->hi83.data_bitmap & HI83_BMAP_UTC) {
