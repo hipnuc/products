@@ -28,7 +28,19 @@ typedef struct {
 
 int config_get_sync_items(config_sync_item_t *items, int max_count);
 int config_get_sync_count(void);
-uint8_t config_get_sync_node(void);
+
+// Returns the number of target nodes. Fills `nodes` up to `max_count`.
+int config_get_target_nodes(uint8_t *nodes, int max_count);
+
+// Clears all configured target nodes.
+void config_clear_target_nodes(void);
+
+// Adds a target node.
+void config_add_target_node(uint8_t node_id);
+
+// Legacy: returns the first configured node or default.
+uint8_t config_get_target_node(void);
+
 uint8_t config_get_sync_sa(void);
 
 #endif // CANHOST_CONFIG_H

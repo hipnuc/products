@@ -37,6 +37,9 @@ int cmd_read(int argc, char *argv[])
     
     log_info("Starting CAN read on interface: %s", ifname);
     
+    uint8_t target_nodes[32];
+    int target_count = config_get_target_nodes(target_nodes, 32);
+    
     while (running) {
         struct can_frame frame;
         uint64_t hw_ts_us = 0;
@@ -48,6 +51,16 @@ int cmd_read(int argc, char *argv[])
             
             can_sensor_data_t data = {0};
             data.node_id = hipnuc_can_extract_node_id(hipnuc_frame.can_id);
+            
+            bool match = false;
+            for (int i = 0; i < target_count; ++i) {
+                if (data.node_id == target_nodes[i]) {
+                    match = true;
+                    break;
+                }
+            }
+            if (!match) continue;
+
             data.hw_ts_us = hipnuc_frame.hw_ts_us;
             int msg_type = (hipnuc_frame.can_id & HIPNUC_CAN_EFF_FLAG)
                          ? hipnuc_j1939_parse_frame(&hipnuc_frame, &data)

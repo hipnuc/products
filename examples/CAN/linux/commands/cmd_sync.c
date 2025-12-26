@@ -38,7 +38,8 @@ int cmd_sync(int argc, char *argv[])
 
     config_sync_item_t items_all[32];
     int item_cnt_all = config_get_sync_items(items_all, 32);
-    uint8_t node_id = config_get_sync_node();
+    uint8_t target_nodes[32];
+    int target_count = config_get_target_nodes(target_nodes, 32);
     uint8_t host_sa = config_get_sync_sa();
     config_sync_item_t items[32];
     int item_cnt = 0;
@@ -67,7 +68,7 @@ int cmd_sync(int argc, char *argv[])
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    printf("Sync config: if=%s node_id=%u sa=%u items=%d\n", ifname, (unsigned)node_id, (unsigned)host_sa, item_cnt);
+    printf("Sync config: if=%s nodes=%d sa=%u items=%d\n", ifname, target_count, (unsigned)host_sa, item_cnt);
     for (int i = 0; i < item_cnt; ++i) {
         printf("  PGN=0x%X period=%ums\n", (unsigned)items[i].pgn, (unsigned)items[i].period_ms);
     }
@@ -87,13 +88,17 @@ int cmd_sync(int argc, char *argv[])
         uint32_t min_sleep = 50;
         for (int i = 0; i < item_cnt; ++i) {
             if ((int32_t)(now_ms - next_due[i]) >= 0) {
-                hipnuc_can_frame_t cfg;
-                hipnuc_j1939_build_sync(node_id, host_sa, items[i].pgn, &cfg);
-                struct can_frame f;
-                utils_hipnuc_can_to_linux_can(&cfg, &f);
-                ssize_t w = write(fd, &f, sizeof(f));
-                if (w != sizeof(f)) { log_error("send failed"); g_run = 0; break; }
-                sent_total++;
+                for (int k = 0; k < target_count; ++k) {
+                    hipnuc_can_frame_t cfg;
+                    hipnuc_j1939_build_sync(target_nodes[k], host_sa, items[i].pgn, &cfg);
+                    struct can_frame f;
+                    utils_hipnuc_can_to_linux_can(&cfg, &f);
+                    ssize_t w = write(fd, &f, sizeof(f));
+                    if (w != sizeof(f)) { log_error("send failed"); g_run = 0; break; }
+                    sent_total++;
+                }
+                if (!g_run) break;
+                
                 next_due[i] += items[i].period_ms;
                 if (count_target >= 1) {
                     if (sent_counts[i] < UINT32_MAX) sent_counts[i]++;

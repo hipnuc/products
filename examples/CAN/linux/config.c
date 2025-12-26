@@ -8,13 +8,14 @@
 
 typedef struct {
     char interface[32];
-    uint8_t sync_node;
+    uint8_t target_nodes[32];
+    int target_node_count;
     uint8_t sync_sa;
     struct { uint32_t pgn; uint32_t period_ms; } sync_items[32];
     int sync_count;
 } canhost_config_t;
 
-static canhost_config_t G = { .interface = "can0", .sync_node = 8, .sync_sa = 0x55, .sync_count = 0 };
+static canhost_config_t G = { .interface = "can0", .target_nodes = {8}, .target_node_count = 1, .sync_sa = 0x55, .sync_count = 0 };
 static int initialized = 0;
 static char source_path[256] = {0};
 
@@ -28,6 +29,22 @@ static char* trim(char *s)
     while (end > s && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\r')) --end;
     *end = '\0';
     return s;
+}
+
+void config_add_target_node(uint8_t node_id)
+{
+    if (G.target_node_count < (int)(sizeof(G.target_nodes)/sizeof(G.target_nodes[0]))) {
+        // Check for duplicates?
+        for (int i = 0; i < G.target_node_count; ++i) {
+            if (G.target_nodes[i] == node_id) return;
+        }
+        G.target_nodes[G.target_node_count++] = node_id;
+    }
+}
+
+void config_clear_target_nodes(void)
+{
+    G.target_node_count = 0;
 }
 
 static void apply_kv(const char *key_in, const char *val_in)
@@ -46,8 +63,12 @@ static void apply_kv(const char *key_in, const char *val_in)
         return;
     }
     if (strcmp(key, "node_id") == 0) {
-        unsigned long v = strtoul(val, NULL, 0);
-        G.sync_node = (uint8_t)v;
+        config_clear_target_nodes();
+        char *token = strtok(val, ",");
+        while (token) {
+            config_add_target_node((uint8_t)strtoul(token, NULL, 0));
+            token = strtok(NULL, ",");
+        }
         return;
     }
     if (strcmp(key, "sync.sa") == 0 || strcmp(key, "sync_sa") == 0) {
@@ -163,8 +184,21 @@ void config_log_summary(void)
     } else {
         log_info("Config defaults used | interface=%s", G.interface);
     }
+    
+    char nodes_buf[128] = {0};
+    int off = 0;
+    for (int i=0; i<G.target_node_count; i++) {
+        off += snprintf(nodes_buf+off, sizeof(nodes_buf)-off, "%u%s", 
+                        G.target_nodes[i], (i<G.target_node_count-1)?",":"");
+    }
+    if (G.target_node_count > 1) {
+        log_info("Target nodes: [%s]", nodes_buf);
+    } else if (G.target_node_count == 1) {
+        log_info("Target node: %s", nodes_buf);
+    }
+
     if (G.sync_count > 0) {
-        log_info("Sync: node_id=%u sa=%u items=%d", (unsigned)G.sync_node, (unsigned)G.sync_sa, G.sync_count);
+        log_info("Sync: sa=%u items=%d", (unsigned)G.sync_sa, G.sync_count);
     }
 }
 
@@ -184,9 +218,20 @@ int config_get_sync_count(void)
     return G.sync_count;
 }
 
-uint8_t config_get_sync_node(void)
+int config_get_target_nodes(uint8_t *nodes, int max_count)
 {
-    return G.sync_node;
+    if (!nodes || max_count <= 0) return 0;
+    int n = (G.target_node_count < max_count) ? G.target_node_count : max_count;
+    for (int i = 0; i < n; ++i) {
+        nodes[i] = G.target_nodes[i];
+    }
+    return n;
+}
+
+uint8_t config_get_target_node(void)
+{
+    if (G.target_node_count > 0) return G.target_nodes[0];
+    return 8; // Fallback
 }
 
 uint8_t config_get_sync_sa(void)

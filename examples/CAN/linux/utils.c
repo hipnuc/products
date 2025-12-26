@@ -2,6 +2,7 @@
 #include "utils.h"
 #include <time.h>
 #include <string.h>
+#include <stdlib.h>
 
 // Millisecond timestamp based on CLOCK_MONOTONIC
 uint32_t utils_get_timestamp_ms(void)

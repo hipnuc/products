@@ -28,6 +28,8 @@ static void on_signal(int sig)
 int cmd_record(int argc, char *argv[])
 {
     const char *out_path = NULL;
+    uint8_t target_nodes[32];
+    int target_count = config_get_target_nodes(target_nodes, 32);
     
     for (int i = 1; i < argc; ++i) {
         if ((strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--out") == 0) && i + 1 < argc) {
@@ -103,6 +105,16 @@ int cmd_record(int argc, char *argv[])
             can_sensor_data_t data;
             memset(&data, 0, sizeof(data));
             data.node_id = hipnuc_can_extract_node_id(hipnuc_frame.can_id);
+            
+            bool match = false;
+            for (int k = 0; k < target_count; ++k) {
+                if (data.node_id == target_nodes[k]) {
+                    match = true;
+                    break;
+                }
+            }
+            if (!match) continue;
+
             data.hw_ts_us = hipnuc_frame.hw_ts_us;
 
             int msg_type = (hipnuc_frame.can_id & HIPNUC_CAN_EFF_FLAG)
