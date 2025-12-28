@@ -25,6 +25,8 @@ set(SOURCES
     commands/cmd_record.c
     commands/cmd_sync.c
     commands/cmd_reg.c
+    commands/cmd_action.c
+    reg_seq.c
     j1939_reg_api.c
     help.c
     ../../../drivers/hipnuc_can_common.c

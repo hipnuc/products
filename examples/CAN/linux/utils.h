@@ -9,6 +9,9 @@
 // Millisecond timestamp sourced from CLOCK_MONOTONIC
 uint32_t utils_get_timestamp_ms(void);
 
+// Sleep for specified milliseconds
+void utils_delay_ms(uint32_t ms);
+
 // Convert a Linux CAN frame into the HiPNUC helper struct
 void utils_linux_can_to_hipnuc_can(const struct can_frame *linux_frame, uint64_t hw_ts_us, hipnuc_can_frame_t *hipnuc_frame);
 

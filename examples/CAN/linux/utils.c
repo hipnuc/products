@@ -12,6 +12,11 @@ uint32_t utils_get_timestamp_ms(void)
     return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
 
+void utils_delay_ms(uint32_t ms)
+{
+    usleep(ms * 1000);
+}
+
 // Convert a Linux CAN frame into the HiPNUC CAN helper struct
 void utils_linux_can_to_hipnuc_can(const struct can_frame *linux_frame, uint64_t hw_ts_us, hipnuc_can_frame_t *hipnuc_frame)
 {

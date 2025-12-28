@@ -2,15 +2,17 @@
 
 ## 概述
 
-`canhost` 是一个面向 HiPNUC IMU/ARHS 设备的 SocketCAN Linux 命令行工具。通过统一的 CLI 命令即可完成接口检测、J1939 探测、实时数据展示与记录，便于在 Linux/树莓派等平台快速评估产品表现。
+`canhost` 是一个面向 HiPNUC IMU/ARHS 设备的 SocketCAN Linux 命令行工具。通过统一的 CLI 命令即可完成接口检测、J1939 探测、实时数据展示与记录、以及寄存器配置与动作执行，便于在 Linux/树莓派等平台快速评估产品表现。
 
 ## 功能
 
-- **接口一览**：`list` 命令以表格展示所有物理 CAN 接口（忽略 `vcan/vxcan`）
-- **设备探测**：`probe` 发送 J1939 REQUEST 并在 2 s 窗口内列出响应设备地址与 NAME。
-- **实时数据**：`read` 输出解析后的 JSON 行；内部以类型为粒度缓存最新帧，输出节流约 20 Hz，`Ctrl+C` 退出。
-- **数据记录**：`record` 将解析后的 NDJSON 追加写入文件，同时在终端打印速率与队列占用。
-
+- **接口管理**：`list` 命令以表格展示所有物理 CAN 接口状态。
+- **设备探测**：`probe` 基于 J1939 协议探测总线上的设备，列出地址与 NAME。
+- **动作执行**：`action` 执行预定义的复杂操作序列（如复位、保存配置、校准等）。
+- **寄存器操作**：`reg` 直接读写 J1939 配置寄存器（支持多节点广播）。
+- **同步触发**：`sync` 根据配置周期性发送同步请求，触发数据上传。
+- **实时数据**：`read` 自动识别 J1939/CANopen 协议，解析并输出 JSON 格式传感器数据。
+- **数据记录**：`record` 高性能记录 NDJSON 数据到文件，支持缓冲与丢帧统计。
 
 ## 目录结构
 
@@ -18,16 +20,22 @@
 examples/CAN/linux
 ├── CMakeLists.txt
 ├── README.md
-├── can_interface.c/h       # SocketCAN 枚举 & socket 工具
-├── commands.c/h            # 命令分发
-├── command_handlers.h
+├── canhost.ini         # 默认配置文件
+├── can_interface.c/h   # SocketCAN 封装
+├── commands.c/h        # 命令注册与分发
+├── command_handlers.h  # 命令函数声明
 ├── commands/
-│   ├── cmd_list.c          # list 命令
-│   ├── cmd_probe.c         # probe 命令
-│   ├── cmd_read.c          # read 命令
-│   ├── cmd_record.c        # record 命令
-├── config.c/h
-├── log.c/h
+│   ├── cmd_action.c    # action 命令（动作序列）
+│   ├── cmd_list.c      # list 命令
+│   ├── cmd_probe.c     # probe 命令
+│   ├── cmd_read.c      # read 命令
+│   ├── cmd_record.c    # record 命令
+│   ├── cmd_reg.c       # reg 命令（寄存器读写）
+│   └── cmd_sync.c      # sync 命令
+├── config.c/h          # 配置文件解析
+├── log.c/h             # 日志工具
+├── j1939_reg_api.c/h   # J1939 寄存器协议实现
+├── reg_seq.c/h         # 寄存器序列执行器
 └── utils.c/h
 ```
 
@@ -43,103 +51,103 @@ make -j$(nproc)
 
 依赖：CMake 3.10+、GCC、pthread、libm、Linux SocketCAN 头文件。
 
-## 快速开始（适合新用户）
+## 快速开始
 
-- 准备 CAN 接口：确保物理连接；若为 USB 适配器，加载对应驱动后应出现 `can0/slcan0` 等接口。
-- 手动拉起接口（示例 500 kbit/s）：
+1.  **准备 CAN 接口**：
+    
+    ```bash
+    sudo ip link set can0 down
+    sudo ip link set can0 type can bitrate 500000
+    sudo ip link set can0 up
+    ```
+    
+2.  **配置**：
+    在源码目录或当前目录创建 `canhost.ini`（参考源码中的 `canhost.ini`）：
+    ```ini
+    interface=can0
+    node_id=8
+    ```
 
-```bash
-sudo ip link set can0 down
-sudo ip link set can0 type can bitrate 500000
-sudo ip link set can0 up
-ip -details link show can0
-```
-
-- 配置文件写入接口名：在源码同级或当前目录提供 `canhost.ini`，内容为：
-
-```
-interface=can0
-```
-
-- 运行并观察：
-
-```bash
-./canhost list      # 查看接口状态
-./canhost read      # 终端显示（约20 Hz，按类型输出最新帧）
-./canhost record -o imu.json  # 记录到 NDJSON 文件并显示速率
-```
+3.  **运行**：
+    ```bash
+    ./canhost list
+    ./canhost probe
+    ./canhost read
+    ```
 
 ## 使用方式
 
 ### 配置文件
 
-程序不通过命令行指定接口，而是从初始化配置文件读取：
+程序按以下顺序搜索配置文件：
+`$CANHOST_CONF` → `examples/CAN/linux/canhost.ini` → `./canhost.ini` → `~/.canhost.ini` → `/etc/canhost.ini`
 
-- 搜索顺序：`$CANHOST_CONF` → `examples/CAN/linux/canhost.ini` → `./canhost.ini` → `~/.canhost.ini` → `/etc/canhost.ini`
-- 配置格式（ini 风格，键值对）：
-
+配置示例：
+```ini
+interface=can0      # 使用的接口
+node_id=8,9         # 目标节点地址（支持逗号分隔多个）
+sync.sa=0x55        # 主机源地址
+sync.0xff34=100     # 配置 sync 命令：每 100ms 请求一次 PGN 0xFF34
 ```
-interface=can0
+
+### 命令详解
+
+| 命令 | 说明 |
+| ---- | ---- |
+| `list` | 列出物理 CAN 接口及其状态（UP/DOWN）。 |
+| `probe` | 扫描 J1939 总线设备，显示源地址 (SA) 和 NAME。 |
+| `action` | 执行预定义动作序列。 |
+| `reg` | 读写设备寄存器。 |
+| `sync` | 发送同步请求触发数据。 |
+| `read` | 实时显示解析后的 JSON 数据。 |
+| `record` | 记录数据到文件。 |
+
+#### 1. Action (动作执行)
+执行预定义的寄存器操作流程。
+```bash
+./canhost action <name>
 ```
+支持的动作（取决于固件版本与定义）：
+- `reset`: 复位设备
+- `save`: 保存当前配置
+- `version`: 读取版本信息
+- `mag_calib`: 执行磁场校准流程
 
-#### 示例配置文件
-
-- 仓库建议将配置文件放置在源码同级目录：`examples/CAN/linux/canhost.ini`
-
-说明：如果未提供配置文件，程序使用默认值 `interface=can0`。
-
-命令行仅保留：
-
-| 选项 | 说明 |
-| ---- | ---- |
-| `-h, --help` | 显示英文帮助 |
-| `-v, --version` | 显示版本号 |
-
-### 命令
-
-| 命令 | 作用 |
-| ---- | ---- |
-| `list`   | 展示接口状态 |
-| `probe`  | 设备探测，输出地址及 NAME |
-| `read`   | 实时显示解析后的传感器数据（JSON 行，约 20 Hz） |
-| `record` | 记录解析后的 NDJSON 到文件，并显示 fps/队列 |
-
+#### 2. Reg (寄存器操作)
+读写 J1939 配置寄存器（对应 Modbus 地址）。若配置了多个 `node_id`，会对所有目标节点执行操作。
+```bash
+./canhost reg read <addr>           # 读取地址 addr (hex/dec)
+./canhost reg write <addr> <val>    # 写入值 val 到地址 addr
+```
 示例：
-
 ```bash
-./canhost list
-./canhost probe
+./canhost reg read 0x0001
+./canhost reg write 0x0010 100
+```
+
+#### 3. Sync (同步触发)
+根据配置文件中的 `sync.*` 条目发送请求。
+```bash
+./canhost sync                  # 按配置无限循环发送
+./canhost sync -c 10            # 发送 10 次循环后退出
+./canhost sync -p 0xF100        # 仅触发指定的 PGN（忽略配置文件的列表）
+```
+
+#### 4. Read (实时数据)
+自动识别 HiPNUC J1939 和 CANopen 协议，解析标准帧与扩展帧。
+```bash
 ./canhost read
-./canhost record -o imu.jsonl
 ```
+输出为 JSON 行格式 (JSON Lines)，包含时间戳、节点 ID、帧类型及物理量数据。
 
-### Sync 用法
-
-支持按配置周期触发或限定次数触发：
-
+#### 5. Record (数据记录)
+高性能录制工具，使用大缓冲区减少 I/O 阻塞。
 ```bash
-./canhost sync                 # 周期触发（按配置）
-./canhost sync -c 1            # 每个配置的 PGN 仅触发一次
-./canhost sync --pgn 0xF100    # 仅触发指定 PGN
+./canhost record -o data.jsonl
 ```
+终端会实时显示接收速率 (RX FPS)、写入速率 (Write FPS) 及丢帧统计。
 
 ## 协议与解析
 
-- **设备探测**：`probe` 发送 PGN 0xEA00（REQUEST）请求 ADDRESS_CLAIMED，并列出所有响应节点。（仅针对 J1939 设备）
-- **HiPNUC-CAN 数据**：`read` 按帧类型自动路由：扩展帧由 `hipnuc_j1939_parser` 解析，标准帧由 `canopen_parser` 解析；统一 JSON 输出由 `hipnuc_can_common` 提供。节点 ID 来自 CAN 帧 ID 解析。
-
-
-## 注意事项
-
-1. 访问 SocketCAN 通常需要 root 权限，若遇到 `Operation not permitted` 请使用 `sudo`.
-2. `list` 仅列出真实物理接口，`vcan`、`vxcan` 默认忽略；`slcan*` 会被视为物理口。
-3. 若未提供配置文件，则默认 `interface=can0`。
-4. `record` 支持参数：`-o/--out FILE`、`--buf-frames N`（默认 100 帧）。
-
-## 故障排查
-
-| 现象 | 排查建议 |
-| ---- | -------- |
-| `list` 无接口 | 检查硬件连接并加载驱动(以PeakCAN为例)（如 `sudo modprobe peak_usb`） |
-| `read` 无数据 | 检查接口是否 UP、波特率匹配、设备是否确实输出帧 |
-| `record` 报错 | 确认提供了 `-o FILE`，并有写入权限 |
+- **自动识别**：根据 CAN ID 特征区分 J1939（扩展帧）与 CANopen（标准帧）。
+- **统一输出**：所有协议解析后统一转换为内部数据结构，并以 JSON 格式输出。
