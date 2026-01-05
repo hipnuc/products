@@ -61,7 +61,7 @@ bash复制imudata
 
 ## 数据集下载
 
-数据集文件尺寸较大,目前可从百度网盘下载: https://pan.baidu.com/s/1Un_lejsY9ZPud71ITFGc8w 提取码: ermt
+数据集文件尺寸较大,目前可从百度网盘下载: https://pan.baidu.com/s/1PqLtdZXYzWl0XIPR0AZYQA 提取码: qqaw
 
 ## 注意事项
 
