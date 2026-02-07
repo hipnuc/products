@@ -131,7 +131,7 @@ subplot(2, 2, 4);
 plot(time, hi91_data.roll, 'r.-');
 hold on;
 plot(time, hi91_data.pitch, 'g.-');
-plot(time, hi91_data.yaw, 'b.-');
+plot(time, hi91_data.imu_yaw, 'b.-');
 grid on;
 xlabel('Time (s)');
 ylabel('Angle (deg)');
