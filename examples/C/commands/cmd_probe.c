@@ -54,7 +54,7 @@ int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
                     serial_send_then_recv_str(fd, "LOG DISABLE\r\n", "OK", recv_buf, sizeof(recv_buf), 200);
                     safe_sleep(50);
                 }
-                len = serial_send_then_recv_str(fd, "AT+INFO\r\n", "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
+                len = serial_send_then_recv_str(fd, "LOG VERSION\r\n", "OK", recv_buf, sizeof(recv_buf), CMD_REPLAY_TIMEOUT_MS);
                 if (len > 0 && strstr((char *)recv_buf, "OK") != NULL) {
                     log_info("Device found on %s at %d baud! (Attempt %d)", ports[port_index].name, baud_rates[i], attempt + 1);
                     device_found = true;
@@ -84,7 +84,7 @@ int cmd_probe(GlobalOptions *opts, int argc, char *argv[]) {
         printf("Device Info:\n%s\n", device_info);
         printf("\nExample commands to use this device:\n");
         printf("1. Read data:\n   sudo ./hihost -p %s -b %d read\n", found_port, found_baud);
-        printf("2. Send a command:\n   sudo ./hihost -p %s -b %d write \"AT+INFO\"\n", found_port, found_baud);
+        printf("2. Send a command:\n   sudo ./hihost -p %s -b %d write \"LOG VERSION\"\n", found_port, found_baud);
         printf("===================================\n");
 
         save_device_info(found_port, found_baud);

@@ -70,7 +70,7 @@ def cmd_probe(ports):
                 return
 
             try:
-                ser.write(b"AT+INFO\r\n")
+                ser.write(b"LOG VERSION\r\n")
             except (serial.SerialTimeoutException, serial.SerialException):
                 return
 
@@ -123,7 +123,7 @@ def cmd_probe(ports):
                 print(result["text"])
                 print("\nExample commands:")
                 print(f"python main.py read -p {result['port']} -b {result['baud']}")
-                print(f"python main.py write -p {result['port']} -b {result['baud']} \"AT+INFO\"")
+                print(f"python main.py write -p {result['port']} -b {result['baud']} \"LOG VERSION\"")
                 print("==================================")
                 return
 

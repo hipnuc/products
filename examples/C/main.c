@@ -152,7 +152,7 @@ static void print_usage(const char *program_name) {
     printf("    %s -p /dev/ttyUSB0 -r raw.bin -j data.json read  # Record both formats\n", program_name);
     printf("\n");
     printf("  Device configuration:\n");
-    printf("    %s -p /dev/ttyUSB0 write \"AT+INFO\"         # Send single command\n", program_name);
+    printf("    %s -p /dev/ttyUSB0 write \"LOG VERSION\"         # Send single command\n", program_name);
     printf("    %s -p /dev/ttyUSB0 write config.txt        # Execute command file\n", program_name);
     printf("    %s -p /dev/ttyUSB0 update firmware.hex     # Update firmware\n", program_name);
     printf("\n");
