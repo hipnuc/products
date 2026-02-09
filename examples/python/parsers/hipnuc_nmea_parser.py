@@ -1,3 +1,4 @@
+import json
 import pynmea2
 import logging
 from datetime import datetime
@@ -182,21 +183,12 @@ class hipnuc_nmea_parser:
     @staticmethod
     def print_parsed_data(data: List[Dict]):
         if not data:
-            print("No parsed NMEA data available.")
             return
 
-        for idx, item in enumerate(data, 1):
+        for item in data:
             if not item:
-                print(f"\n--- Sentence {idx}: Empty NMEA data ---")
                 continue
-
-            print(f"=== {item.get('message_id', 'Unknown')} ===")
-            
-            for key, value in item.items():
-                if key != 'message_id':
-                    print(f"{key}: {value}")
-            
-            print()
+            print(json.dumps(item, ensure_ascii=False))
 
 
 

@@ -1,10 +1,9 @@
 import struct
 import logging
+import json
 
-# Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Constant definitions
 CHSYNC1 = 0x5A
 CHSYNC2 = 0xA5
 CH_HDR_SIZE = 6
@@ -12,52 +11,32 @@ CH_HDR_SIZE = 6
 GRAVITY = 9.80665
 R2D = 57.29577951308232
 
-
-# Data item identifiers
 FRAME_TAG_HI91 = 0x91
 FRAME_TAG_HI81 = 0x81
+FRAME_TAG_HI83 = 0x83
 
-class hipnuc_frame:
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.temperature = None
-        self.pressure = None
-        self.system_time_ms = None
-        self.acc = None
-        self.gyr = None
-        self.mag = None
-        self.quat = None
-        self.roll = None
-        self.pitch = None
-        self.yaw = None
-        self.ins_status = None
-        self.gpst_wn = None
-        self.gpst_tow = None
-        self.utc_year = None
-        self.utc_month = None
-        self.utc_day = None
-        self.utc_hour = None
-        self.utc_min = None
-        self.utc_msec = None
-        self.ins_lon = None
-        self.ins_lat = None
-        self.ins_msl = None
-        self.pdop = None
-        self.hdop = None
-        self.solq_pos = None
-        self.nv_pos = None
-        self.solq_heading = None
-        self.nv_heading = None
-        self.diff_age = None
-        self.undulation = None
-        self.vel_enu = None
-        self.acc_enu = None
-
-    def to_dict(self):
-        """Return a dictionary representation of non-null fields"""
-        return {k: v for k, v in self.__dict__.items() if v is not None}
+HI83_BMAP_ACC_B = 1 << 0
+HI83_BMAP_GYR_B = 1 << 1
+HI83_BMAP_MAG_B = 1 << 2
+HI83_BMAP_RPY = 1 << 3
+HI83_BMAP_QUAT = 1 << 4
+HI83_BMAP_SYSTEM_TIME = 1 << 5
+HI83_BMAP_UTC = 1 << 6
+HI83_BMAP_AIR_PRESSURE = 1 << 7
+HI83_BMAP_TEMPERATURE = 1 << 8
+HI83_BMAP_INCLINATION = 1 << 9
+HI83_BMAP_HSS = 1 << 10
+HI83_BMAP_HSS_FRQ = 1 << 11
+HI83_BMAP_VEL_ENU = 1 << 12
+HI83_BMAP_ACC_ENU = 1 << 13
+HI83_BMAP_INS_LON_LAT_MSL = 1 << 14
+HI83_BMAP_GNSS_QUALITY_NV = 1 << 15
+HI83_BMAP_OD_SPEED = 1 << 16
+HI83_BMAP_UNDULATION = 1 << 17
+HI83_BMAP_DIFF_AGE = 1 << 18
+HI83_BMAP_NODE_ID = 1 << 19
+HI83_BMAP_GNSS_LON_LAT_MSL = 1 << 30
+HI83_BMAP_GNSS_VEL = 1 << 31
 
 class hipnuc_parser:
     def __init__(self):
@@ -65,7 +44,6 @@ class hipnuc_parser:
         self.CHSYNC2 = CHSYNC2
         self.CH_HDR_SIZE = CH_HDR_SIZE
         self.buffer = bytearray()
-        self.frame = hipnuc_frame()
 
     @staticmethod
     def crc16_update(crc, data):
@@ -78,79 +56,191 @@ class hipnuc_parser:
                 crc = temp
         return crc & 0xFFFF
 
-    def parse_item(self, item_type, data, ofs):
-        try:
-            if item_type == FRAME_TAG_HI91:
-                self._parse_hi91(data, ofs)
-                return ofs + 76
-            elif item_type == FRAME_TAG_HI81:
-                self._parse_hi81(data, ofs)
-                return ofs + 104
-            else:
-                logging.warning(f"Unknown item type: {item_type}")
-                return ofs + 1
-        except struct.error as e:
-            logging.error(f"Error parsing data: {e}")
-            return ofs + 1
-
     def _parse_hi91(self, data, ofs):
-        self.frame.temperature = struct.unpack_from('<b', data, ofs + 3)[0]
-        self.frame.pressure = struct.unpack_from('<f', data, ofs + 4)[0]
-        self.frame.system_time_ms = struct.unpack_from('<I', data, ofs + 8)[0]
-        self.frame.acc = struct.unpack_from('<3f', data, ofs + 12)
-        self.frame.gyr = struct.unpack_from('<3f', data, ofs + 24)
-        self.frame.mag = struct.unpack_from('<3f', data, ofs + 36)
-        self.frame.roll = struct.unpack_from('<f', data, ofs + 48)[0]
-        self.frame.pitch = struct.unpack_from('<f', data, ofs + 52)[0]
-        self.frame.yaw = struct.unpack_from('<f', data, ofs + 56)[0]
-        self.frame.quat = struct.unpack_from('<4f', data, ofs + 60)
+        return {
+            "type": "HI91",
+            "main_status": struct.unpack_from('<H', data, ofs + 1)[0],
+            "temperature": struct.unpack_from('<b', data, ofs + 3)[0],
+            "air_pressure": struct.unpack_from('<f', data, ofs + 4)[0],
+            "system_time": struct.unpack_from('<I', data, ofs + 8)[0],
+            "acc": [x * GRAVITY for x in struct.unpack_from('<3f', data, ofs + 12)],
+            "gyr": list(struct.unpack_from('<3f', data, ofs + 24)),
+            "mag": list(struct.unpack_from('<3f', data, ofs + 36)),
+            "roll": struct.unpack_from('<f', data, ofs + 48)[0],
+            "pitch": struct.unpack_from('<f', data, ofs + 52)[0],
+            "yaw": struct.unpack_from('<f', data, ofs + 56)[0],
+            "quat": list(struct.unpack_from('<4f', data, ofs + 60)),
+        }, ofs + 76
 
     def _parse_hi81(self, data, ofs):
-        self.frame.ins_status = struct.unpack_from('<B', data, ofs + 3)[0]
-        self.frame.gpst_wn = struct.unpack_from('<H', data, ofs + 4)[0]
-        self.frame.gpst_tow = struct.unpack_from('<I', data, ofs + 6)[0] * 1e-3
-        self.frame.gyr = [x * 0.001 * R2D for x in struct.unpack_from('<3h', data, ofs + 12)]  # Convert to degrees per second
-        self.frame.acc = [x * 0.0048828 / GRAVITY for x in struct.unpack_from('<3h', data, ofs + 18)]  # Convert to G
-        self.frame.mag = [x * 0.030517 for x in struct.unpack_from('<3h', data, ofs + 24)]  # Convert to uT
-        self.frame.pressure = struct.unpack_from('<h', data, ofs + 30)[0] + 100000
+        utc_year = struct.unpack_from('<B', data, ofs + 35)[0]
+        utc_month = struct.unpack_from('<B', data, ofs + 36)[0]
+        utc_day = struct.unpack_from('<B', data, ofs + 37)[0]
+        utc_hour = struct.unpack_from('<B', data, ofs + 38)[0]
+        utc_min = struct.unpack_from('<B', data, ofs + 39)[0]
+        utc_msec = struct.unpack_from('<H', data, ofs + 40)[0]
+        utc_sec = utc_msec // 1000
+        utc_ms = utc_msec % 1000
+        utc = f"20{utc_year:02}-{utc_month:02}-{utc_day:02} {utc_hour:02}:{utc_min:02}:{utc_sec:02}.{utc_ms:03}"
 
-        self.frame.temperature = struct.unpack_from('<b', data, ofs + 34)[0]
-        self.frame.utc_year = struct.unpack_from('<B', data, ofs + 35)[0]
-        self.frame.utc_month = struct.unpack_from('<B', data, ofs + 36)[0]
-        self.frame.utc_day = struct.unpack_from('<B', data, ofs + 37)[0]
-        self.frame.utc_hour = struct.unpack_from('<B', data, ofs + 38)[0]
-        self.frame.utc_min = struct.unpack_from('<B', data, ofs + 39)[0]
-        self.frame.utc_msec = struct.unpack_from('<H', data, ofs + 40)[0]
-        self.frame.roll = struct.unpack_from('<h', data, ofs + 42)[0] * 0.01  # Convert to degrees
-        self.frame.pitch = struct.unpack_from('<h', data, ofs + 44)[0] * 0.01  # Convert to degrees
-        self.frame.yaw = struct.unpack_from('<H', data, ofs + 46)[0] * 0.01  # Convert to degrees
-        self.frame.quat = [x * 0.0001 for x in struct.unpack_from('<4h', data, ofs + 48)]  # Convert to quaternion
-        self.frame.ins_lon = struct.unpack_from('<i', data, ofs + 56)[0] * 1e-7  # Convert to degrees
-        self.frame.ins_lat = struct.unpack_from('<i', data, ofs + 60)[0] * 1e-7  # Convert to degrees
-        self.frame.ins_msl = struct.unpack_from('<i', data, ofs + 64)[0] * 1e-3  # Convert to meters
-        self.frame.pdop = struct.unpack_from('<B', data, ofs + 68)[0] * 0.1  # Convert to unit
-        self.frame.hdop = struct.unpack_from('<B', data, ofs + 69)[0] * 0.1  # Convert to unit
-        self.frame.solq_pos = struct.unpack_from('<B', data, ofs + 70)[0]
-        self.frame.nv_pos = struct.unpack_from('<B', data, ofs + 71)[0]
-        self.frame.solq_heading = struct.unpack_from('<B', data, ofs + 72)[0]
-        self.frame.nv_heading = struct.unpack_from('<B', data, ofs + 73)[0]
-        self.frame.diff_age = struct.unpack_from('<B', data, ofs + 74)[0]
-        self.frame.undulation = struct.unpack_from('<h', data, ofs + 75)[0] * 0.01  # Convert to meters
-        self.frame.vel_enu = [x * 0.01 for x in struct.unpack_from('<3h', data, ofs + 78)]  # Convert to meters per second
-        self.frame.acc_enu = [x * 0.0048828 / GRAVITY for x in struct.unpack_from('<3h', data, ofs + 84)]  # Convert to G
-        self.frame.system_time_ms = struct.unpack_from('<I', data, ofs + 90)[0]
+        return {
+            "type": "HI81",
+            "main_status": struct.unpack_from('<H', data, ofs + 1)[0],
+            "ins_status": struct.unpack_from('<B', data, ofs + 3)[0],
+            "gpst_wn": struct.unpack_from('<H', data, ofs + 4)[0],
+            "gpst_tow": struct.unpack_from('<I', data, ofs + 6)[0],
+            "gyr": [x * 0.001 * R2D for x in struct.unpack_from('<3h', data, ofs + 12)],
+            "acc": [x * 0.0048828 for x in struct.unpack_from('<3h', data, ofs + 18)],
+            "mag": [x * 0.030517 for x in struct.unpack_from('<3h', data, ofs + 24)],
+            "air_pressure": struct.unpack_from('<h', data, ofs + 30)[0],
+            "temperature": struct.unpack_from('<b', data, ofs + 34)[0],
+            "utc": utc,
+            "roll": struct.unpack_from('<h', data, ofs + 42)[0] * 0.01,
+            "pitch": struct.unpack_from('<h', data, ofs + 44)[0] * 0.01,
+            "yaw": struct.unpack_from('<H', data, ofs + 46)[0] * 0.01,
+            "quat": [x * 0.0001 for x in struct.unpack_from('<4h', data, ofs + 48)],
+            "ins_lon": struct.unpack_from('<i', data, ofs + 56)[0] * 1e-7,
+            "ins_lat": struct.unpack_from('<i', data, ofs + 60)[0] * 1e-7,
+            "ins_msl": struct.unpack_from('<i', data, ofs + 64)[0] * 1e-3,
+            "pdop": struct.unpack_from('<B', data, ofs + 68)[0] * 0.1,
+            "hdop": struct.unpack_from('<B', data, ofs + 69)[0] * 0.1,
+            "solq_pos": struct.unpack_from('<B', data, ofs + 70)[0],
+            "nv_pos": struct.unpack_from('<B', data, ofs + 71)[0],
+            "solq_heading": struct.unpack_from('<B', data, ofs + 72)[0],
+            "nv_heading": struct.unpack_from('<B', data, ofs + 73)[0],
+            "diff_age": struct.unpack_from('<B', data, ofs + 74)[0],
+            "undulation": struct.unpack_from('<h', data, ofs + 75)[0] * 0.01,
+            "ant_status": struct.unpack_from('<B', data, ofs + 77)[0],
+            "vel_enu": [x * 0.01 for x in struct.unpack_from('<3h', data, ofs + 78)],
+            "acc_enu": [x * 0.0048828 for x in struct.unpack_from('<3h', data, ofs + 84)],
+            "gnss_lon": struct.unpack_from('<i', data, ofs + 90)[0] * 1e-7,
+            "gnss_lat": struct.unpack_from('<i', data, ofs + 94)[0] * 1e-7,
+            "gnss_msl": struct.unpack_from('<i', data, ofs + 98)[0] * 1e-3,
+        }, ofs + 104
+
+    def _parse_hi83(self, data, ofs):
+        bitmap = struct.unpack_from('<I', data, ofs + 4)[0]
+        idx = ofs + 8
+
+        result = {
+            "type": "HI83",
+            "main_status": struct.unpack_from('<H', data, ofs + 1)[0],
+            "ins_status": struct.unpack_from('<B', data, ofs + 3)[0],
+            "data_bitmap": bitmap,
+        }
+
+        if bitmap & HI83_BMAP_ACC_B:
+            result["acc"] = list(struct.unpack_from('<3f', data, idx))
+            idx += 12
+        if bitmap & HI83_BMAP_GYR_B:
+            result["gyr"] = list(struct.unpack_from('<3f', data, idx))
+            idx += 12
+        if bitmap & HI83_BMAP_MAG_B:
+            result["mag"] = list(struct.unpack_from('<3f', data, idx))
+            idx += 12
+        if bitmap & HI83_BMAP_RPY:
+            rpy = struct.unpack_from('<3f', data, idx)
+            result["roll"] = rpy[0]
+            result["pitch"] = rpy[1]
+            result["yaw"] = rpy[2]
+            idx += 12
+        if bitmap & HI83_BMAP_QUAT:
+            result["quat"] = list(struct.unpack_from('<4f', data, idx))
+            idx += 16
+        if bitmap & HI83_BMAP_SYSTEM_TIME:
+            result["system_time_us"] = struct.unpack_from('<Q', data, idx)[0]
+            idx += 8
+        if bitmap & HI83_BMAP_UTC:
+            year = data[idx]
+            month = data[idx + 1]
+            day = data[idx + 2]
+            hour = data[idx + 3]
+            minute = data[idx + 4]
+            sec_ms = struct.unpack_from('<H', data, idx + 5)[0]
+            rev = data[idx + 7]
+            utc_sec = sec_ms // 1000
+            utc_ms = sec_ms % 1000
+            result["utc"] = f"20{year:02}-{month:02}-{day:02} {hour:02}:{minute:02}:{utc_sec:02}.{utc_ms:03}"
+            result["utc_rev"] = rev
+            idx += 8
+        if bitmap & HI83_BMAP_AIR_PRESSURE:
+            result["air_pressure"] = struct.unpack_from('<f', data, idx)[0]
+            idx += 4
+        if bitmap & HI83_BMAP_TEMPERATURE:
+            result["temperature"] = struct.unpack_from('<f', data, idx)[0]
+            idx += 4
+        if bitmap & HI83_BMAP_INCLINATION:
+            result["inclination"] = list(struct.unpack_from('<3f', data, idx))
+            idx += 12
+        if bitmap & HI83_BMAP_HSS:
+            result["hss"] = list(struct.unpack_from('<3f', data, idx))
+            idx += 12
+        if bitmap & HI83_BMAP_HSS_FRQ:
+            result["hss_frq"] = list(struct.unpack_from('<3f', data, idx))
+            idx += 12
+        if bitmap & HI83_BMAP_VEL_ENU:
+            result["vel_enu"] = list(struct.unpack_from('<3f', data, idx))
+            idx += 12
+        if bitmap & HI83_BMAP_ACC_ENU:
+            result["acc_enu"] = list(struct.unpack_from('<3f', data, idx))
+            idx += 12
+        if bitmap & HI83_BMAP_INS_LON_LAT_MSL:
+            result["ins_lon_lat_msl"] = list(struct.unpack_from('<3d', data, idx))
+            idx += 24
+        if bitmap & HI83_BMAP_GNSS_QUALITY_NV:
+            solq_pos, nv_pos, solq_heading, nv_heading = struct.unpack_from('<4B', data, idx)
+            result["solq_pos"] = solq_pos
+            result["nv_pos"] = nv_pos
+            result["solq_heading"] = solq_heading
+            result["nv_heading"] = nv_heading
+            idx += 4
+        if bitmap & HI83_BMAP_OD_SPEED:
+            result["od_speed"] = struct.unpack_from('<f', data, idx)[0]
+            idx += 4
+        if bitmap & HI83_BMAP_UNDULATION:
+            result["undulation"] = struct.unpack_from('<f', data, idx)[0]
+            idx += 4
+        if bitmap & HI83_BMAP_DIFF_AGE:
+            result["diff_age"] = struct.unpack_from('<f', data, idx)[0]
+            idx += 4
+        if bitmap & HI83_BMAP_NODE_ID:
+            result["node_id"] = struct.unpack_from('<B', data, idx)[0]
+            idx += 4
+        if bitmap & HI83_BMAP_GNSS_LON_LAT_MSL:
+            result["gnss_lon_lat_msl"] = list(struct.unpack_from('<3d', data, idx))
+            idx += 24
+        if bitmap & HI83_BMAP_GNSS_VEL:
+            result["gnss_vel"] = list(struct.unpack_from('<3f', data, idx))
+            idx += 12
+
+        return result, idx
 
     def parse_data(self, data):
-        """Parse data"""
+        packets = []
         ofs = 0
         while ofs < len(data):
             item_type = data[ofs]
-            ofs = self.parse_item(item_type, data, ofs)
+            try:
+                if item_type == FRAME_TAG_HI91:
+                    packet, ofs = self._parse_hi91(data, ofs)
+                    packets.append(packet)
+                elif item_type == FRAME_TAG_HI81:
+                    packet, ofs = self._parse_hi81(data, ofs)
+                    packets.append(packet)
+                elif item_type == FRAME_TAG_HI83:
+                    packet, ofs = self._parse_hi83(data, ofs)
+                    packets.append(packet)
+                else:
+                    logging.warning(f"Unknown item type: {item_type}")
+                    ofs += 1
+            except struct.error as e:
+                logging.error(f"Error parsing data: {e}")
+                ofs += 1
+        return packets
 
     def parse(self, new_data):
-        """Decode new data and return successfully parsed frames"""
         self.buffer += new_data
-        frames = []
+        packets = []
         while len(self.buffer) >= self.CH_HDR_SIZE:
             if self.buffer[0] == self.CHSYNC1 and self.buffer[1] == self.CHSYNC2:
                 length = struct.unpack_from('<H', self.buffer, 2)[0]
@@ -159,10 +249,7 @@ class hipnuc_parser:
                     crc_calculated = self.crc16_update(0, frame[:4] + frame[6:])
                     crc_received = struct.unpack_from('<H', frame, 4)[0]
                     if crc_calculated == crc_received:
-                        self.frame.reset()  # Reset data
-                        self.frame.frame_type = frame[6]  # 获取帧类型并保存到实例中
-                        self.parse_data(frame[self.CH_HDR_SIZE:])
-                        frames.append(self.frame)  # Add parsed IMU data to list
+                        packets.extend(self.parse_data(frame[self.CH_HDR_SIZE:]))
                     else:
                         logging.error("CRC check failed")
                     del self.buffer[:self.CH_HDR_SIZE + length]
@@ -170,48 +257,14 @@ class hipnuc_parser:
                     break
             else:
                 del self.buffer[0]
-        return frames
+        return packets
 
 
     @staticmethod
     def print_parsed_data(data):
-        """Format and print IMU data in a professional and compact format"""
-        if data.frame_type is not None:
-            data_fields = [
-                ("Frame Type",             f"HI{data.frame_type:02X}"),
-                ("Temperature (C)",        f"{data.temperature:<6}" if data.temperature is not None else None),
-                ("Pressure (Pa)",          f"{data.pressure:<9.3f}" if data.pressure is not None else None),
-                ("System_time_ms",         f"{data.system_time_ms:<9}" if data.system_time_ms is not None else None),
-                ("Roll (deg)",             f"{data.roll:<9.3f}" if data.roll is not None else None),
-                ("Pitch (deg)",            f"{data.pitch:<9.3f}" if data.pitch is not None else None),
-                ("Yaw (deg)",              f"{data.yaw:<9.3f}" if data.yaw is not None else None),
-                ("INS Status",             f"{data.ins_status:<9}" if data.ins_status is not None else None),
-                ("GPS Week No.",           f"{data.gpst_wn:<9}" if data.gpst_wn is not None else None),
-                ("GPS TOW (s)",            f"{data.gpst_tow:<9} s" if data.gpst_tow is not None else None),
-                ("UTC Time",               f"20{data.utc_year:<2}-{data.utc_month:02}-{data.utc_day:02} {data.utc_hour:02}:{data.utc_min:02}:{data.utc_msec:06.3f}" if all([data.utc_year, data.utc_month, data.utc_day, data.utc_hour, data.utc_min, data.utc_msec]) else None),
-                ("INS Longitude (deg)",    f"{data.ins_lon:<12.7f}" if data.ins_lon is not None else None),
-                ("INS Latitude (deg)",     f"{data.ins_lat:<12.7f}" if data.ins_lat is not None else None),
-                ("INS MSL (m)",            f"{data.ins_msl:<9.3f}" if data.ins_msl is not None else None),
-                ("PDOP",                   f"{data.pdop:<9.1f}" if data.pdop is not None else None),
-                ("HDOP",                   f"{data.hdop:<9.1f}" if data.hdop is not None else None),
-                ("Position Quality",       f"{data.solq_pos:<9}" if data.solq_pos is not None else None),
-                ("Sat No. ",               f"{data.nv_pos:<9}" if data.nv_pos is not None else None),
-                ("Heading Quality",        f"{data.solq_heading:<9}" if data.solq_heading is not None else None),
-                ("NV Heading",             f"{data.nv_heading:<9}" if data.nv_heading is not None else None),
-                ("Diff Age",               f"{data.diff_age:<9}" if data.diff_age is not None else None),
-                ("Undulation",             f"{data.undulation:<9}" if data.undulation is not None else None),
-                ("Acceleration (G)",       f"({data.acc[0]:<9.3f}, {data.acc[1]:<9.3f}, {data.acc[2]:<9.3f})" if data.acc is not None else None),
-                ("Gyroscope (deg/s)",        f"({data.gyr[0]:<9.3f}, {data.gyr[1]:<9.3f}, {data.gyr[2]:<9.3f})" if data.gyr is not None else None),
-                ("Magnetometer (uT)",      f"({data.mag[0]:<9.3f}, {data.mag[1]:<9.3f}, {data.mag[2]:<9.3f})" if data.mag is not None else None),
-                ("Quaternion",             f"({data.quat[0]:<9.3f}, {data.quat[1]:<9.3f}, {data.quat[2]:<9.3f}, {data.quat[3]:<9.3f})" if data.quat is not None else None),
-                ("Velocity ENU (m/s)",     f"({data.vel_enu[0]:<9.3f}, {data.vel_enu[1]:<9.3f}, {data.vel_enu[2]:<9.3f})" if data.vel_enu is not None else None),
-                ("Acceleration ENU (m/s²)", f"({data.acc_enu[0]:<9.3f}, {data.acc_enu[1]:<9.3f}, {data.acc_enu[2]:<9.3f})" if data.acc_enu is not None else None),
-            ]
-
-            # Print the data fields
-            for label, value in data_fields:
-                if value is not None:
-                    print(f"{label:<24}: {value}")
+        if not data:
+            return
+        print(json.dumps(data, ensure_ascii=False))
 
 
 
@@ -226,16 +279,14 @@ if __name__ == "__main__":
     
 
     print("Input binary data length for HI91:", len(example_data_hi91))
-    frames_hi91 = decoder.parse(example_data_hi91)
-    print(f"Total frames parsed for HI91: {len(frames_hi91)}")
-    for i, frame in enumerate(frames_hi91):
-        hipnuc_parser.print_parsed_data(frame)
+    packets_hi91 = decoder.parse(example_data_hi91)
+    print(f"Total packets parsed for HI91: {len(packets_hi91)}")
+    for packet in packets_hi91:
+        hipnuc_parser.print_parsed_data(packet)
     
 
     print("Input binary data length for HI81:", len(example_data_hi81))
-    frames_hi81 = decoder.parse(example_data_hi81)
-    print(f"Total frames parsed for HI81: {len(frames_hi81)}")
-    for i, frame in enumerate(frames_hi81):
-        hipnuc_parser.print_parsed_data(frame)
-
-
+    packets_hi81 = decoder.parse(example_data_hi81)
+    print(f"Total packets parsed for HI81: {len(packets_hi81)}")
+    for packet in packets_hi81:
+        hipnuc_parser.print_parsed_data(packet)
