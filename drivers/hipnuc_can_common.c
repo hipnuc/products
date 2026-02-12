@@ -57,6 +57,15 @@ int hipnuc_can_to_json(const can_sensor_data_t *data, int msg_type, can_json_out
         case CAN_MSG_GNSS_STATUS:
             json_append(output, "\"solq_pos\":%d,\"solq_heading\":%d,\"nv_pos\":%d,\"nv_heading\":%d,\"ins_status\":%d", data->solq_pos, data->solq_heading, data->nv_pos, data->nv_heading, data->ins_status);
             break;
+        case CAN_MSG_CANFD0:
+            json_append(output, "\"main_status\":%u,\"system_time\":%u", data->main_status, data->system_time_ms);
+            json_append(output, ",\"acc_x\":%.6f,\"acc_y\":%.6f,\"acc_z\":%.6f", data->acc_x, data->acc_y, data->acc_z);
+            json_append(output, ",\"gyr_x\":%.6f,\"gyr_y\":%.6f,\"gyr_z\":%.6f", data->gyr_x, data->gyr_y, data->gyr_z);
+            json_append(output, ",\"mag_x\":%.3f,\"mag_y\":%.3f,\"mag_z\":%.3f", data->mag_x, data->mag_y, data->mag_z);
+            json_append(output, ",\"roll\":%.6f,\"pitch\":%.6f,\"yaw\":%.6f", data->roll, data->pitch, data->imu_yaw);
+            json_append(output, ",\"quat_w\":%.4f,\"quat_x\":%.4f,\"quat_y\":%.4f,\"quat_z\":%.4f", data->quat_w, data->quat_x, data->quat_y, data->quat_z);
+            json_append(output, ",\"temperature\":%.2f", data->temperature);
+            break;
         default:
             json_append(output, "\"error\":\"unknown message type\"");
             break;

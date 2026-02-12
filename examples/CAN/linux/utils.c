@@ -2,7 +2,7 @@
 #include "utils.h"
 #include <time.h>
 #include <string.h>
-#include <stdlib.h>
+#include <unistd.h>
 
 // Millisecond timestamp based on CLOCK_MONOTONIC
 uint32_t utils_get_timestamp_ms(void)
@@ -15,15 +15,6 @@ uint32_t utils_get_timestamp_ms(void)
 void utils_delay_ms(uint32_t ms)
 {
     usleep(ms * 1000);
-}
-
-// Convert a Linux CAN frame into the HiPNUC CAN helper struct
-void utils_linux_can_to_hipnuc_can(const struct can_frame *linux_frame, uint64_t hw_ts_us, hipnuc_can_frame_t *hipnuc_frame)
-{
-    hipnuc_frame->can_id = linux_frame->can_id;
-    hipnuc_frame->can_dlc = linux_frame->can_dlc;
-    memcpy(hipnuc_frame->data, linux_frame->data, 8);
-    hipnuc_frame->hw_ts_us = hw_ts_us;
 }
 
 void utils_hipnuc_can_to_linux_can(const hipnuc_can_frame_t *hipnuc_frame, struct can_frame *linux_frame)

@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include "../can_interface.h"
 #include "../log.h"
-#include "../utils.h"
 #include "../help.h"
 #include "hipnuc_can_common.h"
 #include "hipnuc_j1939_parser.h"
@@ -41,14 +40,10 @@ int cmd_read(int argc, char *argv[])
     int target_count = config_get_target_nodes(target_nodes, 32);
     
     while (running) {
-        struct can_frame frame;
-        uint64_t hw_ts_us = 0;
-        int result = can_receive_frame_ts(sockfd, &frame, &hw_ts_us);
+        hipnuc_can_frame_t hipnuc_frame;
+        int result = can_receive_frame(sockfd, &hipnuc_frame);
 
         if (result > 0) {
-            hipnuc_can_frame_t hipnuc_frame;
-            utils_linux_can_to_hipnuc_can(&frame, hw_ts_us, &hipnuc_frame);
-            
             can_sensor_data_t data = {0};
             data.node_id = hipnuc_can_extract_node_id(hipnuc_frame.can_id);
             

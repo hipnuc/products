@@ -61,6 +61,14 @@ make -j$(nproc)
     sudo ip link set can0 up
     ```
     
+    CANFD 示例：
+    ```bash
+    sudo ip link set can0 down
+    sudo ip link set can0 type can bitrate 500000 dbitrate 4000000 fd on
+    sudo ip link set can0 up
+    ip -details link show can0
+    ```
+    
 2.  **配置**：
     在源码目录或当前目录创建 `canhost.ini`（参考源码中的 `canhost.ini`）：
     ```ini
@@ -88,7 +96,14 @@ interface=can0      # 使用的接口
 node_id=8,9         # 目标节点地址（支持逗号分隔多个）
 sync.sa=0x55        # 主机源地址
 sync.0xff34=100     # 配置 sync 命令：每 100ms 请求一次 PGN 0xFF34
+
+# CANFD
+canfd=1             # 使能CANFD
+canfd.brs=1         # 使能BRS
+canfd.data_bitrate=4000000
 ```
+说明：
+- CAN 接口速率由 `ip link` 配置，配置文件中的 CANFD/BRS/data_bitrate 仅用于程序内部记录与对齐设备配置。
 
 ### 命令详解
 
@@ -130,11 +145,10 @@ sync.0xff34=100     # 配置 sync 命令：每 100ms 请求一次 PGN 0xFF34
 ```bash
 ./canhost sync                  # 按配置无限循环发送
 ./canhost sync -c 10            # 发送 10 次循环后退出
-./canhost sync -p 0xF100        # 仅触发指定的 PGN（忽略配置文件的列表）
 ```
 
 #### 4. Read (实时数据)
-自动识别 HiPNUC J1939 和 CANopen 协议，解析标准帧与扩展帧。
+自动识别 HiPNUC J1939 和 CANopen 协议，解析标准帧、扩展帧与 CANFD0 帧。
 ```bash
 ./canhost read
 ```

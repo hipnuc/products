@@ -7,7 +7,7 @@
 typedef struct {
     uint32_t can_id;
     uint8_t can_dlc;
-    uint8_t data[8];
+    uint8_t data[64];
     uint64_t hw_ts_us;
 } hipnuc_can_frame_t;
 
@@ -30,11 +30,14 @@ typedef struct {
 #define CAN_MSG_PITCH_ROLL  12
 #define CAN_MSG_YAW         13
 #define CAN_MSG_GNSS_STATUS 14
+#define CAN_MSG_CANFD0      15
 #define CAN_MSG_UNKNOWN     99
 
 typedef struct {
     uint8_t node_id;
     uint64_t hw_ts_us;
+    uint16_t main_status;
+    uint32_t system_time_ms;
     float acc_x;
     float acc_y;
     float acc_z;

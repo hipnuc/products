@@ -9,7 +9,6 @@
 
 #include "../can_interface.h"
 #include "../log.h"
-#include "../utils.h"
 #include "../help.h"
 #include "../commands.h"
 #include "../config.h"
@@ -102,11 +101,11 @@ static int send_request_address_claimed(int sockfd)
     return 0;
 }
 
-static bool parse_address_claimed(const struct can_frame *f, uint8_t *addr, uint64_t *name)
+static bool parse_address_claimed(const hipnuc_can_frame_t *f, uint8_t *addr, uint64_t *name)
 {
-    if (!(f->can_id & CAN_EFF_FLAG) || f->can_dlc != 8)
+    if (!(f->can_id & HIPNUC_CAN_EFF_FLAG) || f->can_dlc != 8)
         return false;
-    uint32_t id = f->can_id & CAN_EFF_MASK;
+    uint32_t id = f->can_id & HIPNUC_CAN_EFF_MASK;
     if (j1939_can_id_to_pgn(id) != J1939_PGN_ADDRESS_CLAIMED)
         return false;
     *addr = j1939_can_id_to_sa(id);
@@ -171,9 +170,8 @@ int cmd_probe(int argc, char *argv[])
         if (now_ms() - last_claim_ms > PROBE_IDLE_TIMEOUT_MS) {
             break;
         }
-        struct can_frame f;
-        uint64_t hw_ts_us = 0;
-        int r = can_receive_frame_ts(fd, &f, &hw_ts_us);
+        hipnuc_can_frame_t f;
+        int r = can_receive_frame(fd, &f);
         if (r > 0) {
             uint8_t addr; uint64_t name;
             if (parse_address_claimed(&f, &addr, &name)) {

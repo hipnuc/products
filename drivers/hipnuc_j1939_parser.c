@@ -13,6 +13,7 @@
 #define J1939_PGN_ENV        0xFF43
 #define J1939_PGN_QUAT       0xFF46
 #define J1939_PGN_INCLINE    0xFF4A
+#define J1939_PGN_CANFD0     0xFF5A
 
 static int parse_j1939_time(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
@@ -136,6 +137,43 @@ static int parse_j1939_vel(const hipnuc_can_frame_t *frame, can_sensor_data_t *d
     return CAN_MSG_GNSS_VEL;
 }
 
+static int parse_j1939_canfd0(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
+{
+    if (frame->can_dlc < 64) return CAN_MSG_UNKNOWN;
+    const uint8_t *raw = frame->data;
+    data->main_status = (uint16_t)(raw[0] | ((uint16_t)raw[1] << 8));
+    data->system_time_ms = (uint32_t)raw[4]
+                         | ((uint32_t)raw[5] << 8)
+                         | ((uint32_t)raw[6] << 16)
+                         | ((uint32_t)raw[7] << 24);
+
+    int16_t *raw16 = (int16_t*)(raw + 8);
+    data->acc_x = raw16[0] * 0.00048828f;
+    data->acc_y = raw16[1] * 0.00048828f;
+    data->acc_z = raw16[2] * 0.00048828f;
+    data->gyr_x = raw16[3] * 0.061035f;
+    data->gyr_y = raw16[4] * 0.061035f;
+    data->gyr_z = raw16[5] * 0.061035f;
+    data->mag_x = raw16[6] * 0.030517f;
+    data->mag_y = raw16[7] * 0.030517f;
+    data->mag_z = raw16[8] * 0.030517f;
+
+    int32_t *raw32 = (int32_t*)(raw + 26);
+    data->roll = raw32[0] * 0.001f;
+    data->pitch = raw32[1] * 0.001f;
+    data->imu_yaw = raw32[2] * 0.001f;
+
+    int16_t *rawq = (int16_t*)(raw + 38);
+    data->quat_w = rawq[0] * 0.0001f;
+    data->quat_x = rawq[1] * 0.0001f;
+    data->quat_y = rawq[2] * 0.0001f;
+    data->quat_z = rawq[3] * 0.0001f;
+
+    int16_t temp = *(int16_t*)(raw + 46);
+    data->temperature = temp * 0.01f;
+    return CAN_MSG_CANFD0;
+}
+
 int hipnuc_j1939_parse_frame(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
     if (!frame || !data) return CAN_MSG_ERROR;
@@ -156,6 +194,7 @@ int hipnuc_j1939_parse_frame(const hipnuc_can_frame_t *frame, can_sensor_data_t 
         case J1939_PGN_ENV:        return parse_j1939_env(frame, data);
         case J1939_PGN_QUAT:       return parse_j1939_quat(frame, data);
         case J1939_PGN_INCLINE:    return parse_j1939_inclination(frame, data);
+        case J1939_PGN_CANFD0:     return parse_j1939_canfd0(frame, data);
         default:                   return CAN_MSG_UNKNOWN;
     }
 }
