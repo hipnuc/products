@@ -1,0 +1,115 @@
+VERSION ""
+
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	CAT_DEF_
+	CAT_
+	FILTER
+	BA_DEF_DEF_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_TABLE_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_REL_
+	BA_DEF_DEF_REL_
+	BU_SG_REL_
+	BU_EV_REL_
+	BU_BO_REL_
+	SG_MUL_VAL_
+
+BS_:
+
+BU_: HIPNUC_J1939
+
+
+BO_ 2365526024 PGN65296_FF10_LonLat: 8 HIPNUC_J1939
+ SG_ Latitude : 0|32@1- (1E-007,0) [-90|90] "deg" Vector__XXX
+ SG_ Longitude : 32|32@1- (1E-007,0) [-180|180] "deg" Vector__XXX
+
+BO_ 2365527048 PGN65300_FF14_AltUnduDiffAge: 8 HIPNUC_J1939
+ SG_ Altitude : 0|32@1- (0.01,0) [0|0] "m" Vector__XXX
+ SG_ Undulation : 32|16@1- (0.01,0) [0|0] "m" Vector__XXX
+ SG_ Diff_Age : 48|16@1- (0.01,0) [0|0] "s" Vector__XXX
+
+BO_ 2365528072 PGN65304_FF18_StatusSats: 8 HIPNUC_J1939
+ SG_ GNSS_Pos_Quality : 0|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ GNSS_Heading_Quality : 8|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ Sat_Pos_Count : 16|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ Sat_Heading_Count : 24|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ INS_Status : 32|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ Reserved_FF18 : 40|24@1+ (1,0) [0|0] "" Vector__XXX
+
+BO_ 2365531656 PGN65318_FF26_Velocity: 8 HIPNUC_J1939
+ SG_ Vel_East : 0|16@1- (0.01,0) [0|0] "m/s" Vector__XXX
+ SG_ Vel_North : 16|16@1- (0.01,0) [0|0] "m/s" Vector__XXX
+ SG_ Vel_Up : 32|16@1- (0.01,0) [0|0] "m/s" Vector__XXX
+ SG_ Ground_Speed : 48|16@1- (0.01,0) [0|0] "m/s" Vector__XXX
+
+BO_ 2365533960 PGN65327_FF2F_Time: 8 HIPNUC_J1939
+ SG_ UTC_Year : 0|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ UTC_Month : 8|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ UTC_Day : 16|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ UTC_Hour : 24|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ UTC_Minute : 32|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ UTC_Second : 40|8@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ UTC_Millisecond : 48|16@1+ (1,0) [0|0] "ms" Vector__XXX
+
+BO_ 2365535240 PGN65332_FF34_Accel: 8 HIPNUC_J1939
+ SG_ Acc_X : 0|16@1- (0.00048828,0) [0|0] "G" Vector__XXX
+ SG_ Acc_Y : 16|16@1- (0.00048828,0) [0|0] "G" Vector__XXX
+ SG_ Acc_Z : 32|16@1- (0.00048828,0) [0|0] "G" Vector__XXX
+ SG_ Reserved_FF34 : 48|16@1+ (1,0) [0|0] "" Vector__XXX
+
+BO_ 2365536008 PGN65335_FF37_Gyro: 8 HIPNUC_J1939
+ SG_ Gyr_X : 0|16@1- (0.061035,0) [0|0] "deg/s" Vector__XXX
+ SG_ Gyr_Y : 16|16@1- (0.061035,0) [0|0] "deg/s" Vector__XXX
+ SG_ Gyr_Z : 32|16@1- (0.061035,0) [0|0] "deg/s" Vector__XXX
+ SG_ Reserved_FF37 : 48|16@1+ (1,0) [0|0] "" Vector__XXX
+
+BO_ 2365536776 PGN65338_FF3A_Mag: 8 HIPNUC_J1939
+ SG_ Mag_X : 0|16@1- (0.030517,0) [0|0] "uT" Vector__XXX
+ SG_ Mag_Y : 16|16@1- (0.030517,0) [0|0] "uT" Vector__XXX
+ SG_ Mag_Z : 32|16@1- (0.030517,0) [0|0] "uT" Vector__XXX
+ SG_ Reserved_FF3A : 48|16@1+ (1,0) [0|0] "" Vector__XXX
+
+BO_ 2365537544 PGN65341_FF3D_RollPitch: 8 HIPNUC_J1939
+ SG_ Roll : 0|32@1- (0.001,0) [0|0] "deg" Vector__XXX
+ SG_ Pitch : 32|32@1- (0.001,0) [0|0] "deg" Vector__XXX
+
+BO_ 2365538568 PGN65345_FF41_YawDual: 8 HIPNUC_J1939
+ SG_ Yaw_360 : 0|32@1+ (0.001,0) [0|360] "deg" Vector__XXX
+ SG_ Yaw_pm180 : 32|32@1- (0.001,0) [-180|180] "deg" Vector__XXX
+
+BO_ 2365539080 PGN65347_FF43_TempPressure: 8 HIPNUC_J1939
+ SG_ Temperature : 0|16@1- (0.01,0) [0|0] "degC" Vector__XXX
+ SG_ Reserved_FF43 : 16|16@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ Pressure : 32|32@1- (0.01,0) [0|0] "Pa" Vector__XXX
+
+BO_ 2365539848 PGN65350_FF46_Quaternion: 8 HIPNUC_J1939
+ SG_ Quat_W : 0|16@1- (0.0001,0) [-1|1] "" Vector__XXX
+ SG_ Quat_X : 16|16@1- (0.0001,0) [-1|1] "" Vector__XXX
+ SG_ Quat_Y : 32|16@1- (0.0001,0) [-1|1] "" Vector__XXX
+ SG_ Quat_Z : 48|16@1- (0.0001,0) [-1|1] "" Vector__XXX
+
+BO_ 2365540872 PGN65354_FF4A_Inclinometer: 8 HIPNUC_J1939
+ SG_ Incli_X : 0|32@1- (0.001,0) [0|0] "deg" Vector__XXX
+ SG_ Incli_Y : 32|32@1- (0.001,0) [0|0] "deg" Vector__XXX
+
+
+BA_DEF_  "BusType" STRING ;
+BA_DEF_DEF_  "BusType" "CAN";
+BA_ "BusType" "CAN";

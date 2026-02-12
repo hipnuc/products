@@ -1,13 +1,10 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <linux/can.h>
 #include "../can_interface.h"
 #include "../log.h"
 #include "../utils.h"
@@ -63,8 +60,7 @@ int cmd_record(int argc, char *argv[])
     signal(SIGTERM, on_signal);
     log_info("Recording JSON on %s -> %s", ifname, out_path);
 
-    struct can_frame frames[256];
-    uint64_t ts_us[256];
+    hipnuc_can_frame_t frames[256];
     size_t batch_cap = sizeof(frames) / sizeof(frames[0]);
 
     uint64_t rx_frames = 0;
@@ -74,7 +70,7 @@ int cmd_record(int argc, char *argv[])
     uint32_t last_print_ms = utils_get_timestamp_ms();
 
     while (g_running) {
-        int r = can_receive_frames_ts(sockfd, frames, ts_us, batch_cap, 100);
+        int r = can_receive_frames(sockfd, frames, batch_cap, 100);
 
         if (r < 0) {
             log_error("Receive error");
@@ -99,12 +95,9 @@ int cmd_record(int argc, char *argv[])
         }
 
         for (int i = 0; i < r; ++i) {
-            hipnuc_can_frame_t hipnuc_frame;
-            utils_linux_can_to_hipnuc_can(&frames[i], ts_us[i], &hipnuc_frame);
-
             can_sensor_data_t data;
             memset(&data, 0, sizeof(data));
-            data.node_id = hipnuc_can_extract_node_id(hipnuc_frame.can_id);
+            data.node_id = hipnuc_can_extract_node_id(frames[i].can_id);
             
             bool match = false;
             for (int k = 0; k < target_count; ++k) {
@@ -115,11 +108,11 @@ int cmd_record(int argc, char *argv[])
             }
             if (!match) continue;
 
-            data.hw_ts_us = hipnuc_frame.hw_ts_us;
+            data.hw_ts_us = frames[i].hw_ts_us;
 
-            int msg_type = (hipnuc_frame.can_id & HIPNUC_CAN_EFF_FLAG)
-                         ? hipnuc_j1939_parse_frame(&hipnuc_frame, &data)
-                         : canopen_parse_frame(&hipnuc_frame, &data);
+            int msg_type = (frames[i].can_id & HIPNUC_CAN_EFF_FLAG)
+                         ? hipnuc_j1939_parse_frame(&frames[i], &data)
+                         : canopen_parse_frame(&frames[i], &data);
 
             if (msg_type == CAN_MSG_UNKNOWN || msg_type == CAN_MSG_ERROR) {
                 dropped_frames++;

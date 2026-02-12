@@ -1,6 +1,7 @@
 // can_interface.c
 #include "can_interface.h"
 #include "log.h"
+#include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -185,6 +186,11 @@ int can_open_socket(const char *ifname)
         // continue, not fatal
     }
 
+    int fd_enable = config_get_canfd_enable() ? 1 : 0;
+    if (setsockopt(sockfd, SOL_CAN_RAW, CAN_RAW_FD_FRAMES, &fd_enable, sizeof(fd_enable)) < 0) {
+        log_warn("Failed to set CAN FD option: %s", strerror(errno));
+    }
+
     int tstamp_flags = SOF_TIMESTAMPING_RAW_HARDWARE;
     if (setsockopt(sockfd, SOL_SOCKET, SO_TIMESTAMPING, &tstamp_flags, sizeof(tstamp_flags)) < 0) {
         log_warn("Failed to enable timestamping: %s", strerror(errno));
@@ -226,15 +232,16 @@ void can_close_socket(int sockfd)
 }
 
 
-int can_receive_frame_ts(int sockfd, struct can_frame *frame, uint64_t *hw_ts_us)
+int can_receive_frame(int sockfd, hipnuc_can_frame_t *frame)
 {
-    if (sockfd < 0 || !frame || !hw_ts_us) {
+    if (sockfd < 0 || !frame) {
         return -1;
     }
 
+    struct canfd_frame raw;
     struct iovec iov = {
-        .iov_base = frame,
-        .iov_len = sizeof(struct can_frame)
+        .iov_base = &raw,
+        .iov_len = sizeof(raw)
     };
 
     char ctrlmsg[256];
@@ -248,51 +255,60 @@ int can_receive_frame_ts(int sockfd, struct can_frame *frame, uint64_t *hw_ts_us
     ssize_t nbytes = recvmsg(sockfd, &msg, 0);
     if (nbytes < 0) {
         if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
-            return 0; // Timeout or interrupted
+            return 0;
         }
         log_error("recvmsg failed: %s", strerror(errno));
         return -1;
     }
-    if ((size_t)nbytes < sizeof(struct can_frame)) {
-        log_warn("Partial CAN frame received");
-        return -1;
-    }
 
-    // Extract hardware timestamp (if available)
-    *hw_ts_us = 0;
+    uint64_t hw_ts_us = 0;
     for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
         if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_TIMESTAMPING) {
             struct timespec *ts = (struct timespec *)CMSG_DATA(cmsg);
-            // Only use raw hardware timestamp (ts[2])
             if (ts[2].tv_sec || ts[2].tv_nsec) {
-                *hw_ts_us = (uint64_t)ts[2].tv_sec * 1000000ULL 
-                          + (uint64_t)ts[2].tv_nsec / 1000ULL;
+                hw_ts_us = (uint64_t)ts[2].tv_sec * 1000000ULL + (uint64_t)ts[2].tv_nsec / 1000ULL;
             }
             break;
         }
     }
 
-    return 1; // Success (hw_ts_us == 0 means no hardware timestamp available)
+    if ((size_t)nbytes == CAN_MTU) {
+        struct can_frame *cf = (struct can_frame *)&raw;
+        frame->can_id = cf->can_id;
+        frame->can_dlc = cf->can_dlc;
+        memcpy(frame->data, cf->data, frame->can_dlc > 8 ? 8 : frame->can_dlc);
+        frame->hw_ts_us = hw_ts_us;
+        return 1;
+    }
+    if ((size_t)nbytes == CANFD_MTU) {
+        frame->can_id = raw.can_id;
+        frame->can_dlc = raw.len;
+        memcpy(frame->data, raw.data, frame->can_dlc > 64 ? 64 : frame->can_dlc);
+        frame->hw_ts_us = hw_ts_us;
+        return 1;
+    }
+
+    log_warn("Partial CAN frame received");
+    return -1;
 }
 
-int can_receive_frames_ts(int sockfd,
-                          struct can_frame *frames,
-                          uint64_t *ts_us,
-                          size_t max_frames,
-                          int timeout_ms)
+int can_receive_frames(int sockfd,
+                       hipnuc_can_frame_t *frames,
+                       size_t max_frames,
+                       int timeout_ms)
 {
-    if (sockfd < 0 || !frames || !ts_us || max_frames == 0) {
+    if (sockfd < 0 || !frames || max_frames == 0) {
         return -1;
     }
 
     struct pollfd pfd = { .fd = sockfd, .events = POLLIN };
     int pr = poll(&pfd, 1, timeout_ms);
     if (pr == 0) {
-        return 0; // timeout
+        return 0;
     }
     if (pr < 0) {
         if (errno == EINTR) {
-            return 0; // interrupted
+            return 0;
         }
         log_error("poll failed: %s", strerror(errno));
         return -1;
@@ -300,9 +316,10 @@ int can_receive_frames_ts(int sockfd,
 
     size_t count = 0;
     while (count < max_frames) {
+        struct canfd_frame raw;
         struct iovec iov = {
-            .iov_base = &frames[count],
-            .iov_len = sizeof(struct can_frame)
+            .iov_base = &raw,
+            .iov_len = sizeof(raw)
         };
 
         char ctrlmsg[256];
@@ -316,17 +333,13 @@ int can_receive_frames_ts(int sockfd,
         ssize_t nbytes = recvmsg(sockfd, &msg, MSG_DONTWAIT);
         if (nbytes < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                break; // drained
+                break;
             }
             if (errno == EINTR) {
-                continue; // retry
+                continue;
             }
             log_error("recvmsg failed: %s", strerror(errno));
             return (int)count > 0 ? (int)count : -1;
-        }
-        if ((size_t)nbytes < sizeof(struct can_frame)) {
-            log_warn("Partial CAN frame received");
-            continue;
         }
 
         uint64_t hw_ts_us = 0;
@@ -339,8 +352,24 @@ int can_receive_frames_ts(int sockfd,
                 break;
             }
         }
-        ts_us[count] = hw_ts_us; // 0 if not available
-        count++;
+
+        if ((size_t)nbytes == CAN_MTU) {
+            struct can_frame *cf = (struct can_frame *)&raw;
+            frames[count].can_id = cf->can_id;
+            frames[count].can_dlc = cf->can_dlc;
+            memcpy(frames[count].data, cf->data, frames[count].can_dlc > 8 ? 8 : frames[count].can_dlc);
+            frames[count].hw_ts_us = hw_ts_us;
+            count++;
+            continue;
+        }
+        if ((size_t)nbytes == CANFD_MTU) {
+            frames[count].can_id = raw.can_id;
+            frames[count].can_dlc = raw.len;
+            memcpy(frames[count].data, raw.data, frames[count].can_dlc > 64 ? 64 : frames[count].can_dlc);
+            frames[count].hw_ts_us = hw_ts_us;
+            count++;
+            continue;
+        }
     }
 
     return (int)count;

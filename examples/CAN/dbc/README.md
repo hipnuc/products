@@ -1,25 +1,35 @@
-# CAN DBC 文件说明
+# CAN DBC 使用说明
 
-## 简介
+本目录提供产品 CAN 报文解析所需的 DBC 文件，面向上位机调试、总线监控和数据解码使用。
 
-本仓库包含 :
+## 文件说明
 
-​	HI32 IMU/GNSS 组合导航系统的 CAN 数据库文件 (DBC)，HI32GNSS-J1939.dbc文件，用于定义HI32GNSS  CAN 总线通信的消息格式和信号映射。
+- `J1939.dbc`
+  - 用于 J1939 协议数据解析
+  - 适用于 INS（组合导航）和 IMU 的 J1939 数据显示
 
-​	IMU 惯性导航系统的 CAN 数据库文件 (DBC)，IMU-J1939.dbc、IMU-CANOpen.dbc文件，用于定义IMU  CAN 总线通信的消息格式和信号映射。
+- `CANopen.dbc`
+  - 用于 CANopen 协议数据解析
+  - 适用于 IMU 的 CANopen TPDO 数据显示
 
-## 使用方法
+## 快速上手
 
-### CANdb++ 使用
+1. 打开你的 CAN 分析工具（如 CANdb++、CANalyzer、PCAN-View 等）。
+2. 导入对应协议的 DBC 文件：
+   - 使用 J1939 设备时导入 `J1939.dbc`
+   - 使用 CANopen 设备时导入 `CANopen.dbc`
+3. 连接设备并开始接收 CAN 报文，即可按信号名称查看物理量。
 
-1. 打开 CANdb++ 软件
-2. 选择 `File` → `Open` 导入 `HI32GNSS-J1939.dbc` 或者`IMU-J1939.dbc`或者`IMU-CANOpen.dbc`文件
-3. 查看消息列表和信号定义
-4. 配置 CAN 接口进行数据监控
+## 使用建议
 
-## 注意事项
+- 默认节点 ID 按 `0x08` 建模。
+- 若设备节点 ID 不是 `0x08`，请在工具中按实际 ID 做报文映射。
+- 数据均按小端（Little-Endian）解析。
+- 本目录 DBC 主要用于数据显示，不包含参数配置类控制报文定义。
 
-- HI32-J1939.dbc、IMU-J1939.dbc消息 ID 遵循 J1939 PGN 格式
-- 数据采用小端格式编码
-- 需要根据信号定义的缩放因子进行单位转换
+## 协议选择建议
 
+- INS（GNSS/组合导航）产品：使用 `J1939.dbc`
+- IMU 产品：
+  - 设备输出 J1939 时使用 `J1939.dbc`
+  - 设备输出 CANopen 时使用 `CANopen.dbc`

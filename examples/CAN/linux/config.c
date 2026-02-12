@@ -11,11 +11,14 @@ typedef struct {
     uint8_t target_nodes[32];
     int target_node_count;
     uint8_t sync_sa;
+    int canfd_enable;
+    int canfd_brs;
+    uint32_t canfd_data_bitrate;
     struct { uint32_t pgn; uint32_t period_ms; } sync_items[32];
     int sync_count;
 } canhost_config_t;
 
-static canhost_config_t G = { .interface = "can0", .target_nodes = {8}, .target_node_count = 1, .sync_sa = 0x55, .sync_count = 0 };
+static canhost_config_t G = { .interface = "can0", .target_nodes = {8}, .target_node_count = 1, .sync_sa = 0x55, .canfd_enable = 1, .canfd_brs = 1, .canfd_data_bitrate = 4000000, .sync_count = 0 };
 static int initialized = 0;
 static char source_path[256] = {0};
 
@@ -74,6 +77,19 @@ static void apply_kv(const char *key_in, const char *val_in)
     if (strcmp(key, "sync.sa") == 0 || strcmp(key, "sync_sa") == 0) {
         unsigned long v = strtoul(val, NULL, 0);
         G.sync_sa = (uint8_t)v;
+        return;
+    }
+    if (strcmp(key, "canfd") == 0 || strcmp(key, "canfd.enable") == 0 || strcmp(key, "canfd_enable") == 0) {
+        G.canfd_enable = (int)strtol(val, NULL, 0) ? 1 : 0;
+        return;
+    }
+    if (strcmp(key, "canfd.brs") == 0 || strcmp(key, "canfd_brs") == 0) {
+        G.canfd_brs = (int)strtol(val, NULL, 0) ? 1 : 0;
+        return;
+    }
+    if (strcmp(key, "canfd.data_bitrate") == 0 || strcmp(key, "canfd.data_bit_rate") == 0 || strcmp(key, "canfd_data_bitrate") == 0 || strcmp(key, "canfd_data_bit_rate") == 0) {
+        unsigned long v = strtoul(val, NULL, 0);
+        G.canfd_data_bitrate = (uint32_t)v;
         return;
     }
     if (strncmp(key, "sync.", 5) == 0) {
@@ -200,6 +216,7 @@ void config_log_summary(void)
     if (G.sync_count > 0) {
         log_info("Sync: sa=%u items=%d", (unsigned)G.sync_sa, G.sync_count);
     }
+    log_info("CANFD: enable=%d brs=%d data_bitrate=%u", G.canfd_enable, G.canfd_brs, G.canfd_data_bitrate);
 }
 
 int config_get_sync_items(config_sync_item_t *items, int max_count)
@@ -237,4 +254,19 @@ uint8_t config_get_target_node(void)
 uint8_t config_get_sync_sa(void)
 {
     return G.sync_sa;
+}
+
+int config_get_canfd_enable(void)
+{
+    return G.canfd_enable;
+}
+
+int config_get_canfd_brs(void)
+{
+    return G.canfd_brs;
+}
+
+uint32_t config_get_canfd_data_bitrate(void)
+{
+    return G.canfd_data_bitrate;
 }

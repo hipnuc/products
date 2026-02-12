@@ -43,4 +43,8 @@ uint8_t config_get_target_node(void);
 
 uint8_t config_get_sync_sa(void);
 
+int config_get_canfd_enable(void);
+int config_get_canfd_brs(void);
+uint32_t config_get_canfd_data_bitrate(void);
+
 #endif // CANHOST_CONFIG_H
