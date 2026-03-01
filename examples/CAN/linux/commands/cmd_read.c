@@ -7,6 +7,7 @@
 #include "../can_interface.h"
 #include "../log.h"
 #include "../help.h"
+#include "../commands.h"
 #include "hipnuc_can_common.h"
 #include "hipnuc_j1939_parser.h"
 #include "canopen_parser.h"
@@ -22,13 +23,17 @@ static void signal_handler(int sig)
 
 int cmd_read(int argc, char *argv[])
 {
-    (void)argc; (void)argv;
+    (void)argv;
+    if (argc != 1) {
+        help_print_arg_error_json("stream read", "usage: stream read");
+        return CANHOST_EXIT_INVALID_ARGS;
+    }
     
     const char *ifname = config_get_interface();
     int sockfd = can_open_socket(ifname);
     if (sockfd < 0) {
         help_print_can_setup(ifname);
-        return -1;
+        return CANHOST_EXIT_RUNTIME_ERROR;
     }
     
     signal(SIGINT, signal_handler);
@@ -38,6 +43,11 @@ int cmd_read(int argc, char *argv[])
     
     uint8_t target_nodes[32];
     int target_count = config_get_target_nodes(target_nodes, 32);
+    if (target_count <= 0) {
+        help_print_arg_error_json("stream read", "no target node configured");
+        can_close_socket(sockfd);
+        return CANHOST_EXIT_INVALID_ARGS;
+    }
     
     while (running) {
         hipnuc_can_frame_t hipnuc_frame;
@@ -70,11 +80,12 @@ int cmd_read(int argc, char *argv[])
             }
         } else if (result < 0) {
             log_error("Failed to receive CAN frame");
-            break;
+            can_close_socket(sockfd);
+            return CANHOST_EXIT_RUNTIME_ERROR;
         }
     }
     
     log_info("Stopping CAN read");
     can_close_socket(sockfd);
-    return 0;
+    return CANHOST_EXIT_OK;
 }

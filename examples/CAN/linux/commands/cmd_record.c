@@ -10,6 +10,7 @@
 #include "../utils.h"
 #include "../help.h"
 #include "../config.h"
+#include "../commands.h"
 #include "hipnuc_can_common.h"
 #include "hipnuc_j1939_parser.h"
 #include "canopen_parser.h"
@@ -31,26 +32,33 @@ int cmd_record(int argc, char *argv[])
     for (int i = 1; i < argc; ++i) {
         if ((strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--out") == 0) && i + 1 < argc) {
             out_path = argv[++i];
+        } else {
+            help_print_arg_error_json("stream record", "usage: stream record -o <file>");
+            return CANHOST_EXIT_INVALID_ARGS;
         }
     }
     
     if (!out_path) {
-        log_error("Missing output file (-o FILE)");
-        return -1;
+        help_print_arg_error_json("stream record", "missing output file (-o FILE)");
+        return CANHOST_EXIT_INVALID_ARGS;
+    }
+    if (target_count <= 0) {
+        help_print_arg_error_json("stream record", "no target node configured");
+        return CANHOST_EXIT_INVALID_ARGS;
     }
 
     const char *ifname = config_get_interface();
     int sockfd = can_open_socket(ifname);
     if (sockfd < 0) {
         help_print_can_setup(ifname);
-        return -1;
+        return CANHOST_EXIT_RUNTIME_ERROR;
     }
 
     FILE *file = fopen(out_path, "w");
     if (!file) {
         log_error("Failed to open %s: %s", out_path, strerror(errno));
         can_close_socket(sockfd);
-        return -1;
+        return CANHOST_EXIT_RUNTIME_ERROR;
     }
     
     // Set large buffer for file I/O
@@ -74,7 +82,9 @@ int cmd_record(int argc, char *argv[])
 
         if (r < 0) {
             log_error("Receive error");
-            break;
+            fclose(file);
+            can_close_socket(sockfd);
+            return CANHOST_EXIT_RUNTIME_ERROR;
         }
 
         if (r == 0) {
@@ -150,5 +160,5 @@ int cmd_record(int argc, char *argv[])
     fflush(file);
     fclose(file);
     can_close_socket(sockfd);
-    return 0;
+    return CANHOST_EXIT_OK;
 }

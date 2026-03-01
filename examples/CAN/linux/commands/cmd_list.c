@@ -5,6 +5,7 @@
 #include "../can_interface.h"
 #include "../log.h"
 #include "../help.h"
+#include "../commands.h"
 
 // bitrate column removed for a simpler list output
 
@@ -29,19 +30,22 @@ static void print_setup_hint(void)
 
 int cmd_list(int argc, char *argv[])
 {
-    (void)argc;
     (void)argv;
+    if (argc != 1) {
+        help_print_arg_error_json("device list", "usage: device list");
+        return CANHOST_EXIT_INVALID_ARGS;
+    }
 
     can_interface_info_t interfaces[16];
     int count = can_list_interfaces(interfaces, (int)(sizeof(interfaces) / sizeof(interfaces[0])));
     if (count < 0) {
         printf("Error: unable to enumerate CAN interfaces (check permissions).\n");
-        return -1;
+        return CANHOST_EXIT_RUNTIME_ERROR;
     }
 
     if (count == 0) {
         print_setup_hint();
-        return 0;
+        return CANHOST_EXIT_OK;
     }
 
     printf("\nDetected CAN interfaces (%d):\n", count);
@@ -51,9 +55,9 @@ int cmd_list(int argc, char *argv[])
     }
 
     printf("\nExamples:\n");
-    printf("  canhost read\n");
-    printf("  canhost probe\n");
+    printf("  canhost stream read\n");
+    printf("  canhost device probe\n");
     printf("\n");
 
-    return 0;
+    return CANHOST_EXIT_OK;
 }

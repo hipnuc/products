@@ -8,35 +8,41 @@
 #define TPDO6_BASE  0x680
 #define TPDO7_BASE  0x780
 
+#define REQUIRE_DLC(min_len) do { if (frame->can_dlc < (min_len)) return CAN_MSG_UNKNOWN; } while (0)
+
 static int parse_canopen_accel(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(6);
     int16_t *raw = (int16_t*)frame->data;
-    data->acc_x = raw[0] * 0.001f * 9.81f;
-    data->acc_y = raw[1] * 0.001f * 9.81f;
-    data->acc_z = raw[2] * 0.001f * 9.81f;
+    data->acc_x = raw[0] * 0.001f;
+    data->acc_y = raw[1] * 0.001f;
+    data->acc_z = raw[2] * 0.001f;
     return CAN_MSG_ACCEL;
 }
 
 static int parse_canopen_gyro(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(6);
     int16_t *raw = (int16_t*)frame->data;
-    data->gyr_x = raw[0] * 0.1f * 0.017453f;
-    data->gyr_y = raw[1] * 0.1f * 0.017453f;
-    data->gyr_z = raw[2] * 0.1f * 0.017453f;
+    data->gyr_x = raw[0] * 0.1f;
+    data->gyr_y = raw[1] * 0.1f;
+    data->gyr_z = raw[2] * 0.1f;
     return CAN_MSG_GYRO;
 }
 
 static int parse_canopen_euler(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(6);
     int16_t *raw = (int16_t*)frame->data;
-    data->roll = raw[0] * 0.01f * 0.017453f;
-    data->pitch = raw[1] * 0.01f * 0.017453f;
-    data->imu_yaw = raw[2] * 0.01f * 0.017453f;
+    data->roll = raw[0] * 0.01f;
+    data->pitch = raw[1] * 0.01f;
+    data->imu_yaw = raw[2] * 0.01f;
     return CAN_MSG_EULER;
 }
 
 static int parse_canopen_quat(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     int16_t *raw = (int16_t*)frame->data;
     data->quat_w = raw[0] * 0.0001f;
     data->quat_x = raw[1] * 0.0001f;
@@ -47,6 +53,7 @@ static int parse_canopen_quat(const hipnuc_can_frame_t *frame, can_sensor_data_t
 
 static int parse_canopen_pressure(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(4);
     int32_t *raw = (int32_t*)frame->data;
     data->pressure = *raw;
     return CAN_MSG_PRESSURE;
@@ -54,6 +61,7 @@ static int parse_canopen_pressure(const hipnuc_can_frame_t *frame, can_sensor_da
 
 static int parse_canopen_inclination(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     int32_t *raw = (int32_t*)frame->data;
     data->incli_x = raw[0] * 0.01f;
     data->incli_y = raw[1] * 0.01f;

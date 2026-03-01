@@ -202,7 +202,13 @@ int can_open_socket(const char *ifname)
     }
     
     // Resolve interface index
-    strcpy(ifr.ifr_name, ifname);
+    memset(&ifr, 0, sizeof(ifr));
+    int ifname_len = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", ifname);
+    if (ifname_len < 0 || (size_t)ifname_len >= sizeof(ifr.ifr_name)) {
+        log_error("Interface name too long: '%s'", ifname);
+        close(sockfd);
+        return -1;
+    }
     if (ioctl(sockfd, SIOCGIFINDEX, &ifr) < 0) {
         log_error("Failed to query index for '%s': %s", ifname, strerror(errno));
         close(sockfd);
@@ -275,15 +281,17 @@ int can_receive_frame(int sockfd, hipnuc_can_frame_t *frame)
     if ((size_t)nbytes == CAN_MTU) {
         struct can_frame *cf = (struct can_frame *)&raw;
         frame->can_id = cf->can_id;
-        frame->can_dlc = cf->can_dlc;
-        memcpy(frame->data, cf->data, frame->can_dlc > 8 ? 8 : frame->can_dlc);
+        frame->can_dlc = cf->can_dlc > 8 ? 8 : cf->can_dlc;
+        memset(frame->data, 0, sizeof(frame->data));
+        memcpy(frame->data, cf->data, frame->can_dlc);
         frame->hw_ts_us = hw_ts_us;
         return 1;
     }
     if ((size_t)nbytes == CANFD_MTU) {
         frame->can_id = raw.can_id;
-        frame->can_dlc = raw.len;
-        memcpy(frame->data, raw.data, frame->can_dlc > 64 ? 64 : frame->can_dlc);
+        frame->can_dlc = raw.len > 64 ? 64 : raw.len;
+        memset(frame->data, 0, sizeof(frame->data));
+        memcpy(frame->data, raw.data, frame->can_dlc);
         frame->hw_ts_us = hw_ts_us;
         return 1;
     }
@@ -356,16 +364,18 @@ int can_receive_frames(int sockfd,
         if ((size_t)nbytes == CAN_MTU) {
             struct can_frame *cf = (struct can_frame *)&raw;
             frames[count].can_id = cf->can_id;
-            frames[count].can_dlc = cf->can_dlc;
-            memcpy(frames[count].data, cf->data, frames[count].can_dlc > 8 ? 8 : frames[count].can_dlc);
+            frames[count].can_dlc = cf->can_dlc > 8 ? 8 : cf->can_dlc;
+            memset(frames[count].data, 0, sizeof(frames[count].data));
+            memcpy(frames[count].data, cf->data, frames[count].can_dlc);
             frames[count].hw_ts_us = hw_ts_us;
             count++;
             continue;
         }
         if ((size_t)nbytes == CANFD_MTU) {
             frames[count].can_id = raw.can_id;
-            frames[count].can_dlc = raw.len;
-            memcpy(frames[count].data, raw.data, frames[count].can_dlc > 64 ? 64 : frames[count].can_dlc);
+            frames[count].can_dlc = raw.len > 64 ? 64 : raw.len;
+            memset(frames[count].data, 0, sizeof(frames[count].data));
+            memcpy(frames[count].data, raw.data, frames[count].can_dlc);
             frames[count].hw_ts_us = hw_ts_us;
             count++;
             continue;

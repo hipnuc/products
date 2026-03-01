@@ -12,6 +12,7 @@
 #include "../utils.h"
 #include "../help.h"
 #include "../config.h"
+#include "../commands.h"
 #include "hipnuc_can_common.h"
 
 static volatile sig_atomic_t g_run = 1;
@@ -29,10 +30,21 @@ int cmd_sync(int argc, char *argv[])
     uint32_t filter_pgn = 0;
 
     for (int i = 1; i < argc; ++i) {
-        if ((strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--count") == 0) && i + 1 < argc) {
+        if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--count") == 0) {
+            if (i + 1 >= argc) {
+                help_print_arg_error_json("trigger sync", "missing value for --count");
+                return CANHOST_EXIT_INVALID_ARGS;
+            }
             count_target = strtoul(argv[++i], NULL, 0);
-        } else if ((strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--pgn") == 0) && i + 1 < argc) {
+        } else if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--pgn") == 0) {
+            if (i + 1 >= argc) {
+                help_print_arg_error_json("trigger sync", "missing value for --pgn");
+                return CANHOST_EXIT_INVALID_ARGS;
+            }
             filter_pgn = (uint32_t)strtoul(argv[++i], NULL, 0);
+        } else {
+            help_print_arg_error_json("trigger sync", "unknown option");
+            return CANHOST_EXIT_INVALID_ARGS;
         }
     }
 
@@ -40,6 +52,10 @@ int cmd_sync(int argc, char *argv[])
     int item_cnt_all = config_get_sync_items(items_all, 32);
     uint8_t target_nodes[32];
     int target_count = config_get_target_nodes(target_nodes, 32);
+    if (target_count <= 0) {
+        help_print_arg_error_json("trigger sync", "no target node configured");
+        return CANHOST_EXIT_INVALID_ARGS;
+    }
     uint8_t host_sa = config_get_sync_sa();
     config_sync_item_t items[32];
     int item_cnt = 0;
@@ -54,15 +70,15 @@ int cmd_sync(int argc, char *argv[])
         item_cnt = item_cnt_all;
     }
     if (item_cnt <= 0) {
-        log_error("No sync items configured in canhost.ini (use sync.<pgn>=<period_ms>)");
-        return -1;
+        help_print_arg_error_json("trigger sync", "no sync items configured in canhost.ini");
+        return CANHOST_EXIT_INVALID_ARGS;
     }
 
     const char *ifname = config_get_interface();
     int fd = can_open_socket(ifname);
     if (fd < 0) {
         help_print_can_setup(ifname);
-        return -1;
+        return CANHOST_EXIT_RUNTIME_ERROR;
     }
 
     signal(SIGINT, on_signal);
@@ -76,6 +92,7 @@ int cmd_sync(int argc, char *argv[])
     uint32_t now_ms = utils_get_timestamp_ms();
     uint32_t next_due[32];
     uint64_t sent_total = 0;
+    int had_runtime_error = 0;
     uint64_t last_print_total = 0;
     uint32_t last_print_ms = now_ms;
     uint32_t sent_counts[32] = {0};
@@ -94,7 +111,12 @@ int cmd_sync(int argc, char *argv[])
                     struct can_frame f;
                     utils_hipnuc_can_to_linux_can(&cfg, &f);
                     ssize_t w = write(fd, &f, sizeof(f));
-                    if (w != sizeof(f)) { log_error("send failed"); g_run = 0; break; }
+                    if (w != sizeof(f)) {
+                        log_error("send failed");
+                        had_runtime_error = 1;
+                        g_run = 0;
+                        break;
+                    }
                     sent_total++;
                 }
                 if (!g_run) break;
@@ -131,5 +153,5 @@ int cmd_sync(int argc, char *argv[])
     printf("\n");
     log_info("Sync trigger done: sent_total=%llu", (unsigned long long)sent_total);
     can_close_socket(fd);
-    return 0;
+    return had_runtime_error ? CANHOST_EXIT_RUNTIME_ERROR : CANHOST_EXIT_OK;
 }

@@ -15,8 +15,11 @@
 #define J1939_PGN_INCLINE    0xFF4A
 #define J1939_PGN_CANFD0     0xFF5A
 
+#define REQUIRE_DLC(min_len) do { if (frame->can_dlc < (min_len)) return CAN_MSG_UNKNOWN; } while (0)
+
 static int parse_j1939_time(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     const uint8_t *raw = frame->data;
     data->utc_year = raw[0];
     data->utc_month = raw[1];
@@ -31,6 +34,7 @@ static int parse_j1939_time(const hipnuc_can_frame_t *frame, can_sensor_data_t *
 
 static int parse_j1939_accel(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(6);
     int16_t *raw = (int16_t*)frame->data;
     data->acc_x = raw[0] * 0.00048828f;
     data->acc_y = raw[1] * 0.00048828f;
@@ -40,6 +44,7 @@ static int parse_j1939_accel(const hipnuc_can_frame_t *frame, can_sensor_data_t 
 
 static int parse_j1939_gyro(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(6);
     int16_t *raw = (int16_t*)frame->data;
     data->gyr_x = raw[0] * 0.061035f;
     data->gyr_y = raw[1] * 0.061035f;
@@ -49,6 +54,7 @@ static int parse_j1939_gyro(const hipnuc_can_frame_t *frame, can_sensor_data_t *
 
 static int parse_j1939_mag(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(6);
     int16_t *raw = (int16_t*)frame->data;
     data->mag_x = raw[0] * 0.030517f;
     data->mag_y = raw[1] * 0.030517f;
@@ -58,6 +64,7 @@ static int parse_j1939_mag(const hipnuc_can_frame_t *frame, can_sensor_data_t *d
 
 static int parse_j1939_pitch_roll(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     int32_t *raw = (int32_t*)frame->data;
     data->roll = raw[0] * 0.001f;
     data->pitch = raw[1] * 0.001f;
@@ -66,6 +73,7 @@ static int parse_j1939_pitch_roll(const hipnuc_can_frame_t *frame, can_sensor_da
 
 static int parse_j1939_yaw(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(4);
     int32_t *raw = (int32_t*)frame->data;
     data->imu_yaw = raw[0] * 0.001f;
     return CAN_MSG_YAW;
@@ -73,6 +81,7 @@ static int parse_j1939_yaw(const hipnuc_can_frame_t *frame, can_sensor_data_t *d
 
 static int parse_j1939_quat(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     int16_t *raw = (int16_t*)frame->data;
     data->quat_w = raw[0] * 0.0001f;
     data->quat_x = raw[1] * 0.0001f;
@@ -83,6 +92,7 @@ static int parse_j1939_quat(const hipnuc_can_frame_t *frame, can_sensor_data_t *
 
 static int parse_j1939_inclination(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     int32_t *raw = (int32_t*)frame->data;
     data->incli_x = raw[0] * 0.001f;
     data->incli_y = raw[1] * 0.001f;
@@ -91,6 +101,7 @@ static int parse_j1939_inclination(const hipnuc_can_frame_t *frame, can_sensor_d
 
 static int parse_j1939_env(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     int16_t *raw16 = (int16_t*)frame->data;
     int32_t *raw32 = (int32_t*)(frame->data + 4);
     data->temperature = raw16[0] * 0.01f;
@@ -100,6 +111,7 @@ static int parse_j1939_env(const hipnuc_can_frame_t *frame, can_sensor_data_t *d
 
 static int parse_j1939_lonlat(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     int32_t *raw = (int32_t*)frame->data;
     data->ins_lat = raw[0] * 1e-7;
     data->ins_lon = raw[1] * 1e-7;
@@ -108,6 +120,7 @@ static int parse_j1939_lonlat(const hipnuc_can_frame_t *frame, can_sensor_data_t
 
 static int parse_j1939_alt(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     int32_t *raw32 = (int32_t*)frame->data;
     int16_t *raw16 = (int16_t*)frame->data;
     data->ins_msl = raw32[0] * 0.01;
@@ -118,6 +131,7 @@ static int parse_j1939_alt(const hipnuc_can_frame_t *frame, can_sensor_data_t *d
 
 static int parse_j1939_status(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(5);
     const uint8_t *raw = frame->data;
     data->solq_pos = raw[0];
     data->solq_heading = raw[1];
@@ -129,6 +143,7 @@ static int parse_j1939_status(const hipnuc_can_frame_t *frame, can_sensor_data_t
 
 static int parse_j1939_vel(const hipnuc_can_frame_t *frame, can_sensor_data_t *data)
 {
+    REQUIRE_DLC(8);
     int16_t *raw = (int16_t*)frame->data;
     data->ins_vel_e = raw[0] * 0.01f;
     data->ins_vel_n = raw[1] * 0.01f;

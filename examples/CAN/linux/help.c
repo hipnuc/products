@@ -4,23 +4,24 @@
 #include "help.h"
 
 #define PROGRAM_NAME "canhost"
-#define VERSION "1.0.2"
+#define VERSION "2.0.0"
 
 static const char *examples[] = {
-    PROGRAM_NAME " list",
-    PROGRAM_NAME " probe",
-    PROGRAM_NAME " read",
-    PROGRAM_NAME " record -o imu.json",
-    PROGRAM_NAME " sync",
-    PROGRAM_NAME " sync -c 1",
-    PROGRAM_NAME " reg read 0x70",
-    PROGRAM_NAME " reg write 0x06 1"
+    PROGRAM_NAME " device list",
+    PROGRAM_NAME " device probe",
+    PROGRAM_NAME " stream read",
+    PROGRAM_NAME " stream record -o imu.jsonl",
+    PROGRAM_NAME " trigger sync --count 1",
+    PROGRAM_NAME " trigger sync --pgn 0xff34 --count 10",
+    PROGRAM_NAME " config reg read 0x70",
+    PROGRAM_NAME " config reg write 0x06 1",
+    PROGRAM_NAME " action run reset --yes"
 };
 
 void help_print_version(void)
 {
-    printf("%s %s - HiPNUC CAN evaluation utility\n", PROGRAM_NAME, VERSION);
-    printf("Copyright (C) 2025 HiPNUC\n");
+    printf("%s %s - HiPNUC CAN host utility\n", PROGRAM_NAME, VERSION);
+    printf("Copyright (C) 2026 HiPNUC\n");
     printf("Website: https://www.hipnuc.com\n");
 }
 
@@ -28,50 +29,42 @@ void help_print_usage(const char *program_name)
 {
     const char *pn = program_name && *program_name ? program_name : PROGRAM_NAME;
     help_print_version();
-    printf("Usage: %s [OPTIONS] <command> [command options]\n", pn);
+    printf("Usage: %s [OPTIONS] <group> <command> [args]\n", pn);
     printf("Options:\n");
     printf("  -h, --help              Show this help\n");
     printf("  -v, --version           Show version information\n");
-    printf("Commands:\n");
-    printf("  list    Show detected CAN interfaces with state\n");
-    printf("  probe   Send a 2 s probe and print responding nodes\n");
-    printf("  read    Stream and format HiPNUC sensor data frames\n");
-    printf("  record  Record parsed JSON (NDJSON) to file, print frames/fps\n");
-    printf("  sync    Periodically trigger data via J1939 config PGN sync\n");
-    printf("  reg     Read/Write J1939 config registers mapped to RS485 Modbus\n");
-    printf("Sync options:\n");
-    printf("  -c, --count N          Trigger each configured PGN N times then exit\n");
-    printf("  -p, --pgn PGN          Restrict to a single PGN (hex or dec)\n");
-    printf("Record options:\n");
-    printf("  -o, --out FILE          Output JSON file\n");
-    printf("Reg usage:\n");
-    printf("  reg read <addr>         Read register at address <addr> (dec or 0xHEX)\n");
-    printf("  reg write <addr> <val>  Write value <val> to <addr> (dec or 0xHEX)\n");
-    printf("  -n, --node ID           Destination node ID (default from config)\n");
+    printf("  -n, --node ID[,ID...]   Override target node list from config\n");
+    printf("Groups:\n");
+    printf("  device list             Show detected CAN interfaces\n");
+    printf("  device probe            Probe online J1939 devices\n");
+    printf("  stream read             Print parsed JSON stream to stdout\n");
+    printf("  stream record -o FILE   Record parsed NDJSON to file\n");
+    printf("  trigger sync            Send periodic sync trigger frames\n");
+    printf("    --count N             Send each configured PGN N times then exit\n");
+    printf("    --pgn PGN             Only trigger one PGN (hex or decimal)\n");
+    printf("  config reg read ADDR    Read register via J1939 config frame\n");
+    printf("  config reg write ADDR V Write register via J1939 config frame\n");
+    printf("  action run NAME --yes   Execute predefined action sequence\n");
+    printf("  help                    Show this help\n");
+    printf("  version                 Show version\n");
     printf("Examples:\n");
     for (size_t i = 0; i < sizeof(examples)/sizeof(examples[0]); ++i) {
-    printf("  %s\n", examples[i]);
+        printf("  %s\n", examples[i]);
     }
-    printf("\n");
-    printf("CAN interface quick setup:\n");
+    printf("\nCAN setup quick-start:\n");
     printf("  sudo ip link set can0 down\n");
     printf("  sudo ip link set can0 type can bitrate <125000|250000|500000|1000000>\n");
     printf("  sudo ip link set can0 up\n");
     printf("  ip -details link show can0\n");
-    printf("Notes:\n");
-    printf("Tip: run '%s list' to see available interfaces\n", PROGRAM_NAME);
-    printf("Configuration file (ini-style):\n");
-    printf("  Search order: $CANHOST_CONF | ./canhost.ini | ~/.canhost.ini | /etc/canhost.ini\n");
-    printf("  Example: interface=can0\n");
+    printf("Config search order:\n");
+    printf("  $CANHOST_CONF | ./canhost.ini | ~/.canhost.ini | /etc/canhost.ini\n");
 }
 
 void help_print_unknown_command(const char *program_name)
 {
     const char *pn = program_name && *program_name ? program_name : PROGRAM_NAME;
-    printf("Available commands:\n");
-    printf("  list\n  probe\n  read\n  record\n  sync\n  reg\n");
-    printf("\nHint: run '%s --help' for usage.\n", pn);
-    printf("Examples: %s list | %s probe | %s read | %s record | %s sync | %s reg\n", pn, pn, pn, pn, pn, pn);
+    fprintf(stderr, "Unknown command.\n");
+    fprintf(stderr, "Run '%s help' for usage.\n", pn);
 }
 
 void help_print_can_setup(const char *ifname)
@@ -83,8 +76,6 @@ void help_print_can_setup(const char *ifname)
     fprintf(stderr, "  sudo ip link set %s type can bitrate <125000|250000|500000|1000000>\n", iface);
     fprintf(stderr, "  sudo ip link set %s up\n", iface);
     fprintf(stderr, "  ip -details link show %s\n", iface);
-    fprintf(stderr, "Notes:\n");
-    fprintf(stderr, "Tip: run '%s list' to see available interfaces\n", PROGRAM_NAME);
 }
 
 void help_print_no_interfaces_hint(void)
@@ -96,3 +87,13 @@ void help_print_no_interfaces_hint(void)
     printf("  sudo ip link set can0 up\n");
     printf("  ip -details link show can0\n");
 }
+
+void help_print_arg_error_json(const char *command, const char *message)
+{
+    const char *cmd = (command && *command) ? command : "unknown";
+    const char *msg = (message && *message) ? message : "invalid arguments";
+    fprintf(stderr,
+            "{\"error\":{\"type\":\"invalid_args\",\"command\":\"%s\",\"message\":\"%s\"}}\n",
+            cmd, msg);
+}
+

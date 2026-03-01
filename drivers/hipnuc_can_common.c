@@ -20,9 +20,11 @@ int hipnuc_can_to_json(const can_sensor_data_t *data, int msg_type, can_json_out
     json_append(output, "{\"node_id\":%d,\"hw_ts_us\":%llu,\"data\":{", data->node_id, (unsigned long long)data->hw_ts_us);
     switch (msg_type) {
         case CAN_MSG_ACCEL:
+            // Unified unit across J1939 and CANopen: G
             json_append(output, "\"acc_x\":%.6f,\"acc_y\":%.6f,\"acc_z\":%.6f", data->acc_x, data->acc_y, data->acc_z);
             break;
         case CAN_MSG_GYRO:
+            // Unified unit across J1939 and CANopen: deg/s
             json_append(output, "\"gyr_x\":%.6f,\"gyr_y\":%.6f,\"gyr_z\":%.6f", data->gyr_x, data->gyr_y, data->gyr_z);
             break;
         case CAN_MSG_MAG:
@@ -33,6 +35,7 @@ int hipnuc_can_to_json(const can_sensor_data_t *data, int msg_type, can_json_out
             break;
         case CAN_MSG_EULER:
         case CAN_MSG_PITCH_ROLL:
+            // Euler/Pitch/Roll are expressed in deg.
             json_append(output, "\"roll\":%.6f,\"pitch\":%.6f", data->roll, data->pitch);
             if (msg_type == CAN_MSG_EULER) json_append(output, ",\"imu_yaw\":%.6f", data->imu_yaw);
             break;

@@ -139,14 +139,18 @@ static void display_devices(const discovered_device_t *devices, size_t len)
 
 int cmd_probe(int argc, char *argv[])
 {
-    (void)argc; (void)argv;
+    (void)argv;
+    if (argc != 1) {
+        help_print_arg_error_json("device probe", "usage: device probe");
+        return CANHOST_EXIT_INVALID_ARGS;
+    }
 
     // Interface readiness already validated by the dispatcher (commands.c)
     const char *ifname = config_get_interface();
     int fd = can_open_socket(ifname);
     if (fd < 0) {
         help_print_can_setup(ifname);
-        return -1;
+        return CANHOST_EXIT_RUNTIME_ERROR;
     }
 
     printf("Probing J1939 devices on %s (idle timeout: %dms)\n", ifname, PROBE_IDLE_TIMEOUT_MS);
@@ -160,7 +164,7 @@ int cmd_probe(int argc, char *argv[])
 
     if (send_request_address_claimed(fd) < 0) {
         can_close_socket(fd);
-        return -1;
+        return CANHOST_EXIT_RUNTIME_ERROR;
     }
 
     int frames = 0;
@@ -194,5 +198,5 @@ int cmd_probe(int argc, char *argv[])
     display_devices(devices, MAX_J1939_ADDRESSES);
     can_close_socket(fd);
     keep_running = 1;
-    return 0;
+    return CANHOST_EXIT_OK;
 }
