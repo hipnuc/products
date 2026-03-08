@@ -31,11 +31,13 @@ include_directories(
 
 
 # 在 hipnuc_lib_package 的 CMakeLists.txt 中
-add_library(hipnuc_lib src/hipnuc_dec.c src/nmea_decode.c)
+add_library(hipnuc_lib src/hipnuc_dec.c 
+                       src/nmea_dec.c
+                       )
 
 # 设置库的属性
 set_target_properties(hipnuc_lib PROPERTIES
-  PUBLIC_HEADER "include/${PROJECT_NAME}/hipnuc_dec.h;include/${PROJECT_NAME}/nmea_decode.h"
+  PUBLIC_HEADER "include/hipnuc_dec.h;include/nmea_dec.h"
 
 )
 

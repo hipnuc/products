@@ -18,8 +18,8 @@ extern "C"{
 #include <termios.h>
 #include <poll.h>
 
-#include "hipnuc_lib_package/hipnuc_dec.h"
-#include "hipnuc_lib_package/nmea_decode.h"
+#include "hipnuc_dec.h"
+#include "nmea_dec.h"
 
 #define GRA_ACC      (9.8)
 #define DEG_TO_RAD   (0.01745329)
@@ -230,22 +230,22 @@ void publish_imu_data(hipnuc_raw_t *data, sensor_msgs::Imu *imu_data)
 
 void publish_nav_data(nmea_raw_t *data, sensor_msgs::NavSatFix *NavSatFix_data)
 {
-	if (!strncmp(data->type, "SXT", 3))
+	if (data->msg_type == NMEA_DEC_MSG_SXT)
     {
         NavSatFix_data->latitude = data->sxt.lat;
 		NavSatFix_data->longitude = data->sxt.lon;
-		NavSatFix_data->altitude = data->sxt.alt;
+		NavSatFix_data->altitude = data->sxt.msl;
     }
-    else if (!strncmp(data->type, "RMC", 3))
+    else if (data->msg_type == NMEA_DEC_MSG_RMC)
     {
         NavSatFix_data->latitude = data->rmc.lat;
 		NavSatFix_data->longitude = data->rmc.lon;
 	}
-    else if (!strncmp(data->type, "GGA", 3))
+    else if (data->msg_type == NMEA_DEC_MSG_GGA)
     {
 		NavSatFix_data->latitude = data->gga.lat;
 		NavSatFix_data->longitude = data->gga.lon;
-		NavSatFix_data->altitude = data->gga.alt;
+		NavSatFix_data->altitude = data->gga.msl;
     }
 
 }
