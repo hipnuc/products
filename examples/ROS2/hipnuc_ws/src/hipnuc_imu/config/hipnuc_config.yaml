@@ -1,7 +1,7 @@
 IMU_publisher:
     ros__parameters:
-        serial_port: "/dev/ttyUSB0"
-        baud_rate: 115200
+        serial_port: "/dev/ttyUSB1"
+        baud_rate: 921600
         frame_id: "imu_link"
         imu_switch: FALSE
         imu_topic: "/IMU_data"
@@ -9,5 +9,9 @@ IMU_publisher:
         euler_topic: "/euler_data"
         magnetic_switch: FALSE
         magnetic_topic: "/magnetic_data"
+        temperature_switch: TRUE
+        temperature_topic: "/temp_data"
+        pressure_switch: FALSE
+        pressure_topic: "/pressure_data"
 
 
