@@ -6,7 +6,7 @@
  *
  */
 
-#include "hipnuc_lib_package/hipnuc_dec.h"
+#include "hipnuc_dec.h"
 
 /* The driver file for decoding HiPNUC protocol, DO NOT MODIFTY*/
 
@@ -14,6 +14,7 @@
 #define CHSYNC1                 (0x5A)              /* CHAOHE message sync code 1 */
 #define CHSYNC2                 (0xA5)              /* CHAOHE message sync code 2 */
 #define CH_HDR_SIZE             (0x06)              /* CHAOHE protocol header size */
+
 
 /* new HiPNUC standard packet */
 #define HIPNUC_ID_HI91        (0x91)
@@ -451,6 +452,7 @@ else if(raw->hi81.tag == HIPNUC_ID_HI81)
 
         ret = snprintf(buf + written, buf_size - written, "}\n");
         if (ret > 0) written += ret;
+        ret = 0;
     }
 
     if (ret > 0) written += ret;
