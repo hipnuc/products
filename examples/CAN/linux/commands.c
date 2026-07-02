@@ -21,6 +21,7 @@ static command_t commands[] = {
     {"sync",   cmd_sync},
     {"reg",    cmd_reg},
     {"action", cmd_action},
+    {"update", cmd_update},
     {NULL, NULL}
 };
 

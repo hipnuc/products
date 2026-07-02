@@ -237,6 +237,39 @@ void can_close_socket(int sockfd)
     }
 }
 
+int can_send_frame(int sockfd, const hipnuc_can_frame_t *frame)
+{
+    if (sockfd < 0 || !frame) {
+        return -1;
+    }
+
+    if (frame->can_dlc <= 8) {
+        struct can_frame raw;
+        memset(&raw, 0, sizeof(raw));
+        raw.can_id = frame->can_id;
+        raw.can_dlc = frame->can_dlc;
+        memcpy(raw.data, frame->data, frame->can_dlc);
+        ssize_t written = write(sockfd, &raw, sizeof(raw));
+        if (written != (ssize_t)sizeof(raw)) {
+            log_error("CAN send failed: %s", strerror(errno));
+            return -1;
+        }
+        return 0;
+    }
+
+    struct canfd_frame rawfd;
+    memset(&rawfd, 0, sizeof(rawfd));
+    rawfd.can_id = frame->can_id;
+    rawfd.len = frame->can_dlc > 64 ? 64 : frame->can_dlc;
+    memcpy(rawfd.data, frame->data, rawfd.len);
+    ssize_t written = write(sockfd, &rawfd, sizeof(rawfd));
+    if (written != (ssize_t)sizeof(rawfd)) {
+        log_error("CAN FD send failed: %s", strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
 
 int can_receive_frame(int sockfd, hipnuc_can_frame_t *frame)
 {

@@ -97,6 +97,14 @@ static int dispatch_group_command(int argc, char *argv[], int pos)
         return CANHOST_EXIT_INVALID_ARGS;
     }
 
+    if (strcmp(group, "firmware") == 0) {
+        if (strcmp(sub, "update") == 0) {
+            return execute_command("update", argc - (pos + 1), &argv[pos + 1]);
+        }
+        help_print_arg_error_json("firmware", "supported subcommand: update");
+        return CANHOST_EXIT_INVALID_ARGS;
+    }
+
     help_print_arg_error_json("main", "unknown command group");
     help_print_unknown_command(argv[0]);
     return CANHOST_EXIT_INVALID_ARGS;
@@ -140,4 +148,3 @@ int main(int argc, char *argv[])
 
     return dispatch_group_command(argc, argv, optind);
 }
-

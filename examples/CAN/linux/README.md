@@ -53,6 +53,7 @@ canhost trigger sync --pgn 0xff34 --count 10
 canhost config reg read 0x70
 canhost config reg write 0x06 1
 canhost action run reset --yes
+canhost firmware update -f app.hex
 canhost help
 canhost version
 ```
@@ -82,4 +83,3 @@ canhost version
 - `action run` 中危险动作默认禁用，必须加 `--yes` 才执行。
 - 若未配置 `node_id`，命令会直接报错并返回非 0。
 - 本工具不依赖额外 Python 包，可直接编译使用。
-

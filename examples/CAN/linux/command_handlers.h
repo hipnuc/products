@@ -10,5 +10,6 @@ int cmd_record(int argc, char *argv[]);
 int cmd_sync(int argc, char *argv[]);
 int cmd_reg(int argc, char *argv[]);
 int cmd_action(int argc, char *argv[]);
+int cmd_update(int argc, char *argv[]);
 
 #endif // COMMAND_HANDLERS_H

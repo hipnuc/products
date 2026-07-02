@@ -15,7 +15,8 @@ static const char *examples[] = {
     PROGRAM_NAME " trigger sync --pgn 0xff34 --count 10",
     PROGRAM_NAME " config reg read 0x70",
     PROGRAM_NAME " config reg write 0x06 1",
-    PROGRAM_NAME " action run reset --yes"
+    PROGRAM_NAME " action run reset --yes",
+    PROGRAM_NAME " firmware update -f app.hex"
 };
 
 void help_print_version(void)
@@ -45,6 +46,9 @@ void help_print_usage(const char *program_name)
     printf("  config reg read ADDR    Read register via J1939 config frame\n");
     printf("  config reg write ADDR V Write register via J1939 config frame\n");
     printf("  action run NAME --yes   Execute predefined action sequence\n");
+    printf("  firmware update -f FILE Update CANopen bootloader firmware\n");
+    printf("    --bin                 Treat FILE as a raw binary image\n");
+    printf("    --continue            Continue remaining nodes after an error\n");
     printf("  help                    Show this help\n");
     printf("  version                 Show version\n");
     printf("Examples:\n");
@@ -96,4 +100,3 @@ void help_print_arg_error_json(const char *command, const char *message)
             "{\"error\":{\"type\":\"invalid_args\",\"command\":\"%s\",\"message\":\"%s\"}}\n",
             cmd, msg);
 }
-

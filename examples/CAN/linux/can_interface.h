@@ -20,6 +20,7 @@ int can_list_interfaces(can_interface_info_t *interfaces, int max_count);
 int can_check_interface_status(const char *ifname);
 int can_open_socket(const char *ifname);
 void can_close_socket(int sockfd);
+int can_send_frame(int sockfd, const hipnuc_can_frame_t *frame);
 int can_receive_frame(int sockfd, hipnuc_can_frame_t *frame);
 int can_receive_frames(int sockfd,
                        hipnuc_can_frame_t *frames,
