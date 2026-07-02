@@ -8,6 +8,8 @@
 
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/magnetic_field.hpp>
+#include <sensor_msgs/msg/temperature.hpp>
+#include <sensor_msgs/msg/fluid_pressure.hpp>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include "rclcpp/rclcpp.hpp"
 
@@ -51,9 +53,13 @@ namespace hipnuc_driver
 				this->declare_parameter<std::string>("imu_topic", "/IMU_data");
 				this->declare_parameter<std::string>("euler_topic", "/euler_data");
 				this->declare_parameter<std::string>("magnetic_topic", "/magnetic_data");
+				this->declare_parameter<std::string>("temperature_topic", "/temperature_data");
+				this->declare_parameter<std::string>("pressure_topic", "/pressure_data");
 				this->declare_parameter<bool>("imu_switch", true);
 				this->declare_parameter<bool>("euler_switch", false);
 				this->declare_parameter<bool>("magnetic_switch", false);
+				this->declare_parameter<bool>("temperature_switch", false);
+				this->declare_parameter<bool>("pressure_switch", false);
 
 				this->get_parameter("serial_port", serial_port);
 				this->get_parameter("baud_rate", baud_rate);
@@ -61,9 +67,13 @@ namespace hipnuc_driver
 				this->get_parameter("imu_topic", imu_topic);
 				this->get_parameter("euler_topic", euler_topic);
 				this->get_parameter("magnetic_topic", magnetic_topic);
+				this->get_parameter("temperature_topic", temperature_topic);
+				this->get_parameter("pressure_topic", pressure_topic);
 				this->get_parameter("imu_switch", imu_switch);
 				this->get_parameter("euler_switch", euler_switch);
 				this->get_parameter("magnetic_switch", magnetic_switch);
+				this->get_parameter("temperature_switch", temperature_switch);
+				this->get_parameter("pressure_switch", pressure_switch);
 
 				RCLCPP_INFO(this->get_logger(),"serial_port: %s\r\n", serial_port.c_str());
 				RCLCPP_INFO(this->get_logger(), "baud_rate: %d\r\n", baud_rate);
@@ -71,13 +81,19 @@ namespace hipnuc_driver
 				RCLCPP_INFO(this->get_logger(), "imu_topic: %s\r\n", imu_topic.c_str());
 				RCLCPP_INFO(this->get_logger(), "euler_topic: %s\r\n", euler_topic.c_str());
 				RCLCPP_INFO(this->get_logger(), "magnetic_topic: %s\r\n", magnetic_topic.c_str());
+				RCLCPP_INFO(this->get_logger(), "temperature_topic: %s\r\n", temperature_topic.c_str());
+				RCLCPP_INFO(this->get_logger(), "pressure_topic: %s\r\n", pressure_topic.c_str());
 				RCLCPP_INFO(this->get_logger(), "imu_switch: %d\r\n", imu_switch);
 				RCLCPP_INFO(this->get_logger(), "euler_switch: %d\r\n", euler_switch);
 				RCLCPP_INFO(this->get_logger(), "magnetic_switch: %d\r\n", magnetic_switch);
+				RCLCPP_INFO(this->get_logger(), "temperature_switch: %d\r\n", temperature_switch);
+				RCLCPP_INFO(this->get_logger(), "pressure_switch: %d\r\n", pressure_switch);
 				
 				imu_pub = this->create_publisher<sensor_msgs::msg::Imu>(imu_topic, rclcpp::SensorDataQoS());
 				euler_pub = this->create_publisher<geometry_msgs::msg::Vector3Stamped>(euler_topic, rclcpp::SensorDataQoS());
 				magnetic_pub = this->create_publisher<sensor_msgs::msg::MagneticField>(magnetic_topic, rclcpp::SensorDataQoS());
+				temp_pub = this->create_publisher<sensor_msgs::msg::Temperature>(temperature_topic, rclcpp::SensorDataQoS());
+				pressure_pub = this->create_publisher<sensor_msgs::msg::FluidPressure>(pressure_topic, rclcpp::SensorDataQoS());
 				
 				fd = open_ttyport(serial_port, baud_rate);
 
@@ -145,10 +161,10 @@ namespace hipnuc_driver
 						int rev = hipnuc_input(&raw, buf[i]);
 						if (!rev) continue;
 
-						
                         if (raw.hi83.tag == 0x83)
                         {
                             uint32_t bm = raw.hi83.data_bitmap;
+
                             if (bm & HI83_BMAP_QUAT)
                             {
                                 imu_msg.orientation.w = raw.hi83.quat[0];
@@ -181,6 +197,43 @@ namespace hipnuc_driver
 								euler_msg.vector.y = raw.hi83.rpy[1] * DEG_TO_RAD;
 								euler_msg.vector.z = raw.hi83.rpy[2] * DEG_TO_RAD;
 							}
+
+							if (bm & HI83_BMAP_AIR_PRESSURE)
+							{
+								pre_msg.fluid_pressure = raw.hi83.air_pressure;
+							}
+
+							if (bm & HI83_BMAP_TEMPERATURE)
+							{
+								temp_msg.temperature = raw.hi83.temperature;
+							}
+
+							if (!(raw.hi83.main_status & (1 << 11)) && (bm & HI83_BMAP_UTC))
+							{
+								imu_msg.header.stamp.sec = utc_to_unix(2000 + raw.hi83.utc.year, raw.hi83.utc.month, raw.hi83.utc.day, raw.hi83.utc.hour, raw.hi83.utc.min, raw.hi83.utc.sec_ms / 1000 % 60);
+								imu_msg.header.stamp.nanosec = raw.hi83.utc.sec_ms % 1000 * 1000000;
+
+								magnetic_msg.header.stamp.sec = utc_to_unix(2000 + raw.hi83.utc.year, raw.hi83.utc.month, raw.hi83.utc.day, raw.hi83.utc.hour, raw.hi83.utc.min, raw.hi83.utc.sec_ms / 1000 % 60);
+								magnetic_msg.header.stamp.nanosec = raw.hi83.utc.sec_ms % 1000 * 1000000;
+
+								euler_msg.header.stamp.sec = utc_to_unix(2000 + raw.hi83.utc.year, raw.hi83.utc.month, raw.hi83.utc.day, raw.hi83.utc.hour, raw.hi83.utc.min, raw.hi83.utc.sec_ms / 1000 % 60);
+								euler_msg.header.stamp.nanosec = raw.hi83.utc.sec_ms % 1000 * 1000000;
+
+								temp_msg.header.stamp.sec = utc_to_unix(2000 + raw.hi83.utc.year, raw.hi83.utc.month, raw.hi83.utc.day, raw.hi83.utc.hour, raw.hi83.utc.min, raw.hi83.utc.sec_ms / 1000 % 60);
+								temp_msg.header.stamp.nanosec = raw.hi83.utc.sec_ms % 1000 * 1000000;
+
+								pre_msg.header.stamp.sec = utc_to_unix(2000 + raw.hi83.utc.year, raw.hi83.utc.month, raw.hi83.utc.day, raw.hi83.utc.hour, raw.hi83.utc.min, raw.hi83.utc.sec_ms / 1000 % 60);
+								pre_msg.header.stamp.nanosec = raw.hi83.utc.sec_ms % 1000 * 1000000;
+
+							}
+							else
+							{
+								imu_msg.header.stamp = rclcpp::Clock().now();
+								magnetic_msg.header.stamp = rclcpp::Clock().now();
+								euler_msg.header.stamp = rclcpp::Clock().now();
+								temp_msg.header.stamp = rclcpp::Clock().now();
+								pre_msg.header.stamp = rclcpp::Clock().now();
+							}
                         }
                         else if (raw.hi91.tag == 0x91)
                         {
@@ -202,28 +255,44 @@ namespace hipnuc_driver
 							magnetic_msg.magnetic_field.x = raw.hi91.mag[0] * UTESLA_TO_TESLA ;
 							magnetic_msg.magnetic_field.y = raw.hi91.mag[1] * UTESLA_TO_TESLA ;
 							magnetic_msg.magnetic_field.z = raw.hi91.mag[2] * UTESLA_TO_TESLA ;
+
+							temp_msg.temperature = raw.hi91.temp;
+
+							pre_msg.fluid_pressure = raw.hi91.air_pressure;
+
+							imu_msg.header.stamp = rclcpp::Clock().now();
+							magnetic_msg.header.stamp = rclcpp::Clock().now();
+							euler_msg.header.stamp = rclcpp::Clock().now();
+							temp_msg.header.stamp = rclcpp::Clock().now();
+							pre_msg.header.stamp = rclcpp::Clock().now();
                         }
 						else 
 							continue;
 
 						if (imu_switch) {
 							imu_msg.header.frame_id = frame_id;
-							imu_msg.header.stamp = rclcpp::Clock().now();
 							imu_pub->publish(imu_msg);
 						}
                        
 						if (magnetic_switch) {
-							magnetic_msg.header.stamp = rclcpp::Clock().now();
 							magnetic_msg.header.frame_id = frame_id;
 							magnetic_pub->publish(magnetic_msg);
 						}
 						
 						if (euler_switch) {
-							euler_msg.header.stamp = rclcpp::Clock().now();
 							euler_msg.header.frame_id = frame_id;
 							euler_pub->publish(euler_msg);
 						}
-						
+
+						if (temperature_switch) {
+							temp_msg.header.frame_id = frame_id;
+							temp_pub->publish(temp_msg);
+						}
+
+						if (pressure_switch) {
+							pre_msg.header.frame_id = frame_id;
+							pressure_pub->publish(pre_msg);
+						}	
 					}
 				}
 			}
@@ -280,6 +349,29 @@ namespace hipnuc_driver
 				return serial_port;
 			}
 
+			time_t utc_to_unix(int year, int month, int day, int hour, int minute, int second) 
+			{
+				struct tm tm_time;
+				time_t timestamp;
+
+				tm_time.tm_year = year - 1900;
+				tm_time.tm_mon = month - 1;
+				tm_time.tm_mday = day;
+				tm_time.tm_hour = hour;
+				tm_time.tm_min = minute;
+				tm_time.tm_sec = second;
+				tm_time.tm_isdst = 0;  
+				
+
+				#ifdef _WIN32
+				timestamp = _mkgmtime(&tm_time);  
+				#else
+				timestamp = timegm(&tm_time);
+				#endif
+				
+				return timestamp;
+			}
+
 			int fd = 0;
 			uint8_t buf[BUF_SIZE] = {0};
 
@@ -289,19 +381,26 @@ namespace hipnuc_driver
 			bool imu_switch;
 			bool euler_switch;
 			bool magnetic_switch;
+			bool temperature_switch;
+			bool pressure_switch;
 			std::string imu_topic;
 			std::string euler_topic;
 			std::string magnetic_topic;
+			std::string temperature_topic;
+			std::string pressure_topic;
 
-			// auto imu_msg = std::make_unique<sensor_msgs::msg::Imu>();
 			sensor_msgs::msg::Imu imu_msg;
 			sensor_msgs::msg::MagneticField magnetic_msg;
 			geometry_msgs::msg::Vector3Stamped euler_msg;
+			sensor_msgs::msg::Temperature temp_msg;
+			sensor_msgs::msg::FluidPressure pre_msg;
 
 			rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub;
 			rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr magnetic_pub;
 			rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr euler_pub;
-
+			rclcpp::Publisher<sensor_msgs::msg::Temperature>::SharedPtr temp_pub;
+			rclcpp::Publisher<sensor_msgs::msg::FluidPressure>::SharedPtr pressure_pub;
+			
 			std::atomic<bool> running{false};
 			std::thread reader_thread;
 	};

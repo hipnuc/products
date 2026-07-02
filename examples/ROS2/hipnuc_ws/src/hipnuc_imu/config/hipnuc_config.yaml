@@ -3,11 +3,15 @@ IMU_publisher:
         serial_port: "/dev/ttyUSB0"
         baud_rate: 115200
         frame_id: "imu_link"
-        imu_switch: FALSE
+        imu_switch: TRUE
         imu_topic: "/IMU_data"
         euler_switch: FALSE
         euler_topic: "/euler_data"
         magnetic_switch: FALSE
         magnetic_topic: "/magnetic_data"
+        temperature_switch: FALSE
+        temperature_topic: "/temp_data"
+        pressure_switch: FALSE
+        pressure_topic: "/pressure_data"
 
 
