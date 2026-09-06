@@ -2,54 +2,34 @@
 
 ![Logo](img/logo.png)
 
-# HiPNUC 产品软件例程包
+# HiPNUC SDK 与例程
 
-## 目录结构
+提供 HiPNUC IMU/AHRS/MRU 和 INS 的驱动库、工具与例程，用于数据读取、设备配置和记录。
 
-- usb_uart_drivers/: CP210xUSB 转串口驱动程序
-  -  Linux: Ubuntu 18.04以上版本一般免驱. 如果未能识别请见Silabs[官网](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=overview)安装步骤, 或自行Google”Linux下安装CP210x驱动”解决。
-  -  Windows 请直接运行exe驱动安装程序
+## 选择语言或平台
 
-- examples: 各种平台和语言的示例程序及驱动程序，包括 STM32, ROS, Linux, MATLAB 等。
+选择适合你的入口，按其中的说明开始使用。
 
-- drivers: HiPNUC驱动程序源码
+| 语言 / 平台 | 主要用途 |
+| --- | --- |
+| [Python SDK](python/README_zh.md) | 串口/NMEA、Modbus RTU、设备配置与记录，附简短例程 |
+| [C / Linux 串口](examples/C) | 使用 `hihost` 读取、配置和记录串口数据 |
+| [CAN](examples/CAN) | Linux、STM32 例程，J1939/CANopen 解码和 DBC 文件 |
+| [STM32 串口](examples/stm32_serial) | 在嵌入式应用中接入串口解码 |
+| [Arduino](examples/arduino) | 使用 Arduino 读取设备数据 |
+| [ROS 2](examples/ROS2) | 接入 ROS 2 应用 |
+| [ROS 1 / Melodic](examples/ROS_Melodic) | 接入 ROS Melodic 应用 |
+| [MATLAB](examples/matlab) | 读取 CHCenter 日志，计算 Allan 方差 |
+| [EtherCAT](examples/ecat) | EtherCAT 接入例程 |
+| [C 解码库](drivers) | 在自己的项目中集成二进制、NMEA、J1939 或 CANopen 解码 |
 
-## 快速开始
+## 工具与资料
 
-### Windows
-
-1. 安装驱动: 从 `usb_uart_drivers` 文件夹安装 USB转串口驱动程序。
-2. 下载Windows上位机软件：下载并安装 [CHCenter](https://download.hipnuc.com/internal/pc_host/CHCenter.7z)
-3. 硬件连接：将评估板的 USB 口连接到 PC，打开 CHCenter，连接到相应的 COM 口，开始产品评估。
-
-### linux
-
-1. 推荐直接使用[C - Linux](examples/C)入门
-
-## 示例代码
-
-提供多种语言和平台的示例代码：
-
-- [Python](examples/python): 包含数据读取及模块配置
-- [STM32 串口](examples/stm32_serial)
-- [Arduino](examples/arduino)
-- [ROS Melodic](examples/ROS_Melodic)
-- [ROS2](examples/ROS2)
-- [C - Linux](examples/C): 包括模块配置、固件、读取示例以及**数据记录功能**等，Linux下入门推荐
-- [Matlab](examples/matlab): 包含读取CHCenter记录的log文件以及allan方差分析示例代码
-- [CAN](examples/CAN): 包含DBC格式的CAN帧解析文件
-
-## 配置模块
-
-第一次配置模块强烈建议使用Windows上位机软件 CHCenter， 熟悉后，如果您打算用命令脚本或者在Linux环境下，可以参考其他example例程
-
-## 资源
-
-- 官方网站：[www.hipnuc.com](http://www.hipnuc.com)
-- 产品资料和文档：[GitHub 仓库](https://github.com/hipnuc/products.git)
+- [CHCenter Windows 上位机](https://download.hipnuc.com/internal/pc_host/CHCenter.zip)：通过图形界面评估和配置已连接的设备。
+- [产品手册与下载](https://download.hipnuc.com)：接线、通信协议和各型号的配置说明。
+- [CP210x USB 转串口驱动](usb_uart_drivers)：适配使用该芯片的评估板，串口无法识别时按需安装。
+- [HiPNUC 官网](https://www.hipnuc.com)
 
 ## 联系我们
 
-欢迎通过以下方式关注我们和获取最新信息：
-
-![QR Code](img/qr_qqq.jpg)
+![联系二维码](img/qr_qqq.jpg)

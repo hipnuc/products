@@ -2,54 +2,35 @@
 
 ![Logo](img/logo.png)
 
-# HiPNUC Product Software Examples Package
+# HiPNUC SDKs and Examples
 
-## Directory Structure
+Libraries, tools and examples for reading, configuring and recording data from
+HiPNUC IMU/AHRS/MRU and INS devices.
 
-- usb_uart_drivers/: CP210x USB-to-UART Bridge Driver
-  - Linux: Generally plug-and-play for Ubuntu 18.04 and above. If the device is not recognized, please refer to the installation guide on Silabs [official website](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=overview), or search for "CP210x driver installation on Linux" for solutions.
-  - Windows: Execute the driver installer directly
+## Choose your platform
 
-- examples/: Example programs and source code for various platforms and languages, including STM32, ROS, Linux, MATLAB, etc.
+Open the guide for your language or platform to get started.
 
-- drivers: HiPNUC driver source code
+| Language / platform | What you can do |
+| --- | --- |
+| [Python SDK](python/README.md) | Serial/NMEA and Modbus RTU access, configuration, recording and short examples |
+| [C / Linux serial](examples/C) | Read, configure and record serial data with `hihost` |
+| [CAN](examples/CAN) | Linux and STM32 examples, J1939/CANopen decoding and DBC files |
+| [STM32 serial](examples/stm32_serial) | Integrate serial decoding into an embedded application |
+| [Arduino](examples/arduino) | Read device data from an Arduino sketch |
+| [ROS 2](examples/ROS2) | Integrate with a ROS 2 application |
+| [ROS 1 / Melodic](examples/ROS_Melodic) | Integrate with a ROS Melodic application |
+| [MATLAB](examples/matlab) | Read CHCenter logs and calculate Allan variance |
+| [EtherCAT](examples/ecat) | Connect using an EtherCAT example |
+| [C decoder libraries](drivers) | Embed binary, NMEA, J1939 or CANopen decoding in your own project |
 
-## Quick Start
+## Tools and documentation
 
-### Windows
+- [CHCenter for Windows](https://download.hipnuc.com/internal/pc_host/CHCenter.zip): evaluate and configure a connected device using the desktop application.
+- [Product manuals and downloads](https://download.hipnuc.com): wiring, protocols and model-specific settings.
+- [CP210x USB-to-UART drivers](usb_uart_drivers): drivers for compatible evaluation boards if the serial port is not recognized.
+- [HiPNUC website](https://www.hipnuc.com)
 
-1. Driver Installation: Install the USB-to-UART bridge driver from the `usb_uart_drivers` folder.
-2. Host Software: Download and install [CHCenter](https://download.hipnuc.com/internal/pc_host/CHCenter.7z)
-3. Hardware Connection: Connect the evaluation board's USB port to your PC, launch CHCenter, establish connection to the corresponding COM port to begin product evaluation.
+## Contact
 
-### Linux
-
-1. Recommended to start with the [C - Linux examples](examples/C)
-
-## Example Code
-
-Example code is provided for multiple languages and platforms:
-
-- [Python Examples](examples/python): Includes data reading and module configuration
-- [STM32 Serial Examples](examples/stm32_serial)
-- [Arduino Examples](examples/arduino)
-- [ROS Melodic Examples](examples/ROS_Melodic)
-- [ROS2 Examples](examples/ROS2)
-- [C - Linux Examples](examples/C): Includes module configuration, firmware, reading examples, and **data recording capabilities** - recommended for Linux users
-- [Matlab Examples](examples/matlab): Includes reading CHCenter log files and Allan variance analysis example code
-- [CAN Examples](examples/CAN): Includes DBC format CAN frame parsing files
-
-## Module Configuration
-
-For first-time configuration, it is strongly recommended to use the Windows host software CHCenter. Once familiar, if you plan to use command scripts or work in a Linux environment, refer to the other examples.
-
-## Resources
-
-- Official Website: [www.hipnuc.com](http://www.hipnuc.com)
-- Product Documentation: [GitHub Repository](https://github.com/hipnuc/products.git)
-
-## Contact Us
-
-Follow us and get the latest updates through:
-
-![QR Code](img/qr_qqq.jpg)
+![Contact QR code](img/qr_qqq.jpg)

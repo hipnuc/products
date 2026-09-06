@@ -1,3 +1,0 @@
-pyserial==3.4
-pynmea2==1.19.0
-click==8.1.7

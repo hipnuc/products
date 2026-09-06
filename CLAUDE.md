@@ -4,16 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the **HiPNUC Product Software Examples Package** — a multi-platform SDK and example collection for HiPNUC IMU/INS (Inertial Measurement Unit / Inertial Navigation System) products. The repository contains:
+This is the **HiPNUC SDKs and Examples** repository — a multi-platform SDK and example collection for HiPNUC IMU/INS (Inertial Measurement Unit / Inertial Navigation System) products. The repository contains:
 
 - Cross-platform driver libraries (C)
 - CLI tools for Linux (serial and CAN)
-- Example code for Python, STM32, Arduino, ROS, MATLAB, and EtherCAT
+- An installable Python SDK with CLI, documentation, examples, and tests
+- Example code for STM32, Arduino, ROS, MATLAB, and EtherCAT
 
 ## Repository Structure
 
 ```
-drivers/          # Shared decoder libraries used by all examples
+drivers/          # Shared C decoder libraries
   hipnuc_dec.{c,h}          # HiPNUC binary protocol decoder (0x91/0x81/0x83 packets)
   nmea_dec.{c,h}            # NMEA parser (GGA/RMC/SXT)
   hipnuc_can_common.{c,h}   # CAN common types and JSON output
@@ -21,12 +22,15 @@ drivers/          # Shared decoder libraries used by all examples
   canopen_parser.{c,h}      # CANopen TPDO frame parser
   example_data.{c,h}        # Static example data for testing
 
+python/           # Python SDK: package, CLI, docs, examples, and tests
+  src/hipnuc/     # Runtime package
+  examples/       # Short scripts using the installed SDK
+
 examples/
   C/              # Linux serial CLI tool: hihost
   CAN/linux/      # Linux CAN CLI tool: canhost
   CAN/stm32/      # STM32F103 CAN example (Keil MDK project)
   CAN/dbc/        # DBC files for CAN analysis tools
-  python/         # Python CLI for serial devices
   stm32_serial/   # STM32 USART example (Keil MDK project)
   ROS_Melodic/    # ROS Melodic example
   ROS2/           # ROS2 example
@@ -69,10 +73,20 @@ Open the Keil MDK project files:
 
 ### Python
 ```sh
-cd examples/python
-pip install -r requirements.txt
-python main.py --help
+cd python
+# Create and activate a virtual environment as described in README.md first.
+python -m pip install .
+python -m hipnuc --help
 ```
+
+The Python SDK supports Python 3.10+. Its synchronous API and CLI share
+`SerialDevice`, `ModbusBus`, `Decoder`, and `Recorder`. Put CLI connection options
+after the final subcommand, for example `python -m hipnuc read -p COM3 -b 115200`.
+The four scripts under `python/examples/` use editable constants and a `main()`
+entry point; they have no argument parsers and perform no I/O when imported.
+Customer README files link directly to each script, without a second examples index.
+Customer documentation is under `python/`; developer checks are documented in
+`python/tests/README.md`.
 
 ## Key Architectural Concepts
 
@@ -107,7 +121,7 @@ Fixed path at `examples/C/hihost.ini`. Stores `port=` and `baud=`. Updated autom
 
 ## Device Communication
 
-- AT command protocol: send commands as plain text (e.g., `LOG VERSION`, `SAVECONFIG`)
-- Tools automatically stop output before sending commands and restore it after
-- Linux serial port access typically requires `sudo`
+- ASCII command protocol: send commands as plain text (e.g., `LOG VERSION`, `SAVECONFIG`)
+- Python reads measurements and command responses through one serial session without changing output settings
+- Linux serial access requires device permissions, commonly membership in `dialout`
 - CAN interface setup: `sudo ip link set can0 type can bitrate 500000 && sudo ip link set can0 up`

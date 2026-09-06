@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hipnuc-sdk"
+version = "0.1.0"
+description = "Synchronous HiPNUC IMU/INS serial and Modbus RTU SDK"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "HiPNUC"}]
+dependencies = [
+    "pyserial>=3.5,<4",
+    "click>=8.1,<9",
+    "pynmea2>=1.19,<2",
+    "pymodbus>=3.15,<3.16",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+
+[project.scripts]
+hipnuc = "hipnuc.cli:main"
+
+[project.urls]
+Homepage = "https://www.hipnuc.com"
+Documentation = "https://download.hipnuc.com"
+Repository = "https://github.com/hipnuc/products"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hipnuc = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

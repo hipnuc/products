@@ -10,3 +10,11 @@ build
 find_new_firwamre.py
 copy_um.py
 __pycache__
+.venv/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+/python/*.bin
+/python/*.jsonl
+/python/*.log
