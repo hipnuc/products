@@ -1,0 +1,7 @@
+interface: can0
+node_id: 8                  # J1939 source address of the device
+trigger_pgn: 65345          # 0xFF41 (yaw): publish the merged sample when this PGN arrives
+frame_id: imu_link
+gnss_frame_id: gnss_antenna
+enu_frame_id: enu
+publish_hipnuc: true

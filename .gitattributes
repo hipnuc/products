@@ -1,0 +1,18 @@
+# Normalize text to LF in the repository; check out as LF on every platform.
+* text=auto eol=lf
+
+# Keil MDK project files are edited by the IDE on Windows; keep them untouched.
+*.uvprojx -text
+*.uvoptx -text
+*.dbgconf -text
+*.s -text
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.zip binary
+*.doc binary
+*.pdf binary
+*.mat binary
+*.bin binary
+*.hex binary

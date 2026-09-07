@@ -5,31 +5,27 @@
 # HiPNUC SDKs and Examples
 
 Libraries, tools and examples for reading, configuring and recording data from
-HiPNUC IMU/AHRS/MRU and INS devices.
+HiPNUC IMU/AHRS/MRU and INS devices (firmware 1.6.9 or later).
 
 ## Choose your platform
 
-Open the guide for your language or platform to get started.
-
-| Language / platform | What you can do |
+| Directory | What it is |
 | --- | --- |
-| [Python SDK](python/README.md) | Serial/NMEA and Modbus RTU access, configuration, recording and short examples |
-| [C / Linux serial](examples/C) | Read, configure and record serial data with `hihost` |
-| [CAN](examples/CAN) | Linux and STM32 examples, J1939/CANopen decoding and DBC files |
-| [STM32 serial](examples/stm32_serial) | Integrate serial decoding into an embedded application |
-| [Arduino](examples/arduino) | Read device data from an Arduino sketch |
-| [ROS 2](examples/ROS2) | Integrate with a ROS 2 application |
-| [ROS 1 / Melodic](examples/ROS_Melodic) | Integrate with a ROS Melodic application |
-| [MATLAB](examples/matlab) | Read CHCenter logs and calculate Allan variance |
-| [EtherCAT](examples/ecat) | Connect using an EtherCAT example |
-| [C decoder libraries](drivers) | Embed binary, NMEA, J1939 or CANopen decoding in your own project |
+| [python/](python/README.md) | Python SDK and `hipnuc` command line: find the device, read, record, send commands, Modbus RTU |
+| [c/hipnuc/](c/hipnuc/README.md) | C core: copy a few files or link with CMake; serial binary, NMEA, J1939/CANFD83, firmware update |
+| [c/tools/](c/tools/README.md) | Linux command-line tools `hihost` (serial) and `canhost` (SocketCAN), built on the C core |
+| [stm32/serial/](stm32/serial/README.md) | STM32F103 Keil project: receive on USART2, print attitude |
+| [stm32/can/](stm32/can/README.md) | STM32F103 Keil project: receive J1939 frames |
+| [ros/](ros/README.md) | ROS 2 (Humble/Jazzy) and ROS 1 (Noetic) driver packages |
+| [ethercat/](ethercat/README.md) | HI15 EtherCAT example (IgH master) |
+| [matlab/](matlab/allan/README.md) | Read recorded CSV data and compute Allan variance |
+| [protocol/dbc/](protocol/dbc/README.md) | DBC files for CAN analysis tools |
 
 ## Tools and documentation
 
-- [CHCenter for Windows](https://download.hipnuc.com/internal/pc_host/CHCenter.zip): evaluate and configure a connected device using the desktop application.
-- [Product manuals and downloads](https://download.hipnuc.com): wiring, protocols and model-specific settings.
-- [CP210x USB-to-UART drivers](usb_uart_drivers): drivers for compatible evaluation boards if the serial port is not recognized.
-- [HiPNUC website](https://www.hipnuc.com)
+- CHCenter: the Windows/Linux desktop application for evaluation, configuration and firmware update.
+- Product manuals, datasheets and downloads: HiPNUC documentation site.
+- [CP210x USB-to-UART drivers](usb_uart_drivers) for the evaluation boards.
 
 ## Contact
 

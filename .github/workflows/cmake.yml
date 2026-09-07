@@ -1,29 +1,70 @@
-name: cmake-build
+name: c-sdk
 
 on:
   push:
-    branches: ["**"]
   pull_request:
-    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  examples-c:
+  core-tests:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        include:
+          - os: ubuntu-24.04
+            flags: ""
+          - os: ubuntu-24.04
+            flags: "-fsanitize=undefined,address -g"
+          - os: windows-latest
+            flags: ""
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S examples/C -B examples/C/build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S c/tests -B build/c-tests -DCMAKE_C_FLAGS="${{ matrix.flags }}" -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
       - name: Build
-        run: cmake --build examples/C/build --config Release --parallel
+        run: cmake --build build/c-tests --config Release
+      - name: Test
+        run: ctest --test-dir build/c-tests -C Release --output-on-failure
 
-  examples-can-linux:
-    runs-on: ubuntu-latest
+  linux-tools:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake -S examples/CAN/linux -B examples/CAN/linux/build -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build examples/CAN/linux/build --config Release --parallel
+      - name: Build hihost and canhost
+        run: |
+          cmake -S c/tools -B build/tools -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-Wall -Wextra -Werror"
+          cmake --build build/tools
+          ./build/tools/hihost/hihost --help
+          ./build/tools/canhost/canhost --help
+
+  ros2:
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [humble, jazzy]
+    runs-on: ubuntu-latest
+    container: ros:${{ matrix.distro }}-ros-base
+    steps:
+      - uses: actions/checkout@v4
+      - name: colcon build
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          cd ros/ros2
+          colcon build --event-handlers console_direct+
+
+  ros1-noetic:
+    runs-on: ubuntu-latest
+    container: ros:noetic-ros-base
+    steps:
+      - uses: actions/checkout@v4
+      - name: catkin_make
+        shell: bash
+        run: |
+          source /opt/ros/noetic/setup.bash
+          cd ros/ros1
+          catkin_make

@@ -5,140 +5,74 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the **HiPNUC SDKs and Examples** repository — a multi-platform SDK and example collection for HiPNUC IMU/INS (Inertial Measurement Unit / Inertial Navigation System) products. The repository contains:
+**HiPNUC SDKs and Examples** — the public SDK and example collection for HiPNUC
+IMU/AHRS/MRU/INS products. Supported devices: current-platform firmware 1.6.9 or
+later (HI01–HI06, HI12–HI18, HI32, HI70/HI71, CH0X0). Legacy HI2xx/CH1xx products
+and the 4-byte HI83 timestamp layout of early 1.7.1 builds are not targets.
 
-- Cross-platform driver libraries (C)
-- CLI tools for Linux (serial and CAN)
-- A small installable Python SDK with CLI, documentation, examples, and tests
-- Example code for STM32, Arduino, ROS, MATLAB, and EtherCAT
+The repository is a set of small, independent deliverables; keep each one
+simple, professional and quick to start with. No release engineering (PyPI,
+changelog, ROS index).
 
-Supported products for the current SDK: firmware 1.6.9 or later on the current
-platform (HI01–HI06, HI12–HI18, HI32, HI70/HI71, CH0X0). Legacy HI2xx/CH1xx
-products are not a target of new work.
-
-## Repository Structure
+## Layout
 
 ```
-drivers/          # Shared C decoder libraries
-  hipnuc_dec.{c,h}          # HiPNUC binary protocol decoder (0x91/0x81/0x83 packets)
-  nmea_dec.{c,h}            # NMEA parser
-  hipnuc_can_common.{c,h}   # CAN common types and JSON output
-  hipnuc_j1939_parser.{c,h} # J1939 CAN frame parser
-  canopen_parser.{c,h}      # CANopen TPDO frame parser
-  hipnuc_can_update.{c,h}   # CANopen SDO firmware update client
-  example_data.{c,h}        # Static example data for testing
-
-python/           # Python SDK: package, CLI, docs, examples, and tests
-  src/hipnuc/     # Runtime package
-  examples/       # Short scripts using the installed SDK
-  docs/           # api.md quick reference, modbus.md (+ modbus_zh.md)
-
-tests/c/          # Host-side C decoder regression tests (CMake + ctest)
-
-examples/
-  C/              # Linux serial CLI tool: hihost
-  CAN/linux/      # Linux CAN CLI tool: canhost
-  CAN/stm32/      # STM32F103 CAN example (Keil MDK project)
-  CAN/dbc/        # DBC files for CAN analysis tools
-  stm32_serial/   # STM32 USART example (Keil MDK project)
-  ROS_Melodic/    # ROS 1 example
-  ROS2/           # ROS 2 example
-  arduino/        # Arduino example
-  matlab/         # MATLAB data reading + Allan variance analysis
-  ecat/           # EtherCAT example (HI15)
+c/hipnuc/      C core: hipnuc_dec (0x91/0x81/0x83), nmea_dec (GGA/RMC), hipnuc_sample (SI + valid bits),
+               hipnuc_json, hipnuc_j1939 (J1939 + CANFD83), hipnuc_kboot / hipnuc_can_update (firmware update)
+c/tools/       Linux CLI tools hihost (serial) and canhost (SocketCAN) + common/ (log, hexfile, ini)
+c/tests/       ctest suite for the core, plus copied-files and C++ consumption checks
+python/        Python SDK (src/hipnuc), click CLI, docs, examples, tests
+ros/ros1/      ROS 1 Noetic package (catkin workspace; COLCON_IGNORE)
+ros/ros2/      ROS 2 Humble/Jazzy packages (CATKIN_IGNORE)
+stm32/serial/  Keil MDK project (StdPeriph): USART2 reception via board module, main.c is the whole app
+stm32/can/     Keil MDK project: J1939 reception
+ethercat/      HI15 IgH EtherCAT example
+matlab/        CSV reading and Allan variance (not part of the SDK; leave as is)
+protocol/dbc/  DBC files for CAN analysis tools
 ```
 
-## Building
+## Building and testing
 
-`hihost` and `canhost` are POSIX/Linux-only (termios, SocketCAN). They do not
-build on Windows; use the Python SDK there.
-
-### `hihost` (Linux serial CLI)
 ```sh
-cd examples/C
-mkdir -p build && cd build
-cmake ..
-make
-# Output: build/hihost
+# C core tests (Windows MinGW: add -G "MinGW Makefiles")
+cmake -S c/tests -B build/c-tests && cmake --build build/c-tests && ctest --test-dir build/c-tests --output-on-failure
+
+# Linux tools (POSIX only: termios, SocketCAN)
+cmake -S c/tools -B build/tools && cmake --build build/tools
+
+# Keil projects (command line; the IDE works too)
+"C:/Keil_v5/UV4/UV4.exe" -b stm32/serial/USER/hipnuc_serial_decode.uvprojx -o build.log
+
+# Python
+cd python && python -m pip install -e ".[dev]" && python -m pytest tests -q && python -m ruff check . && python -m ruff format --check .
+
+# ROS (Linux with ROS installed; CI uses ros:humble / ros:noetic containers)
+cd ros/ros2 && colcon build          # cd ros/ros1 && catkin_make
 ```
 
-### `canhost` (Linux CAN CLI)
-```sh
-cd examples/CAN/linux
-mkdir -p build && cd build
-cmake ..
-make -j$(nproc)
-# Output: build/canhost
-```
+## Rules that are easy to get wrong
 
-### C decoder tests
-```sh
-cmake -S tests/c -B build/c-tests
-cmake --build build/c-tests
-ctest --test-dir build/c-tests --output-on-failure
-```
+- HI91 acceleration is encoded as `acc / 9.8` by the firmware: decode with 9.8, never 9.80665.
+- `MAIN_STATUS` bits `WB_CONV` / `ATT_CONV` *set* mean NOT converged; the sample types expose
+  `attitude_converged` / `gyro_bias_converged` booleans and Python `status_flags` are warnings.
+- HI83: decode bits 0–19, 30, 31 only; bits 25–29 are internal and their wire order is not ascending
+  (…27, 30, 31, 28, 29). Reject frames with unknown bits instead of guessing offsets.
+- CAN: J1939 only (plus CANFD83, PGN 0xFF5B). CANopen exists solely inside the firmware-update client.
+  Frames use `hipnuc_can_frame_t` with `len` as a byte count; reject remote and error frames; filter by the
+  full 8-bit source address.
+- The C core is copy-friendly: C99, no malloc, no stdio (except `hipnuc_json`), no global mutable state,
+  no pointer casts into wire buffers, per-target CMake options only. Keep `c/hipnuc/README.md` copy lists true.
+- Units: wire structs keep wire units (documented in headers); `hipnuc_sample_t`, JSON, Python and ROS are SI
+  with Python key names (`acceleration_m_s2`, ...).
+- Python: keep automatic discovery and actionable connection errors (port in use, no driver / dialout,
+  no bytes, wrong baudrate); no legacy-firmware heuristics; no Modbus in C.
+- Documentation: English primary with a `_zh` mirror; never link manual URLs (name the manual instead);
+  do not repeat what headers or `--help` already say; tool features (e.g. firmware update) document usage only.
+- Windows shell caveat for agents: the Bash tool collapses `\\n`-style escapes in command text; edit source
+  files with the Edit/Write tools, not heredocs, when backslashes matter.
 
-### STM32 Examples
-Open the Keil MDK project files; both reference `drivers/` by relative path:
-- Serial: `examples/stm32_serial/` (Keil MDK V5.38)
-- CAN: `examples/CAN/stm32/USER/hipnuc_can_decode.uvprojx`
+## Device communication
 
-### Python
-```sh
-cd python
-# Create and activate a virtual environment as described in README.md first.
-python -m pip install .
-python -m hipnuc --help
-```
-
-The Python SDK supports Python 3.10+. It is deliberately small: `SerialDevice`
-(with automatic port/baudrate discovery), `Decoder`, `Recorder`, `ModbusBus`
-and a click CLI. Put CLI connection options after the final subcommand, for
-example `python -m hipnuc read -p COM3 -b 115200`. The four scripts under
-`python/examples/` use editable constants and a `main()` entry point; they have
-no argument parsers and perform no I/O when imported. Developer checks are in
-`python/tests/README.md`. Do not add release engineering (PyPI, changelog) or
-legacy-firmware heuristics; keep first-connection ergonomics (discovery, clear
-error hints).
-
-Documentation policy: English primary with a `_zh` Chinese mirror; avoid
-linking to manual URLs (they change), name the manual in words instead.
-
-## Key Architectural Concepts
-
-### Driver Layer (`drivers/`)
-The core decoder libraries are designed to be embedded in any project. The primary interface for serial decoding is:
-- `hipnuc_input(raw, byte)` — feed one byte at a time; returns 1 for a complete frame, 0 for incomplete input, -1 for an invalid frame. Always test `> 0`.
-- Three packet types: `hi91_t` (IMU float), `hi81_t` (INS raw), `hi83_t` (INS float with bitmap)
-- HI91 acceleration is encoded as `acc / 9.8` by the firmware; decode with 9.8, not 9.80665.
-
-### CLI Architecture (both `hihost` and `canhost`)
-Both tools share the same modular command pattern:
-- `main.c` — parses global options, calls `execute_command()`
-- `commands.c` — command registry and dispatch table
-- `command_handlers.h` — declares all `cmd_<name>()` functions
-- `commands/cmd_<name>.c` — individual command implementations
-
-### Adding a New Command to `hihost`
-1. Create `examples/C/commands/cmd_<name>.c` implementing `int cmd_<name>(GlobalOptions *opts, int argc, char **argv)`
-2. Declare it in `examples/C/command_handlers.h`
-3. Register it in the `examples/C/commands.c` command table: `{"<name>", cmd_<name>}`
-4. Add the source file to `examples/C/CMakeLists.txt` `SOURCES` list
-
-### CAN Protocol Support
-- **J1939**: 29-bit extended frames → `hipnuc_j1939_parser`
-- **CANopen**: 11-bit standard frames → `canopen_parser`
-- DBC files for analysis tools: `examples/CAN/dbc/J1939.dbc` and `CANopen.dbc` (default node ID `0x08`, little-endian)
-
-### `canhost` Configuration (`canhost.ini`)
-Loaded in order: `$CANHOST_CONF` → `<source dir>/canhost.ini` (compiled-in path) → `./canhost.ini` → `~/.canhost.ini` → `/etc/canhost.ini`
-
-### `hihost` Configuration (`hihost.ini`)
-Compiled-in absolute path `examples/C/hihost.ini`. Stores `port=` and `baud=`. Updated automatically after `probe`.
-
-## Device Communication
-
-- ASCII command protocol: send commands as plain text (e.g., `LOG VERSION`, `SAVECONFIG`); the device replies `OK` or `ERR` and prints nothing for unknown commands
-- Python reads measurements and command responses through one serial session without changing output settings
-- Linux serial access requires device permissions, commonly membership in `dialout`
-- CAN interface setup: `sudo ip link set can0 type can bitrate 500000 && sudo ip link set can0 up`
+- ASCII commands (`LOG VERSION`, `SAVECONFIG`, `LOG HI91 ONTIME 0.01`): reply `OK`/`ERR`; unknown commands
+  print nothing; `SERIALCONFIG` answers `OK` and switches immediately; `LOG <MSG> ONMARK ONCE` prints nothing.
+- Linux serial access needs the `dialout` group; CAN: `sudo ip link set can0 type can bitrate 500000 && sudo ip link set can0 up`.

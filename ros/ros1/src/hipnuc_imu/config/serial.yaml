@@ -1,0 +1,11 @@
+port: /dev/ttyUSB0          # prefer /dev/serial/by-id/... on a machine with several adapters
+baudrate: 115200
+frame_id: imu_link
+gnss_frame_id: gnss_antenna
+enu_frame_id: enu
+publish_imu: true
+publish_mag: true
+publish_temperature_pressure: true
+publish_navsatfix: true
+publish_velocity: true
+publish_hipnuc: true
