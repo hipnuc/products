@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 import logging
 import math
 import re
+import sys
 import threading
 import time
 from types import TracebackType
@@ -21,6 +22,7 @@ from .models import CommandResult, DeviceInfo, Sample
 
 BAUDRATES = (115200, 921600, 460800, 230400, 256000, 57600, 38400, 19200, 9600, 4800)
 _logger = logging.getLogger(__name__)
+_ONCE_PATTERN = re.compile(r"LOG\s+(?:COM[1-4]\s+)?(HI91|HI81|HI83|GGA|RMC)\s+ONMARK\s+ONCE")
 
 
 def _positive_timeout(value: float) -> float:
@@ -43,6 +45,27 @@ def _version(value: str | None) -> str | None:
     if value and re.fullmatch(r"\d{3}", value):
         return ".".join(value)
     return value
+
+
+def _open_error(port: str, exc: Exception) -> TransportError:
+    """Turn a pySerial open failure into an actionable message."""
+    text = str(exc)
+    lowered = text.lower()
+    if "access is denied" in lowered or "permissionerror" in lowered or "errno 13" in lowered:
+        if sys.platform.startswith("linux"):
+            hint = (
+                "Permission denied. Add your user to the serial group, e.g. "
+                "`sudo usermod -aG dialout $USER`, then log in again."
+            )
+        else:
+            hint = "The port is in use. Close CHCenter or any other program using it."
+    elif "busy" in lowered or "errno 16" in lowered:
+        hint = "The port is in use. Close CHCenter or any other program using it."
+    elif "no such file" in lowered or "filenotfounderror" in lowered or "errno 2" in lowered:
+        hint = "The port does not exist. Run `hipnuc list` to see available ports."
+    else:
+        hint = ""
+    return TransportError(f"Cannot open {port}: {text}" + (f" {hint}" if hint else ""))
 
 
 @dataclass(frozen=True)
@@ -116,7 +139,6 @@ class SerialDevice:
         self.dropped_samples = 0
         self._serial: serial.Serial | None = None
         self._lock = threading.RLock()
-        self._write_completed = False
         self._command_prepared = False
         self.info: DeviceInfo | None = None
 
@@ -146,7 +168,12 @@ class SerialDevice:
                     if not result.devices:
                         details = "; ".join(f"{p}: {e}" for p, e in result.errors.items())
                         raise TransportError(
-                            "No HiPNUC device found. " + (details or "No serial ports found.")
+                            "No HiPNUC device found. "
+                            + (
+                                details
+                                or "No serial ports found. Check the USB cable and the "
+                                "USB-to-serial driver (CP210x)."
+                            )
                         )
                     if len(result.devices) > 1:
                         raise TransportError(
@@ -159,7 +186,7 @@ class SerialDevice:
                         self.port, self.baudrate, timeout=0, write_timeout=self.timeout
                     )
                 except (serial.SerialException, OSError) as exc:
-                    raise TransportError(f"Cannot open {self.port}: {exc}") from exc
+                    raise _open_error(self.port, exc) from exc
                 self.decoder.reset()
                 self._samples.clear()
                 self._command_prepared = False
@@ -236,13 +263,18 @@ class SerialDevice:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     count = self.decoder.statistics["bytes_received"] - received
-                    state = (
-                        "No bytes received"
-                        if not count
-                        else f"Received {count} bytes but no valid measurement frames"
-                    )
+                    if not count:
+                        state = (
+                            "No bytes received. Check the TX/RX wiring and power, or enable "
+                            'output with the command "LOG ENABLE"'
+                        )
+                    else:
+                        state = (
+                            f"Received {count} bytes but no valid measurement frames. "
+                            "The baudrate is probably wrong; run `hipnuc scan`"
+                        )
                     raise ResponseTimeout(
-                        f"{state} on {self.port} at {self.baudrate} baud within {duration:g}s"
+                        f"{state} ({self.port} at {self.baudrate} baud, {duration:g}s)"
                     )
                 self._pump(remaining)
             return self._samples.popleft()
@@ -268,52 +300,26 @@ class SerialDevice:
             raise DeviceError("Command response exceeds 64 KiB", response="\n".join(lines))
         return acknowledged
 
-    def _finish_ack(self, command: str, lines: list[str], deadline: float) -> CommandResult:
-        """Consume the documented old SERIALCONFIG double-ACK tail.
-
-        Older firmware prints OK, waits 5 ms, then the CLI prints another OK.
-        Allow six 8N1 character times plus that delay, with a small host read
-        batching floor. Binary/NMEA samples do not extend the ASCII quiet time.
-        A hard limit keeps unsolicited ASCII output from extending this forever.
-        """
-        quiet = max(0.01, 0.005 + 6 * 10 / self.baudrate)
-        quiet_until = time.monotonic() + quiet
-        stop_at = min(time.monotonic() + 3 * quiet, deadline)
-        while (remaining := min(quiet_until, stop_at) - time.monotonic()) > 0:
-            self._pump(remaining)
-            before = len(lines)
-            self._collect_response_lines(command, lines)
-            if len(lines) != before:
-                quiet_until = time.monotonic() + quiet
-        return CommandResult(command, "\n".join(lines), True)
-
     def command(
         self, command: str, *, timeout: float | None = None, response: str = "auto"
     ) -> CommandResult:
-        """Send one ASCII command without changing the stream enable state.
+        """Send one ASCII command line and wait for its ``OK``/``ERR`` reply.
 
-        response: auto (ACK or matching ONMARK ONCE data), ack (terminal OK),
-        text (nonempty text after a short idle gap), none (send only).
-        Errors are terminal lines, never an arbitrary 'OK' substring in a packet.
-        Raw lifecycle commands remain raw; managed helpers verify communication changes.
-        timeout limits sending and waiting for the response; the transport write
-        timeout is set at open. Blocking driver calls also obey that transport limit.
-        The first command briefly aligns with an existing stream before sending.
-        After OK, a bounded ASCII quiet interval collects older duplicate ACKs.
-        This protocol has no transaction ID: arbitrarily delayed responses cannot
-        be assigned with certainty. Use readback for configuration verification.
+        ``response="auto"`` waits for a terminal ``OK`` (or for the requested
+        data when the command is ``LOG <MSG> ONMARK ONCE``); ``"none"`` only
+        sends. The device prints nothing for an unknown command, so an unknown
+        command surfaces as ``ResponseTimeout``. Binary bytes never count as an
+        acknowledgement. The first command after opening waits for a clean
+        frame boundary so the reply cannot be confused with an ongoing stream.
         """
         command = command.strip()
         if not command or "\r" in command or "\n" in command:
             raise ValueError("command must contain exactly one nonempty line")
-        if response not in {"auto", "ack", "text", "none"}:
-            raise ValueError("response must be auto, ack, text, or none")
+        if response not in {"auto", "none"}:
+            raise ValueError("response must be auto or none")
         duration = _positive_timeout(self.timeout if timeout is None else timeout)
         with self._lock:
-            self._write_completed = False
             ser = self._require_open()
-            # Route bytes already queued by the OS before starting this transaction.
-            # No reset_input_buffer(): those bytes may include measurements to record.
             try:
                 if not self._command_prepared:
                     # Opening a USB UART can start in the middle of a frame.
@@ -333,6 +339,8 @@ class SerialDevice:
                             break
                     self._command_prepared = True
                 deadline = time.monotonic() + duration
+                # Route bytes already queued by the OS before starting this
+                # transaction; they may include measurements to record.
                 queued = ser.in_waiting
                 while queued:
                     if time.monotonic() >= deadline:
@@ -347,34 +355,25 @@ class SerialDevice:
                 encoded = (command + "\r\n").encode("ascii")
                 if ser.write(encoded) != len(encoded):
                     raise TransportError("Short serial write")
-                self._write_completed = True
             except (serial.SerialException, OSError) as exc:
                 raise TransportError(f"Write to {self.port} failed: {exc}") from exc
             if response == "none":
                 return CommandResult(command, "", False)
             lines: list[str] = []
-            last_text = time.monotonic()
-            once = re.fullmatch(
-                r"LOG\s+(?:COM[1-4]\s+)?(HI91|HI81|HI83|GGA|RMC|SXT|VTG|GSA|GSV)\s+ONMARK\s+ONCE",
-                command.upper(),
-            )
+            once = _ONCE_PATTERN.fullmatch(command.upper())
             while time.monotonic() < deadline:
                 samples = self._pump(deadline - time.monotonic())
-                before = len(lines)
-                acknowledged = self._collect_response_lines(command, lines)
-                if len(lines) != before:
-                    last_text = time.monotonic()
-                if acknowledged:
-                    return self._finish_ack(command, lines, deadline)
-                if response == "auto" and once and any(s.type == once[1] for s in samples):
+                if self._collect_response_lines(command, lines):
+                    return CommandResult(command, "\n".join(lines), True)
+                if once and any(s.type == once[1] for s in samples):
                     return CommandResult(command, "\n".join(lines), False, verified=True)
-                if response == "text" and lines and time.monotonic() - last_text >= 0.1:
-                    return CommandResult(command, "\n".join(lines), False)
-            if response == "text" and lines:
-                return CommandResult(command, "\n".join(lines), False)
-            raise ResponseTimeout(f"No complete response to {command!r} within {duration:g}s")
+            raise ResponseTimeout(
+                f"No OK reply to {command!r} within {duration:g}s. Check the command "
+                "spelling; the device does not answer unknown commands."
+            )
 
     def read_info(self) -> DeviceInfo:
+        """Query ``LOG VERSION`` and require a recognizable product identity."""
         result = self.command("LOG VERSION")
         values = _fields(result.text)
         info = DeviceInfo(
@@ -395,65 +394,36 @@ class SerialDevice:
     def save_config(self) -> CommandResult:
         return self.command("SAVECONFIG")
 
-    def _recover_identity(
-        self, expected: DeviceInfo, baudrates: tuple[int, ...], timeout: float
-    ) -> DeviceInfo:
-        deadline = time.monotonic() + _positive_timeout(timeout)
+    def _wait_for_info(self, timeout: float) -> DeviceInfo:
+        """Reopen if needed and query identity until ``timeout`` elapses."""
+        deadline = time.monotonic() + timeout
         last_error: Exception | None = None
-        while time.monotonic() < deadline:
-            for baud in dict.fromkeys(baudrates):
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    break
+        while True:
+            try:
+                if not self.is_open:
+                    self.open()
+                self.decoder.reset()
+                remaining = max(deadline - time.monotonic(), 0.05)
+                old_timeout = self.timeout
+                self.timeout = min(old_timeout, remaining)
                 try:
-                    self.baudrate = baud
-                    if not self.is_open:
-                        self.open()
-                    else:
-                        try:
-                            self._require_open().baudrate = baud
-                        except (serial.SerialException, OSError) as exc:
-                            raise TransportError(
-                                f"Cannot configure {self.port} at {baud}: {exc}"
-                            ) from exc
-                    self.decoder.reset()
-                    old_timeout = self.timeout
-                    self.timeout = min(old_timeout, remaining)
-                    try:
-                        try:
-                            found = self.read_info()
-                        except VerificationError as exc:
-                            # A delayed old OK is not an identity response.
-                            last_error = exc
-                            continue
-                    finally:
-                        self.timeout = old_timeout
-                    if expected.serial_number:
-                        if found.serial_number != expected.serial_number:
-                            self.info = expected
-                            raise VerificationError("Device identity changed during recovery")
-                    elif not found.product_name or found.product_name != expected.product_name:
-                        self.info = expected
-                        raise VerificationError("Cannot verify the same product after recovery")
-                    return found
-                except ResponseTimeout as exc:
-                    last_error = exc
-                    continue
-                except TransportError as exc:
-                    last_error = exc
+                    return self.read_info()
+                finally:
+                    self.timeout = old_timeout
+            except (TransportError, ResponseTimeout, VerificationError) as exc:
+                last_error = exc
+                if isinstance(exc, TransportError):
                     # A USB reset can leave an open-looking but invalid handle.
-                    # Retry the same port name after closing it, never a new port
-                    # selected only by a similar product name.
                     try:
                         self.close()
                     except (serial.SerialException, OSError):
                         pass
-                    self.info = expected
-            time.sleep(min(0.05, max(0, deadline - time.monotonic())))
-        raise ResponseTimeout(
-            f"Device did not return with matching identity on {self.port}; "
-            "reopen it when available, using its new port name if USB enumeration changed"
-        ) from last_error
+            if time.monotonic() >= deadline:
+                raise ResponseTimeout(
+                    f"Device did not answer on {self.port} at {self.baudrate} baud within "
+                    f"{timeout:g}s; reconnect with `hipnuc scan` if it moved."
+                ) from last_error
+            time.sleep(0.05)
 
     def set_baudrate(
         self,
@@ -463,10 +433,10 @@ class SerialDevice:
         recovery_timeout: float = 5.0,
         save: bool = False,
     ) -> DeviceInfo:
-        """Change the current device port and verify its identity at the new baud.
+        """Send ``SERIALCONFIG``, switch the host to the new speed and query identity.
 
-        The default ``SERIALCONFIG <baud>`` syntax is shared by IMU and INS.
-        Pass ``device_port`` only to explicitly name a supported device COM port.
+        The device answers ``OK`` and switches immediately. Pass ``device_port``
+        (``COM1``..``COM4``) only to name another device port explicitly.
         """
         if baudrate not in BAUDRATES:
             raise ValueError(f"unsupported baudrate; expected one of {BAUDRATES}")
@@ -474,52 +444,41 @@ class SerialDevice:
             raise ValueError("device_port must be COM1..COM4")
         _positive_timeout(recovery_timeout)
         with self._lock:
-            expected = self.info or self.read_info()
-            old_baud = self.baudrate
+            ser = self._require_open()
             target = f"{device_port.upper()} " if device_port is not None else ""
             try:
-                self.command(f"SERIALCONFIG {target}{baudrate}", timeout=0.3)
+                self.command(f"SERIALCONFIG {target}{baudrate}", timeout=0.5)
             except ResponseTimeout:
-                pass  # Some old firmware switches baud before the ACK reaches the host.
-            except TransportError:
-                if not self._write_completed:
-                    raise
-                try:
-                    self.close()
-                except (serial.SerialException, OSError):
-                    pass
-            found = self._recover_identity(expected, (baudrate, old_baud), recovery_timeout)
-            if self.baudrate != baudrate:
-                raise VerificationError("Device still responds only at the previous baudrate")
+                pass  # The switch may happen before the OK reaches the host.
+            try:
+                ser.baudrate = baudrate
+            except (serial.SerialException, OSError) as exc:
+                raise TransportError(f"Cannot configure {self.port} at {baudrate}: {exc}") from exc
+            self.baudrate = baudrate
+            info = self._wait_for_info(recovery_timeout)
             if save:
                 self.save_config()
-            return found
+            return info
 
     def reboot(self, *, recovery_timeout: float = 5.0) -> DeviceInfo:
-        """Send reset once and confirm the same identity is reachable afterward.
-
-        Reconnection does not prove that every setting took effect or that a
-        reset physically occurred; no unrelated configuration is auto-saved.
-        """
+        """Send ``REBOOT`` once and wait until the device answers again."""
         _positive_timeout(recovery_timeout)
         with self._lock:
-            expected = self.info or self.read_info()
+            self._require_open()
             try:
-                self.command("REBOOT", timeout=0.3)
+                self.command("REBOOT", timeout=0.5)
             except ResponseTimeout:
                 pass
             except TransportError:
-                if not self._write_completed:
-                    raise
-                # A native USB port may disappear while sending/receiving reset.
+                # A native USB port may disappear while the device resets;
+                # _wait_for_info reopens it.
                 try:
                     self.close()
                 except (serial.SerialException, OSError):
                     pass
-            # Some fielded builds ACK before their 5-ms reset timer expires.
-            # Do not query identity while that pre-reset application still runs.
+            # Do not query identity while the pre-reset application still runs.
             time.sleep(0.01)
-            return self._recover_identity(expected, (self.baudrate,), recovery_timeout)
+            return self._wait_for_info(recovery_timeout)
 
 
 def discover(
@@ -536,7 +495,6 @@ def discover(
     identifies a brand. A binary candidate's timed-out identity query is retried
     once at the same baudrate. Every probe handle is closed, including on Ctrl-C.
     ``timeout`` limits each identity response; ``scan_timeout`` bounds the scan.
-    OS port opening itself is subject to the operating system's driver timing.
     """
     _positive_timeout(timeout)
     deadline = time.monotonic() + _positive_timeout(scan_timeout)
@@ -610,7 +568,7 @@ def discover(
                         # retry only this read-only query on a binary candidate.
                         if protocol is None:
                             break
-                    except DeviceError as exc:
+                    except (DeviceError, VerificationError) as exc:
                         identity_error = str(exc)
                         break
                 count = device.decoder.statistics["bytes_received"]

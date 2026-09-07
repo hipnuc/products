@@ -12,7 +12,6 @@ authors = [{name = "HiPNUC"}]
 dependencies = [
     "pyserial>=3.5,<4",
     "click>=8.1,<9",
-    "pynmea2>=1.19,<2",
     "pymodbus>=3.15,<3.16",
 ]
 

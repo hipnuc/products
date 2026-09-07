@@ -215,7 +215,7 @@ def test_valid_binary_stream_is_readable_without_identity(monkeypatch, clock):
     found = result.devices[0]
     assert result.complete and result.errors == {}
     assert found.info is None and found.protocol == "hipnuc_binary"
-    assert "No complete response" in found.identity_error
+    assert "No OK reply" in found.identity_error
     assert port.writes == [b"LOG VERSION\r\n"] * 2
     assert not port.is_open
 

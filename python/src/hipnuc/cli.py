@@ -13,7 +13,6 @@ import signal
 import sys
 import threading
 import time
-from typing import Literal
 
 import click
 from serial.tools import list_ports
@@ -113,12 +112,6 @@ def _serial_options(func=None, *, require_port=False):
 
 def _modbus_options(func):
     func = _timeout_option(func)
-    func = click.option(
-        "--magnetic-scale",
-        type=click.Choice(["documented", "legacy"]),
-        default="documented",
-        help="Magnetic scaling for the firmware build.",
-    )(func)
     func = click.option(
         "--id", "device_id", type=click.IntRange(1, 247), default=80, show_default=True
     )(func)
@@ -235,15 +228,11 @@ def _with_serial(func):
 
 @contextmanager
 def _modbus_connection(
-    port: str,
-    baudrate: int,
-    timeout: float,
-    device_id: int,
-    magnetic_scale: Literal["documented", "legacy"],
+    port: str, baudrate: int, timeout: float, device_id: int
 ) -> Iterator[ModbusDevice]:
     """Own the RTU bus for this command and select its addressed device."""
     with ModbusBus(port, baudrate, timeout) as bus:
-        device = bus.device(device_id, magnetic_scale=magnetic_scale)
+        device = bus.device(device_id)
         click.echo(f"Connected to {port} at {baudrate} baud, Modbus ID {device_id}.", err=True)
         yield device
 
@@ -252,8 +241,7 @@ def _with_modbus(func):
     @wraps(func)
     def wrapped(*args, **kwargs):
         connection = {
-            name: kwargs.pop(name)
-            for name in ("port", "baudrate", "timeout", "device_id", "magnetic_scale")
+            name: kwargs.pop(name) for name in ("port", "baudrate", "timeout", "device_id")
         }
         with _modbus_connection(**connection) as device:
             return func(device, *args, **kwargs)
@@ -281,6 +269,11 @@ def _human_sample(sample: Sample) -> str:
     parts = [sample.type]
     if "device_id" in sample.metadata:
         parts.append(f"id={sample.metadata['device_id']}")
+    flags = sample.values.get("status_flags")
+    if flags:
+        parts.append("[" + " ".join(flags) + "]")
+    if sample.values.get("ins_status_name"):
+        parts.append(f"ins={sample.values['ins_status_name']}")
 
     def number(value, scale=1.0):
         return "—" if value is None else f"{value * scale:.3f}"
@@ -549,12 +542,7 @@ def read_command(
 @click.option(
     "--file", "command_file", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
-@click.option(
-    "--response",
-    type=click.Choice(["auto", "ack", "text", "none"]),
-    default="auto",
-    show_default=True,
-)
+@click.option("--no-reply", is_flag=True, help="Send only; do not wait for OK.")
 @click.option("--save", is_flag=True, help="Send SAVECONFIG once, after all commands succeed.")
 @click.option(
     "--reboot", is_flag=True, help="Reboot after commands and optional save; wait for reconnection."
@@ -568,12 +556,13 @@ def command_command(
     scan_timeout,
     command_text,
     command_file,
-    response,
+    no_reply,
     save,
     reboot,
     as_json,
 ):
     """Send one quoted ASCII command, or a UTF-8 command file."""
+    response = "none" if no_reply else "auto"
     if (command_text is None) == (command_file is None):
         raise click.UsageError(
             'Supply one quoted command (e.g. "LOG VERSION") or --file, exclusively.'
@@ -589,10 +578,8 @@ def command_command(
     if not commands:
         raise click.UsageError("No commands supplied.")
     if save or reboot:
-        if response == "none":
-            raise click.UsageError(
-                "--save/--reboot require command responses; remove --response none."
-            )
+        if no_reply:
+            raise click.UsageError("--save/--reboot require command replies; remove --no-reply.")
         if any(
             line.split()[0].upper() in {"SERIALCONFIG", "REBOOT", "FRESET"} for line in commands
         ):
@@ -699,7 +686,6 @@ def modbus_read(
     baudrate,
     timeout,
     device_id,
-    magnetic_scale,
     record,
     duration,
     display_rate,
@@ -713,9 +699,7 @@ def modbus_read(
     """Poll continuously and optionally record SI JSONL with the station ID."""
     with ExitStack() as stack:
         recording = stack.enter_context(Recorder(record, overwrite=overwrite)) if record else None
-        device = stack.enter_context(
-            _modbus_connection(port, baudrate, timeout, device_id, magnetic_scale)
-        )
+        device = stack.enter_context(_modbus_connection(port, baudrate, timeout, device_id))
         stopped = stack.enter_context(_stop_on_interrupt())
         consume = _sample_consumer(
             recording, stopped, jsonl=jsonl, quiet=quiet, display_rate=display_rate
@@ -778,7 +762,6 @@ def modbus_write_register(
     baudrate,
     timeout,
     device_id,
-    magnetic_scale,
     address,
     value,
     verify,
@@ -792,7 +775,7 @@ def modbus_write_register(
             "Do not append --save/--reboot to raw control, baudrate or ID writes; "
             "use modbus baudrate, set-id or reboot for managed reconnection."
         )
-    with _modbus_connection(port, baudrate, timeout, device_id, magnetic_scale) as device:
+    with _modbus_connection(port, baudrate, timeout, device_id) as device:
         result = device.write_register(address, value, verify=verify)
         if not as_json:
             _show(result, False)

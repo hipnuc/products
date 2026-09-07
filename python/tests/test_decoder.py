@@ -1,4 +1,4 @@
-"""Pure byte-stream tests using independent CRC and public golden vectors."""
+"""Pure byte-stream tests using an independent CRC and hand-computed vectors."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from datetime import date, datetime, time, timezone
 import json
 import logging
 import math
-from pathlib import Path
 import struct
 
 import pytest
@@ -16,10 +15,102 @@ from hipnuc import Decoder
 from hipnuc.models import CommandResult, DeviceInfo, Sample
 
 
-FIXTURES = json.loads(
-    (Path(__file__).parent / "fixtures" / "hipnuc_protocol.json").read_text(encoding="utf-8")
-)["frames"]
-VECTORS = {entry["name"]: entry for entry in FIXTURES}
+# Synthetic protocol vectors. Expected values were computed by hand from the
+# published field layouts, independently of the decoder.
+VECTORS = {
+    "hi91_si": {
+        "protocol": "HI91",
+        "complete": True,
+        "raw_hex": (
+            "5aa54c0050959108081980e6c54740e201000000803f000000bf0000803e000034430000b4c200003442"
+            "000020410000a0c10000f041000020410000a0c10000f0410000803f000000000000000000000000"
+        ),
+        "expected": {
+            "acceleration_m_s2": [9.8, -4.9, 2.45],
+            "angular_velocity_rad_s": [3.141592653589793, -1.5707963267948966, 0.7853981633974483],
+            "device_time_ms": 123456,
+            "euler_rad": [0.17453292519943295, -0.3490658503988659, 0.5235987755982988],
+            "magnetic_field_t": [1e-05, -2e-05, 3e-05],
+            "main_status": 2056,
+            "pressure_pa": 101325,
+            "quaternion_wxyz": [1, 0, 0, 0],
+            "temperature_c": 25,
+        },
+    },
+    "hi81_si": {
+        "protocol": "HI81",
+        "complete": True,
+        "raw_hex": (
+            "5aa56800062181000803600915cd5b07ffffe8030cfefa00640038ff0008640038ff2c01d007d204fb1a"
+            "09060c22d5dde80330f82823102700000000000087aed442874cc31040e201000f0804160412022efb01"
+            "7b0038fe1503c800d4fe900191aabbccddeeff0083deadbeef91"
+        ),
+        "expected": {
+            "acceleration_m_s2": [0.48828, -0.97656, 9.9999744],
+            "altitude_msl_m": 123.456,
+            "angular_velocity_rad_s": [1, -0.5, 0.25],
+            "geoid_separation_m": -12.34,
+            "gps_time_of_week_ms": 123456789,
+            "gps_week": 2400,
+            "heading_rad": 1.5707963267948966,
+            "ins_status": 3,
+            "latitude_deg": 28.1234567,
+            "longitude_deg": 112.1234567,
+            "magnetic_field_t": [3.0517e-06, -6.1034e-06, 9.1551e-06],
+            "main_status": 2048,
+            "odometer_speed_m_s": 12.34,
+            "pitch_rad": -0.3490658503988659,
+            "pressure_pa": 102000,
+            "quaternion_wxyz": [1, 0, 0, 0],
+            "roll_rad": 0.17453292519943295,
+            "temperature_c": -5,
+            "utc": "2026-09-06T12:34:56.789000Z",
+            "velocity_enu_m_s": [1.23, -4.56, 7.89],
+        },
+    },
+    "hi83_current": {
+        "protocol": "HI83",
+        "complete": True,
+        "raw_hex": (
+            "5aa5ec0034e483000003ffff0fc00ae81c410ae89cc0000000000000803f000000bf0000803e00002041"
+            "0000a0c10000f041000020410000a0c10000f0410000803f000000000000000000000000b2a9d1c66200"
+            "00001a09060c22d5dd0080e6c5470000c4410000a0400000c0c00000f0410000803f0000004000004040"
+            "cdcccc3dcdcc4c3e9a99993e0000803f0000004000004040cdcccc3dcdcc4cbe9a99993e373eeeb6e607"
+            "5c40daf8b8db9a1f3c4077be9f1a2fdd5e4004160412a4704541a47045c1000000400800000066666666"
+            "66065c409a99999999193c400000000000c05e40000080400000a0400000c040"
+        ),
+        "expected": {
+            "acceleration_m_s2": [9.80665, -4.903325, 0],
+            "altitude_msl_m": 123.456,
+            "angular_velocity_rad_s": [1, -0.5, 0.25],
+            "data_bitmap": 3222274047,
+            "device_time_us": 424242424242,
+            "gnss_velocity_enu_m_s": [4, 5, 6],
+            "inclination_rad": [0.08726646259971647, -0.10471975511965978],
+            "inclination_yaw_rad": 0.5235987755982988,
+            "ins_status": 3,
+            "latitude_deg": 28.1234567,
+            "longitude_deg": 112.1234567,
+            "magnetic_field_t": [1e-05, -2e-05, 3e-05],
+            "main_status": 0,
+            "node_id": 8,
+            "pressure_pa": 101325,
+            "quaternion_wxyz": [1, 0, 0, 0],
+            "temperature_c": 24.5,
+            "utc": "2026-09-06T12:34:56.789000Z",
+            "velocity_enu_m_s": [1, 2, 3],
+        },
+    },
+    "hi83_unknown_prefix": {
+        "protocol": "HI83",
+        "complete": False,
+        "raw_hex": (
+            "5aa53400a9c083000000010010400000803f000000400000404091756e6b6e6f776e0000000000005c40"
+            "0000000000003c400000000000005940"
+        ),
+        "expected": {"acceleration_m_s2": [1, 2, 3], "data_bitmap": 1074790401, "main_status": 0},
+    },
+}
 GGA = b"$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n"
 RMC = b"$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A\r\n"
 
@@ -49,10 +140,10 @@ def assert_values(actual, expected):
             assert actual[key] == value, key
 
 
-@pytest.mark.parametrize("entry", FIXTURES, ids=lambda item: item["name"])
+@pytest.mark.parametrize("entry", VECTORS.values(), ids=list(VECTORS))
 def test_fixed_vectors_and_independent_crc(entry):
     raw = bytes.fromhex(entry["raw_hex"])
-    assert len(raw) == entry["payload_length"] + 6
+    assert len(raw) == int.from_bytes(raw[2:4], "little") + 6
     assert binascii.crc_hqx(raw[:4] + raw[6:], 0) == int.from_bytes(raw[4:6], "little")
     samples = Decoder().feed(raw)
     assert len(samples) == 1
@@ -65,7 +156,7 @@ def test_fixed_vectors_and_independent_crc(entry):
     json.dumps(sample.to_dict(include_raw=True), allow_nan=False)
 
 
-@pytest.mark.parametrize("name", [entry["name"] for entry in FIXTURES])
+@pytest.mark.parametrize("name", list(VECTORS))
 def test_every_binary_split_point(name):
     raw = vector(name)
     expected = Decoder().feed(raw)[0].to_dict()
@@ -76,19 +167,15 @@ def test_every_binary_split_point(name):
         assert decoder.buffered_bytes == 0
 
 
-@pytest.mark.parametrize("field", ["day", "month", "year"])
-@pytest.mark.parametrize("value", ["999999999999999999999999", "0"])
-def test_invalid_zda_date_keeps_following_binary_sample(field, value):
-    parts = {"day": "06", "month": "09", "year": "2026"}
-    parts[field] = value
-    raw = nmea(f"GPZDA,123456.789,{parts['day']},{parts['month']},{parts['year']},00,00")
+def test_unsupported_sentence_keeps_following_binary_sample():
+    raw = nmea("GPZDA,123456.789,06,09,2026,00,00")
     decoder = Decoder()
 
     samples = decoder.feed(raw + vector())
 
     assert [sample.type for sample in samples] == ["ZDA", "HI91"]
-    assert samples[0].values["utc"] is None
-    assert samples[0].issues == ("invalid_utc_date",)
+    assert samples[0].complete is False
+    assert samples[0].issues == ("unsupported_nmea_sentence",)
     assert samples[0].raw == raw
     assert samples[1].to_dict() == Decoder().feed(vector())[0].to_dict()
     assert decoder.buffered_bytes == 0
@@ -96,7 +183,7 @@ def test_invalid_zda_date_keeps_following_binary_sample(field, value):
 
 @pytest.mark.parametrize("chunk_size", [1, 2, 7, 64, 1024])
 def test_mixed_stream_keeps_sample_order_and_ascii_responses(chunk_size):
-    raw = b"LOG VERSION\r\n" + GGA + vector() + RMC + vector("hi83_legacy_ms") + b"OK\r\n"
+    raw = b"LOG VERSION\r\n" + GGA + vector() + RMC + vector("hi83_current") + b"OK\r\n"
     decoder = Decoder()
     samples = []
     for offset in range(0, len(raw), chunk_size):
@@ -267,14 +354,10 @@ def test_hi81_invalid_utc_never_invents_a_date(parts, issue):
     assert issue in sample.issues
 
 
-def test_hi83_time_layouts_and_unknown_bits_preserve_only_reliable_prefix():
+def test_hi83_time_and_unknown_bits_preserve_only_reliable_prefix():
     current = Decoder().feed(vector("hi83_current"))[0]
-    legacy = Decoder().feed(vector("hi83_legacy_ms"))[0]
-    assert current.metadata["hi83_time_layout"] == "uint64_us"
     assert current.values["device_time_s"] == pytest.approx(424242.424242)
-    assert legacy.metadata["hi83_time_layout"] == "legacy_uint32_ms"
-    assert legacy.values["device_time_s"] == pytest.approx(123.456)
-    assert legacy.values["pressure_pa"] == 101325
+    assert current.metadata["device_time_reference"] == "local_counter"
     partial = Decoder().feed(vector("hi83_unknown_prefix"))[0]
     assert not partial.complete
     assert "gnss_longitude_deg" not in partial.values
@@ -282,16 +365,22 @@ def test_hi83_time_layouts_and_unknown_bits_preserve_only_reliable_prefix():
     assert partial.metadata["undecoded_payload_hex"].startswith("91756e6b6e6f776e")
 
 
-def test_hi83_unknown_bitmap_does_not_guess_legacy_time_width():
-    payload = (
-        struct.pack("<BHBI3fI", 0x83, 0, 0, (1 << 0) | (1 << 5) | (1 << 20), 1, 2, 3, 123456)
-        + b"unknown"
-    )
+def test_hi83_legacy_millisecond_layout_is_rejected():
+    payload = struct.pack("<BHBI3fI", 0x83, 0, 0, (1 << 0) | (1 << 5), 1, 2, 3, 123456)
+    decoder = Decoder()
+    assert decoder.feed(frame(payload)) == []
+    assert decoder.statistics["malformed_packets"] == 1
+
+
+def test_hi83_internal_bits_stop_decoding_before_them():
+    payload = struct.pack(
+        "<BHBI3fQ", 0x83, 0, 0, (1 << 0) | (1 << 5) | (1 << 25), 1, 2, 3, 123456
+    ) + bytes(64)
     sample = Decoder().feed(frame(payload))[0]
     assert sample.values["acceleration_m_s2"] == [1, 2, 3]
-    assert not any(key.startswith("device_time") for key in sample.values)
+    assert sample.values["device_time_us"] == 123456
     assert sample.complete is False
-    assert "ambiguous_hi83_time_layout" in sample.issues
+    assert sample.issues == ("unknown_hi83_bitmap:0x02000000",)
 
 
 @pytest.mark.parametrize(
@@ -335,7 +424,13 @@ def test_hi83_zero_bitmap_and_bitmap_change_do_not_retain_previous_fields():
     full = decoder.feed(vector("hi83_current"))[0]
     empty = decoder.feed(frame(struct.pack("<BHBI", 0x83, 0, 0, 0)))[0]
     assert full.values["device_time_us"] == 424242424242
-    assert empty.values == {"main_status": 0, "status_ext": 0, "data_bitmap": 0}
+    assert empty.values == {
+        "main_status": 0,
+        "status_flags": [],
+        "ins_status": 0,
+        "ins_status_name": "invalid",
+        "data_bitmap": 0,
+    }
 
 
 def test_hi83_unsynchronized_utc_is_unavailable():
@@ -409,59 +504,6 @@ def test_invalid_nmea_calendar_and_coordinates_are_not_fabricated():
     )
 
 
-def test_sxt_explicit_units_and_json_datetime():
-    sample = Decoder().feed(
-        nmea(
-            "GNSXT,20260906123456.789,112.1,28.1,123.4,90,10,90,12.3,-20,4,4,22,18,180,-90,45,1,2,3,3,1"
-        )
-    )[0]
-    assert sample.type == "SXT"
-    assert sample.to_dict()["utc"] == "2026-09-06T12:34:56.789000Z"
-    assert sample.values["angular_velocity_rad_s"] == pytest.approx(
-        [math.pi, -math.pi / 2, math.pi / 4]
-    )
-    assert sample.values["heading_rad"] == pytest.approx(math.pi / 2)
-    assert sample.values["velocity_enu_m_s"] == [1, 2, 3]
-    json.dumps(sample.to_dict(), allow_nan=False)
-
-
-@pytest.mark.parametrize(
-    "body,kind,expected",
-    [
-        (
-            "GPVTG,90,T,80,M,10,N,18.52,K,A",
-            "VTG",
-            {"course_over_ground_rad": math.pi / 2, "speed_over_ground_m_s": 1852 / 360},
-        ),
-        (
-            "GPGSA,A,3,04,05,,,,,,,,,,,1.8,1.0,1.5",
-            "GSA",
-            {"fix_type": 3, "pdop": 1.8, "hdop": 1.0, "vdop": 1.5},
-        ),
-        (
-            "GPGSV,1,1,01,04,45,180,42,1",
-            "GSV",
-            {"message_count": 1, "message_number": 1, "satellites_in_view": 1, "signal_id": 1},
-        ),
-        ("GPZDA,123456.789,06,09,2026,00,00", "ZDA", {"utc": "2026-09-06T12:34:56.789000Z"}),
-    ],
-)
-def test_additional_standard_nmea_sentences(body, kind, expected):
-    sample = Decoder().feed(nmea(body))[0]
-    assert sample.type == kind
-    assert_values(sample.to_dict(), expected)
-    if kind == "GSV":
-        assert sample.values["satellites"] == [
-            {"id": "04", "elevation_rad": math.pi / 4, "azimuth_rad": math.pi, "snr_db": 42}
-        ]
-
-
-def test_truncated_gsv_satellite_group_is_rejected():
-    decoder = Decoder()
-    assert decoder.feed(nmea("GPGSV,1,1,01,04,45")) == []
-    assert decoder.statistics["nmea_errors"] == 1
-
-
 def test_unsupported_checksum_valid_nmea_is_explicitly_partial():
     sample = Decoder().feed(nmea("GPXYZ,1,2,3"))[0]
     assert sample.type == "XYZ"
@@ -526,3 +568,16 @@ def test_decoder_does_not_configure_logging_or_accept_text():
     assert (list(root.handlers), root.level) == before
     with pytest.raises(TypeError):
         Decoder().feed("not bytes")
+
+
+def test_main_status_flags_and_ins_status_names():
+    payload = bytearray(76)
+    payload[0] = 0x91
+    struct.pack_into("<H", payload, 1, (1 << 7) | (1 << 4) | (1 << 11))
+    sample = Decoder().feed(frame(bytes(payload)))[0]
+    assert sample.values["status_flags"] == ["MAG_DIST", "ATT_CONV", "UTC_UNSYNC"]
+    assert sample.metadata["device_time_reference"] == "local_counter"
+    ins = struct.pack("<BHBI", 0x83, 0, 6, 0)
+    sample = Decoder().feed(frame(ins))[0]
+    assert sample.values["ins_status_name"] == "dead_reckoning"
+    assert sample.values["status_flags"] == []

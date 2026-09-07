@@ -72,6 +72,7 @@ def records(path):
 
 def measurement_frame():
     packet = bytearray(frame())
+    struct.pack_into("<H", packet, 6 + 1, 1 << 7)  # ATT_CONV
     struct.pack_into("<3f", packet, 6 + 12, 1, 0, 0)
     struct.pack_into("<3f", packet, 6 + 24, 180, 0, 0)
     struct.pack_into("<3f", packet, 6 + 48, 90, 0, 0)
@@ -328,7 +329,7 @@ def test_command_response_timeout_is_visible_and_closes_port(fake):
 
 
 def test_explicit_send_only_command_does_not_require_an_ack(fake):
-    result = invoke(["command", *CONNECTION, "--response", "none", "--json", "NO_REPLY"])
+    result = invoke(["command", *CONNECTION, "--no-reply", "--json", "NO_REPLY"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["acknowledged"] is False
     assert fake.writes == [b"NO_REPLY\r\n"]
@@ -405,9 +406,9 @@ def test_raw_lifecycle_post_actions_are_rejected_before_connection(tmp_path, opt
 
 @pytest.mark.parametrize("option", ["--save", "--reboot"])
 def test_send_only_cannot_trigger_post_actions(option):
-    result = invoke(["command", "CONFIG IMU COORD 2", *CONNECTION, "--response", "none", option])
+    result = invoke(["command", "CONFIG IMU COORD 2", *CONNECTION, "--no-reply", option])
     assert result.exit_code == 2, result.output
-    assert "require command responses" in result.stderr
+    assert "require command replies" in result.stderr
 
 
 def test_command_file_saves_once_at_end(fake, tmp_path):
@@ -430,8 +431,7 @@ def test_baudrate_distinguishes_connected_and_target_speed(fake):
     fake.responses["SERIALCONFIG 230400"] = b"OK\n"
     result = invoke(["baudrate", "230400", *CONNECTION, "--json"])
     assert result.exit_code == 0, result.output
-    assert fake.writes[0] == b"LOG VERSION\r\n"
-    assert b"SERIALCONFIG 230400\r\n" in fake.writes
+    assert fake.writes == [b"SERIALCONFIG 230400\r\n", b"LOG VERSION\r\n"]
     assert fake.baudrate == 230400
     assert not fake.is_open
 
@@ -457,6 +457,7 @@ def test_read_default_is_human_and_recording_stays_si(fake, tmp_path):
     assert not result.stdout.lstrip().startswith("{")
     assert "180.000" in result.stdout
     assert "90.000" in result.stdout
+    assert "[ATT_CONV]" in result.stdout
     sample = records(path)[0]
     assert sample["angular_velocity_rad_s"][0] == pytest.approx(math.pi)
     assert sample["euler_rad"][0] == pytest.approx(math.pi / 2)

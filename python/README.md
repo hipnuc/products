@@ -3,8 +3,12 @@
 [English](README.md) | [中文](README_zh.md)
 
 Read, configure and record HiPNUC IMU/AHRS/MRU and INS devices from a terminal
-or your Python application. Supports serial binary/NMEA and Modbus RTU with
-Python 3.10–3.14 on Windows, Linux (including Ubuntu and Raspberry Pi OS), and macOS.
+or your Python application. Supports serial binary (HI91/HI81/HI83), NMEA
+GGA/RMC and Modbus RTU with Python 3.10–3.14 on Windows, Linux (including
+Ubuntu and Raspberry Pi OS), and macOS.
+
+Supported devices: firmware 1.6.9 or later (HI01–HI06, HI12–HI18, HI32,
+HI70/HI71, CH0X0). Legacy HI2xx/CH1xx products use the archived C examples.
 
 ## Install
 
@@ -23,6 +27,15 @@ py -3 -m venv .venv
 
 **Linux / Raspberry Pi / macOS:**
 
+On Ubuntu, Debian and Raspberry Pi OS, first install virtual environment support:
+
+```sh
+sudo apt update
+sudo apt install -y python3-venv
+```
+
+Then create and activate the environment (start here on macOS):
+
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
@@ -34,11 +47,16 @@ python -m hipnuc read
 `list` shows available serial ports. `read` finds the connected HiPNUC device and
 its baudrate, shows the selected connection, then displays measurements. Discovery
 can take up to 30 seconds and shows each port/baudrate attempt and its result.
-If several devices match, select one with `-p`.
-Press Ctrl-C to stop.
+If several devices match, select one with `-p`. Press Ctrl-C to stop.
+Each displayed line shows the active device warnings after the message type:
+`[ATT_CONV]` or `[WB_CONV]` while the attitude or gyro bias has not converged yet
+(keep the device still for a few seconds), `[MAG_DIST]` under magnetic
+disturbance, `[UTC_UNSYNC]` while device time is not synchronized. No brackets
+means no warning.
 
 Windows commands use the environment's Python directly, so no activation or PATH
-change is needed. On Linux/macOS, activate the environment again in a new terminal.
+change is needed. On Linux/macOS, activation provides `python` and pip from
+`.venv`; activate it again in each new terminal.
 
 ## Read and record
 
@@ -118,9 +136,10 @@ existing files. Use a new output filename for another recording.
   The Windows commands above do not depend on the Scripts directory being on PATH.
 - **No serial ports:** check power, the USB data cable, and the USB-to-serial
   driver. On Windows, check Device Manager for a COM port.
-- **Connection or read fails:** close CHCenter or other programs using the port.
-  If you know the port and baudrate, specify both with `-p` and `-b`. A valid
-  measurement stream can be read even when identity replies are unavailable.
+- **Port is in use / access denied:** close CHCenter or other programs using the
+  port. If you know the port and baudrate, specify both with `-p` and `-b`.
+- **Port opens but no bytes arrive:** check the TX/RX wiring (crossed for a raw
+  UART), the common ground, and that output is enabled (next item).
 - **Output is disabled:** with a single device connected, use
   `python -m hipnuc command "LOG ENABLE" -p COM3 -b 115200` at its actual baudrate.
 - **Gaps or checksum errors:** ensure the output rate fits the serial bandwidth;
@@ -137,6 +156,3 @@ existing files. Use a new output filename for another recording.
   environment; do not use `sudo pip`.
 - **Pi GPIO UART:** enable UART and disable the serial login console in the OS
   configuration. USB-to-serial adapters do not require this GPIO setting.
-
-[IMU command and programming manual](https://download.hipnuc.com/en/products/imu/cum.html)
-· [INS command and programming manual](https://download.hipnuc.com/en/products/ins/cum.html)

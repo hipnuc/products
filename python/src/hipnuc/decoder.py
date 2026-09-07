@@ -8,15 +8,36 @@ import math
 import struct
 from typing import Any
 
-import pynmea2
-
 from .models import Sample
 
 
-# Product wire convention for G-to-SI conversion, not local gravity calibration.
+# Product wire convention: HI91 acceleration is encoded as acc / 9.8 (firmware
+# GRAVITY constant), so 9.8 recovers the value in m/s^2. Not local gravity.
 GRAVITY = 9.8
 _SYNC = b"\x5a\xa5"
 _UTC_UNSYNC = 1 << 11
+
+# MAIN_STATUS bits shared by HI91/HI81/HI83 (IMU manual, "MAIN_STATUS").
+# The names follow the manual; a set bit is a warning, so WB_CONV and ATT_CONV
+# mean "NOT converged" while they are present in ``status_flags``.
+MAIN_STATUS_FLAGS = {
+    3: "WB_CONV",  # set: gyro bias NOT yet converged (keep still for a few seconds)
+    4: "MAG_DIST",  # set: magnetic disturbance detected
+    5: "ACC_SAT",  # set: accelerometer over range
+    6: "GYR_SAT",  # set: gyroscope over range
+    7: "ATT_CONV",  # set: attitude NOT yet converged
+    9: "STATIC",  # set: device detected as static
+    10: "MAG_AIDING",  # set: magnetometer aiding enabled
+    11: "UTC_UNSYNC",  # set: device time is NOT synchronized to UTC
+    12: "SOUT_PULSE",  # set: this frame corresponds to a SYNC_OUT pulse
+}
+INS_STATUS_NAMES = {0: "invalid", 1: "aligning", 3: "navigating", 6: "dead_reckoning"}
+
+# HI83 bitmap fields decoded by this SDK. Bits 0-11 are the public IMU/MRU
+# fields; 12-19, 30 and 31 are INS delivery extensions. Bits 25-29 are
+# internal diagnostics and are not decoded. On the wire, bits 30/31 follow
+# bit 27 and precede bits 28/29, so ascending decoding is only valid while
+# no undecoded bit precedes a decoded one; unknown bits stop decoding.
 _HI83_SIZES = {
     0: 12,
     1: 12,
@@ -41,7 +62,7 @@ _HI83_SIZES = {
     30: 24,
     31: 12,
 }
-_HI83_KNOWN_MASK = sum(1 << bit for bit in _HI83_SIZES)
+_HI83_EXTENSION_MASK = 0xC00FF000
 _HI83_VECTOR_NAMES = {
     0: "acceleration_m_s2",
     1: "angular_velocity_rad_s",
@@ -64,12 +85,17 @@ _HI83_SCALAR_NAMES = {
 
 
 def _crc16(data: bytes, crc: int = 0) -> int:
-    """CRC-16/XMODEM, kept independent of the fixture generator's binascii."""
+    """CRC-16/XMODEM (poly 0x1021, init 0), as used by the HiPNUC frame header."""
     for value in data:
         crc ^= value << 8
         for _ in range(8):
             crc = ((crc << 1) ^ (0x1021 if crc & 0x8000 else 0)) & 0xFFFF
     return crc
+
+
+def status_flags(main_status: int) -> list[str]:
+    """Names of the set MAIN_STATUS bits, in bit order. Every listed flag is a warning."""
+    return [name for bit, name in MAIN_STATUS_FLAGS.items() if main_status & (1 << bit)]
 
 
 def _scaled(values: tuple[float, ...], scale: float) -> list[float]:
@@ -175,16 +201,11 @@ class Decoder:
     waits for the announced bytes; call ``finish`` at EOF to recover a valid
     suffix after a truncated frame. No host clock or date is inferred.
     After a damaged binary header/checksum, text stays quarantined until a
-    checksum-valid binary/NMEA frame or ``reset`` establishes a new boundary.
-    NMEA embedded within the announced damaged binary span is excluded. An
-    ASCII-only response after corruption may be lost rather than becoming a
-    false ACK, because the damaged checksum also covers the length field.
+    checksum-valid binary/NMEA frame or ``reset`` establishes a new boundary,
+    so binary payload bytes can never be mistaken for a command reply.
 
     The default 506-byte payload limit matches the C SDK's 512-byte receive
-    buffer, including its 6-byte header. It is a configurable SDK resource
-    bound, not a claim that the on-wire 16-bit length is limited to 506.
-    HI83 must be the last subpacket in an outer frame: its remaining payload
-    length distinguishes current 64-bit and historical 32-bit time layouts.
+    buffer, including its 6-byte header.
     """
 
     def __init__(
@@ -400,7 +421,7 @@ class Decoder:
                     continue
                 try:
                     sample = _decode_nmea(line)
-                except (ValueError, IndexError, UnicodeError, pynmea2.ParseError):
+                except (ValueError, IndexError, UnicodeError):
                     self.statistics["nmea_errors"] += 1
                 else:
                     self.statistics["nmea_frames"] += 1
@@ -460,6 +481,7 @@ def _decode_hi91(data: bytes, frame: bytes, offset: int) -> Sample:
     status, temperature, pressure, timestamp = struct.unpack_from("<HbfI", data, 1)
     values = {
         "main_status": status,
+        "status_flags": status_flags(status),
         "temperature_c": temperature,
         "pressure_pa": pressure,
         "device_time_ms": timestamp,
@@ -485,7 +507,9 @@ def _decode_hi81(data: bytes, frame: bytes, offset: int) -> Sample:
     utc_parts = struct.unpack_from("<5BH", data, 35)
     values = {
         "main_status": status,
+        "status_flags": status_flags(status),
         "ins_status": ins_status,
+        "ins_status_name": INS_STATUS_NAMES.get(ins_status, "unknown"),
         "gps_week": week,
         "gps_time_of_week_ms": tow,
         "gps_time_of_week_s": tow * 0.001,
@@ -525,43 +549,37 @@ def _decode_hi81(data: bytes, frame: bytes, offset: int) -> Sample:
         gps_time_reference="GPST",
         gps_time_available=bool(week or tow),
         utc_raw_components=list(utc_parts),
+        # Bytes 90..103 are reserved and always zero on current firmware.
         reserved_tail_hex=data[90:104].hex(),
     )
     return _make_sample("HI81", values, frame, metadata, issues)
 
 
 def _decode_hi83(data: bytes, frame: bytes, offset: int) -> Sample:
-    _, status, status_ext, bitmap = struct.unpack_from("<BHBI", data)
-    unknown = bitmap & ~_HI83_KNOWN_MASK
-    length8 = 8 + sum(size for bit, size in _HI83_SIZES.items() if bitmap & (1 << bit))
-    time_size = 8
+    _, status, ins_status, bitmap = struct.unpack_from("<BHBI", data)
+    unknown = bitmap & ~sum(1 << bit for bit in _HI83_SIZES)
     if not unknown:
-        if len(data) == length8:
-            pass
-        elif bitmap & (1 << 5) and len(data) == length8 - 4:
-            time_size = 4
-        else:
+        expected = 8 + sum(size for bit, size in _HI83_SIZES.items() if bitmap & (1 << bit))
+        if len(data) != expected:
             raise ValueError("HI83 bitmap does not match payload length")
     values: dict[str, Any] = {
         "main_status": status,
-        "status_ext": status_ext,
+        "status_flags": status_flags(status),
+        "ins_status": ins_status,
+        "ins_status_name": INS_STATUS_NAMES.get(ins_status, "unknown"),
         "data_bitmap": bitmap,
     }
     metadata = _binary_metadata(offset)
     metadata["euler_components"] = ["roll", "pitch", "yaw"]
     issues: list[str] = []
     cursor = 8
-    complete = not unknown
     for bit in range(32):
         if not bitmap & (1 << bit):
             continue
         if bit not in _HI83_SIZES:
             issues.append(f"unknown_hi83_bitmap:0x{unknown:08x}")
             break
-        if bit == 5 and unknown:
-            issues.extend(("ambiguous_hi83_time_layout", f"unknown_hi83_bitmap:0x{unknown:08x}"))
-            break
-        size = time_size if bit == 5 else _HI83_SIZES[bit]
+        size = _HI83_SIZES[bit]
         if cursor + size > len(data):
             raise ValueError("truncated HI83 field")
         if bit in _HI83_VECTOR_NAMES:
@@ -580,22 +598,16 @@ def _decode_hi83(data: bytes, frame: bytes, offset: int) -> Sample:
         elif bit == 4:
             values["quaternion_wxyz"] = list(struct.unpack_from("<4f", data, cursor))
         elif bit == 5:
-            stamp = struct.unpack_from("<Q" if time_size == 8 else "<I", data, cursor)[0]
-            key = "device_time_us" if time_size == 8 else "device_time_ms"
-            values[key] = stamp
-            values["device_time_s"] = stamp / (1_000_000 if time_size == 8 else 1000)
-            metadata["hi83_time_layout"] = "uint64_us" if time_size == 8 else "legacy_uint32_ms"
-            metadata["device_time_reference"] = (
-                "local_counter" if time_size == 8 or status & _UTC_UNSYNC else "utc_time_of_day"
-            )
-            metadata["device_time_date_known"] = False
+            stamp = struct.unpack_from("<Q", data, cursor)[0]
+            values["device_time_us"] = stamp
+            values["device_time_s"] = stamp / 1_000_000
+            metadata["device_time_reference"] = "local_counter"
         elif bit == 6:
             parts = struct.unpack_from("<5BH", data, cursor)
             values["utc"] = _utc(parts, issues, synchronized=not bool(status & _UTC_UNSYNC))
             metadata["utc_raw_components"] = list(parts)
         elif bit in _HI83_SCALAR_NAMES:
-            key = _HI83_SCALAR_NAMES[bit]
-            values[key] = struct.unpack_from("<f", data, cursor)[0]
+            values[_HI83_SCALAR_NAMES[bit]] = struct.unpack_from("<f", data, cursor)[0]
         elif bit in (14, 30):
             longitude, latitude, altitude = struct.unpack_from("<3d", data, cursor)
             prefix = "gnss_" if bit == 30 else ""
@@ -622,12 +634,12 @@ def _decode_hi83(data: bytes, frame: bytes, offset: int) -> Sample:
         elif bit == 19:
             values["node_id"] = data[cursor]
         cursor += size
-    if not complete:
+    if unknown:
         metadata["undecoded_payload_offset"] = offset + cursor
         metadata["undecoded_payload_hex"] = data[cursor:].hex()
-    if bitmap & 0xC00FF000:
-        metadata["field_dictionary"] = "public_sdk_ins_extensions"
-    return _make_sample("HI83", values, frame, metadata, issues, complete)
+    if bitmap & _HI83_EXTENSION_MASK:
+        metadata["hi83_extension_bits"] = "bits 12-19, 30, 31 are INS delivery extensions"
+    return _make_sample("HI83", values, frame, metadata, issues, complete=not unknown)
 
 
 def _nmea_number(value: str, scale: float = 1) -> float | None:
@@ -688,32 +700,23 @@ def _nmea_coordinate(value: str, direction: str, axis: str, issues: list[str]) -
 
 
 def _decode_nmea(raw: bytes) -> Sample:
+    """Decode the GGA and RMC sentences emitted by HiPNUC INS products."""
     sentence = raw.rstrip(b"\r\n").decode("ascii")
     header = sentence[1:6]
     if len(header) != 5 or not header.isalpha() or not header.isupper():
         raise ValueError("invalid NMEA header")
+    body, _, checksum = sentence[1:].rpartition("*")
+    if len(checksum) != 2 or any(char not in "0123456789abcdefABCDEF" for char in checksum):
+        raise ValueError("invalid NMEA checksum syntax")
+    computed = 0
+    for value in body.encode("ascii"):
+        computed ^= value
+    if computed != int(checksum, 16):
+        raise ValueError("NMEA checksum mismatch")
+    fields = body.split(",")
     kind = header[2:]
-    if kind in ("GGA", "RMC", "VTG", "GSA", "GSV", "ZDA"):
-        # The maintained parser owns standard NMEA syntax/checksum handling.
-        # Convert its raw fields explicitly: missing coordinates must stay
-        # unavailable, rather than becoming a dependency's numeric default.
-        message = pynmea2.parse(sentence, check=True)
-        fields = [message.talker + message.sentence_type, *message.data]
-    else:
-        body, checksum = sentence[1:].rsplit("*", 1)
-        if len(checksum) != 2 or any(char not in "0123456789abcdefABCDEF" for char in checksum):
-            raise ValueError("invalid NMEA checksum syntax")
-        computed = 0
-        for value in body.encode("ascii"):
-            computed ^= value
-        if computed != int(checksum, 16):
-            raise ValueError("NMEA checksum mismatch")
-        fields = body.split(",")
     metadata: dict[str, Any] = {"protocol": "nmea", "talker_id": header[:2]}
-    issues: list[str] = []
-    values: dict[str, Any] = {}
-    # Structural field counts are checked before individual optional fields.
-    minimum = {"GGA": 15, "RMC": 10, "VTG": 9, "GSA": 18, "GSV": 4, "SXT": 22, "ZDA": 7}
+    minimum = {"GGA": 15, "RMC": 10}
     if kind not in minimum:
         return _make_sample(
             kind,
@@ -725,19 +728,19 @@ def _decode_nmea(raw: bytes) -> Sample:
         )
     if len(fields) < minimum[kind]:
         raise ValueError("truncated NMEA sentence")
-    if kind in ("GGA", "RMC"):
-        latitude_index = 2 if kind == "GGA" else 3
-        longitude_index = 4 if kind == "GGA" else 5
-        values.update(
-            utc_time=_nmea_time(fields[1], issues),
-            latitude_deg=_nmea_coordinate(
-                fields[latitude_index], fields[latitude_index + 1], "latitude", issues
-            ),
-            longitude_deg=_nmea_coordinate(
-                fields[longitude_index], fields[longitude_index + 1], "longitude", issues
-            ),
-        )
-        metadata.update(position_source="gnss", position_datum="WGS84")
+    issues: list[str] = []
+    latitude_index = 2 if kind == "GGA" else 3
+    longitude_index = 4 if kind == "GGA" else 5
+    values: dict[str, Any] = {
+        "utc_time": _nmea_time(fields[1], issues),
+        "latitude_deg": _nmea_coordinate(
+            fields[latitude_index], fields[latitude_index + 1], "latitude", issues
+        ),
+        "longitude_deg": _nmea_coordinate(
+            fields[longitude_index], fields[longitude_index + 1], "longitude", issues
+        ),
+    }
+    metadata.update(position_source="gnss", position_datum="WGS84")
     if kind == "GGA":
         values.update(
             position_quality=_nmea_int(fields[6]),
@@ -759,7 +762,7 @@ def _decode_nmea(raw: bytes) -> Sample:
         metadata.update(
             utc_reference="time_of_day_without_date", altitude_reference="mean_sea_level"
         )
-    elif kind == "RMC":
+    else:
         date_value = _nmea_date(fields[9], issues)
         values.update(
             position_status=fields[2],
@@ -775,93 +778,4 @@ def _decode_nmea(raw: bytes) -> Sample:
         if values["fix_valid"] is False:
             issues.append("gnss_fix_invalid")
         metadata.update(course_reference="true_north_clockwise", two_digit_year_window="1969-2068")
-    elif kind == "VTG":
-        values.update(
-            course_over_ground_rad=_nmea_number(fields[1], math.pi / 180),
-            magnetic_course_rad=_nmea_number(fields[3], math.pi / 180),
-            speed_over_ground_m_s=_nmea_number(fields[5], 1852 / 3600),
-            mode=fields[9] if len(fields) > 9 else None,
-        )
-        if values["speed_over_ground_m_s"] is None:
-            values["speed_over_ground_m_s"] = _nmea_number(fields[7], 1 / 3.6)
-        metadata["course_reference"] = "true_north_clockwise"
-    elif kind == "GSA":
-        values.update(
-            selection_mode=fields[1],
-            fix_type=_nmea_int(fields[2]),
-            satellite_ids=[item for item in fields[3:15] if item],
-            pdop=_nmea_number(fields[15]),
-            hdop=_nmea_number(fields[16]),
-            vdop=_nmea_number(fields[17]),
-        )
-        if len(fields) > 18:
-            values["system_id"] = _nmea_int(fields[18])
-    elif kind == "GSV":
-        if (len(fields) - 4) % 4 not in (0, 1):
-            raise ValueError("truncated NMEA satellite group")
-        values.update(
-            message_count=_nmea_int(fields[1]),
-            message_number=_nmea_int(fields[2]),
-            satellites_in_view=_nmea_int(fields[3]),
-        )
-        satellites = []
-        for start in range(4, len(fields) - 3, 4):
-            satellites.append(
-                {
-                    "id": fields[start] or None,
-                    "elevation_rad": _nmea_number(fields[start + 1], math.pi / 180),
-                    "azimuth_rad": _nmea_number(fields[start + 2], math.pi / 180),
-                    "snr_db": _nmea_number(fields[start + 3]),
-                }
-            )
-        values["satellites"] = satellites
-        if (len(fields) - 4) % 4 == 1:
-            values["signal_id"] = _nmea_int(fields[-1])
-    elif kind == "ZDA":
-        utc_time = _nmea_time(fields[1], issues)
-        try:
-            utc_date = date(int(fields[4]), int(fields[3]), int(fields[2]))
-        except (ValueError, OverflowError):
-            utc_date = None
-            issues.append("invalid_utc_date")
-        values["utc"] = datetime.combine(utc_date, utc_time) if utc_date and utc_time else None
-    elif kind == "SXT":
-        stamp = None
-        if fields[1]:
-            try:
-                whole, _, fraction = fields[1].partition(".")
-                if len(whole) != 14 or (fraction and not fraction.isdigit()):
-                    raise ValueError("invalid SXT timestamp syntax")
-                stamp = datetime.strptime(whole, "%Y%m%d%H%M%S").replace(
-                    microsecond=int((fraction + "000000")[:6]),
-                    tzinfo=timezone.utc,
-                )
-            except ValueError:
-                issues.append("invalid_utc")
-        values.update(
-            utc=stamp,
-            longitude_deg=_nmea_number(fields[2]),
-            latitude_deg=_nmea_number(fields[3]),
-            altitude_msl_m=_nmea_number(fields[4]),
-            heading_rad=_nmea_number(fields[5], math.pi / 180),
-            pitch_rad=_nmea_number(fields[6], math.pi / 180),
-            course_over_ground_rad=_nmea_number(fields[7], math.pi / 180),
-            speed_over_ground_m_s=_nmea_number(fields[8]),
-            roll_rad=_nmea_number(fields[9], math.pi / 180),
-            position_quality=_nmea_int(fields[10]),
-            heading_quality=_nmea_int(fields[11]),
-            position_satellites=_nmea_int(fields[12]),
-            heading_satellites=_nmea_int(fields[13]),
-            angular_velocity_rad_s=[_nmea_number(item, math.pi / 180) for item in fields[14:17]],
-            velocity_enu_m_s=[_nmea_number(item) for item in fields[17:20]],
-            ins_status=_nmea_int(fields[20]),
-            antenna_status=_nmea_int(fields[21]),
-        )
-        metadata.update(
-            position_source="ins",
-            position_datum="WGS84",
-            altitude_reference="mean_sea_level",
-            navigation_vector_frame="ENU",
-            heading_reference="device_reported",
-        )
     return _make_sample(kind, values, raw, metadata, issues)

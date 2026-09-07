@@ -197,22 +197,6 @@ def test_empty_optional_identity_does_not_gate_device(rig):
     assert device.read_registers(0x05) == [80]
 
 
-@pytest.mark.parametrize("operation", ["id", "reboot", "baud_reboot"])
-def test_empty_identity_does_not_claim_critical_verification(rig, operation):
-    server, _, device = rig
-    server.nodes[80].update(dict.fromkeys(range(0x70, 0x83), 0))
-    with pytest.raises(VerificationError, match="empty identity"):
-        if operation == "id":
-            device.set_id(81)
-        elif operation == "reboot":
-            device.reboot()
-        else:
-            device.set_baudrate(460800, reboot=True)
-    assert not any(call[0] == "write" for call in server.calls)
-    # Unknown/empty identity does not impose a raw I/O or telemetry gate.
-    assert device.write_register(6, 7).verified
-
-
 def load_sample(server):
     # Independently specified wire values: +1g/-0.5g, +/-125deg/s,
     # +10uT using the historical scale, signed Euler/pressure/quaternion.
@@ -250,14 +234,14 @@ def test_common_source_acceleration_matches_across_protocols(rig, protocol):
 def test_sample_fixed_point_si_sign_word_order_and_uptime(rig):
     server, bus, _ = rig
     expected_raw = load_sample(server)
-    device = bus.device(80, magnetic_scale="legacy")
+    device = bus.device(80)
     sample = device.read_sample(include_mru=True)
     values = sample.values
     assert values["acceleration_m_s2"] == pytest.approx((9.8, -4.9, 0))
     assert values["angular_velocity_rad_s"] == pytest.approx(
         (math.radians(125), -math.radians(125), 0)
     )
-    assert values["magnetic_field_t"] == pytest.approx((10e-6, -20e-6, 0))
+    assert values["magnetic_field_t"] == pytest.approx((320 / 32.768e6, -640 / 32.768e6, 0))
     assert values["euler_rad"] == pytest.approx((-math.pi / 2, math.pi / 4, math.radians(179.999)))
     assert values["temperature_c"] == -12.34
     assert values["pressure_pa"] == 101325.0
@@ -272,7 +256,6 @@ def test_sample_fixed_point_si_sign_word_order_and_uptime(rig):
     assert sample.complete
     assert sample.metadata["device_time"]["epoch"] == "boot"
     assert sample.metadata["register_snapshot"] == "not_guaranteed"
-    assert sample.metadata["magnetic_scale"] == "legacy"
     assert sample.received_time_ns > 0
     assert sample.to_dict()["acceleration_m_s2"] == list(values["acceleration_m_s2"])
     assert server.calls == [("read", 80, 0x70, 19), ("read", 80, 0x34, 32), ("read", 80, 9, 3)]
@@ -387,22 +370,10 @@ def test_id_change_reads_and_saves_at_new_id(rig, lost_ack):
     assert result.verified and result.acknowledged is not lost_ack
     assert device.device_id == 81
     assert server.calls == [
-        ("read", 80, 0x70, 19),
         ("write", 80, 5, 81),
         ("read", 81, 5, 1),
-        ("read", 81, 0x70, 19),
         ("write", 81, 0, 0),
     ]
-
-
-def test_id_rejection_does_not_accidentally_verify_another_device(rig):
-    server, _, device = rig
-    server.add_node(81, serial="8877665544332211")
-    server.echo_only.add(5)
-    with pytest.raises(VerificationError, match="original device"):
-        device.set_id(81)
-    assert device.device_id == 80
-    assert ("write", 81, 0, 0) not in server.calls
 
 
 def test_baud_write_saves_without_reset_or_host_change(rig):
@@ -442,7 +413,7 @@ def test_explicit_baud_reboot_accepts_missing_ack_and_confirms_identity(rig, mon
     assert server.clients[0].closed
     assert server.calls.count(("write", 80, 0, 0)) == 1
     assert server.calls.count(("write", 80, 0, 0xFF)) == 1
-    assert server.calls[-2:] == [("read", 80, 0x70, 19), ("read", 80, 4, 1)]
+    assert server.calls[-1] == ("read", 80, 0x70, 19)
 
 
 def test_reboot_false_save_option_is_respected(rig, monkeypatch):
@@ -461,44 +432,20 @@ def test_configuration_batch_saves_once_only_when_explicit(rig, monkeypatch):
     device.set_baudrate(460800)
     assert not any(call[0] == "write" and call[2:] == (0, 0) for call in server.calls)
     device.save_config()
-    device.reboot(timeout=0.02)
+    device.reboot(timeout=0.02, baudrate=460800)
     assert server.calls.count(("write", 81, 0, 0)) == 1
 
 
-def test_baud_reconnect_failure_restores_host_speed_without_replaying_reset(rig, monkeypatch):
+def test_baud_reconnect_failure_keeps_new_host_speed_without_replaying_reset(rig, monkeypatch):
     server, bus, device = rig
     monkeypatch.setattr(modbus.time, "sleep", lambda _: None)
     server.echo_only.add(0)
-    with pytest.raises(ResponseTimeout):
+    with pytest.raises(ResponseTimeout, match="after reboot"):
         device.set_baudrate(460800, reboot=True, timeout=0.002)
-    assert bus.baudrate == 115200
+    assert bus.baudrate == 460800
+    assert server.calls.count(("write", 80, 0, 0xFF)) == 1
+    bus.reconfigure(115200)
     assert device.read_info().serial_number == "1122334455667788"
-    assert server.calls.count(("write", 80, 0, 0xFF)) == 1
-
-
-def test_baud_reconnect_and_host_restore_failures_preserve_both_errors(rig, monkeypatch):
-    server, bus, device = rig
-    monkeypatch.setattr(modbus.time, "sleep", lambda _: None)
-    device.set_baudrate(460800)
-    original_error = TransportError("Cannot open port at new baudrate")
-    recovery_error = TransportError("Cannot restore original host baudrate")
-    attempted_baudrates = []
-
-    def fail_reconfigure(baudrate):
-        attempted_baudrates.append(baudrate)
-        raise original_error if baudrate == 460800 else recovery_error
-
-    monkeypatch.setattr(bus, "reconfigure", fail_reconfigure)
-    with pytest.raises(TransportError) as caught:
-        device.reboot(timeout=0.002)
-
-    assert str(original_error) in str(caught.value)
-    assert str(recovery_error) in str(caught.value)
-    assert caught.value.__cause__ is recovery_error
-    assert recovery_error.__context__ is original_error
-    assert attempted_baudrates == [460800, 115200]
-    assert server.calls.count(("write", 80, 4, 7)) == 1
-    assert server.calls.count(("write", 80, 0, 0xFF)) == 1
 
 
 def test_write_only_commands_do_not_claim_unavailable_verification(rig):

@@ -3,8 +3,11 @@
 [English](README.md) | [中文](README_zh.md)
 
 在命令行或自己的 Python 程序中读取、配置和录制 HiPNUC IMU/AHRS/MRU 与 INS。
-支持串口二进制/NMEA 和 Modbus RTU，适用于 Python 3.10–3.14、Windows、Linux
-（含 Ubuntu 和树莓派系统）及 macOS。
+支持串口二进制（HI91/HI81/HI83）、NMEA GGA/RMC 和 Modbus RTU，适用于
+Python 3.10–3.14、Windows、Linux（含 Ubuntu 和树莓派系统）及 macOS。
+
+支持设备：固件 1.6.9 及以上（HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0）。
+HI2xx/CH1xx 等老产品请使用归档的 C 例程。
 
 ## 安装
 
@@ -22,6 +25,15 @@ py -3 -m venv .venv
 
 **Linux / 树莓派 / macOS：**
 
+Ubuntu、Debian 和 Raspberry Pi OS 首次使用时，先安装虚拟环境支持：
+
+```sh
+sudo apt update
+sudo apt install -y python3-venv
+```
+
+然后创建并激活虚拟环境（macOS 从这里开始）：
+
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
@@ -33,9 +45,11 @@ python -m hipnuc read
 `list` 列出系统串口。`read` 自动寻找 HiPNUC 设备和波特率，显示选中的连接后开始读数；
 自动发现最多等待 30 秒，期间显示正在尝试的端口、波特率及结果。
 发现多台设备时，用 `-p` 指定端口。按 Ctrl-C 停止。
+每行读数在报文类型后显示设备当前的告警位：姿态或陀螺零偏尚未收敛时出现 `[ATT_CONV]`、`[WB_CONV]`
+（静置几秒即可），磁干扰时出现 `[MAG_DIST]`，设备时间未同步时出现 `[UTC_UNSYNC]`；没有方括号表示无告警。
 
 Windows 命令直接使用虚拟环境中的 Python，无需激活环境或修改 PATH。
-Linux/macOS 新开终端后，重新激活虚拟环境即可。
+Linux/macOS 激活后，`python` 和 pip 由 `.venv` 提供；新开终端后重新激活即可。
 
 ## 读取和录制
 
@@ -111,8 +125,10 @@ Windows 中像上面一样使用 `.\.venv\Scripts\python.exe`。
   上面的 Windows 命令不依赖 Scripts 目录是否在 PATH 中。
 - **没有串口：**检查供电、USB 数据线和 USB 转串口驱动；Windows 下查看设备管理器
   中是否出现 COM 口。
-- **连接或读取失败：**关闭占用串口的 CHCenter 等程序。知道端口和波特率时同时指定
-  `-p`、`-b`；设备有合法测量输出时，即使身份查询没有回复，也可读取数据。
+- **串口被占用 / 拒绝访问：**关闭占用串口的 CHCenter 等程序。知道端口和波特率时同时指定
+  `-p`、`-b`。
+- **能打开串口但收不到任何字节：**检查 TX/RX 接线（裸 UART 需交叉）、共地，以及输出是否
+  已开启（见下一条）。
 - **设备关闭了输出：**只接一台设备，以实际波特率运行
   `python -m hipnuc command "LOG ENABLE" -p COM3 -b 115200`。
 - **数据不连续或校验错误：**确认输出频率与串口带宽匹配，必要时降低输出频率或提高设备波特率。
@@ -126,6 +142,3 @@ Windows 中像上面一样使用 `.\.venv\Scripts\python.exe`。
   `sudo apt install python3-venv`。SDK 安装在虚拟环境中，不要使用 `sudo pip`。
 - **树莓派 GPIO UART：**在系统配置中启用 UART、关闭串口登录控制台；使用 USB 转串口
   不需要这项 GPIO 设置。
-
-[IMU 指令与编程手册](https://download.hipnuc.com/products/imu/cum.html)
-· [INS 指令与编程手册](https://download.hipnuc.com/products/ins/cum.html)
