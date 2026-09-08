@@ -18,6 +18,7 @@ import time
 import click
 from serial.tools import list_ports
 
+from . import __version__
 from ._connection import discovery_error_summary, is_usb_port
 from .errors import HipnucError, ResponseTimeout, TransportError
 from .models import Sample
@@ -105,7 +106,7 @@ def _serial_options(func=None, *, require_port=False):
         "--port",
         required=require_port,
         help=(
-            "Target serial port, e.g. COM3 or /dev/ttyUSB0. Use 'hipnuc scan' to find it."
+            "Target serial port, e.g. COM3 or /dev/ttyUSB0. Use 'hihost scan' to find it."
             if require_port
             else "COM3, /dev/ttyUSB0, etc.; auto-select a USB serial port if omitted."
         ),
@@ -342,14 +343,18 @@ def _sample_consumer(
     return consume
 
 
-@click.group(invoke_without_command=True)
-@click.version_option(package_name="hipnuc-sdk")
+@click.group(
+    invoke_without_command=True,
+    help=(
+        f"hihost {__version__}\n\n"
+        "HiPNUC IMU/INS tools. Start with list, info, or read.\n\n"
+        "Connection options follow the final command: read -p COM3 -b 115200."
+    ),
+)
+@click.version_option(__version__, prog_name="hihost", message="%(prog)s %(version)s")
 @click.pass_context
 def main(ctx):
-    """HiPNUC IMU/INS tools. Start with list, info, or read.
-
-    Connection options follow the final command: read -p COM3 -b 115200.
-    """
+    """Run the HiPNUC command-line tools."""
     # Windows consoles support Unicode, but redirected Python streams can use
     # a legacy code page. CLI pipes/files consistently emit UTF-8, like Recorder.
     for stream in (sys.stdout, sys.stderr):

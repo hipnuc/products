@@ -23,7 +23,8 @@ py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install .
-python -m hipnuc --help
+hihost --version
+hihost --help
 ```
 
 **Linux / 树莓派 / macOS：**
@@ -37,40 +38,44 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install .
-python -m hipnuc --help
+hihost --version
+hihost --help
 ```
 
 新开终端后重新激活环境。集成到已有程序时，激活该程序的环境并运行
 `python -m pip install "/path/to/products/python"`，IDE 也选择同一环境。
 更新 SDK 源码后重新安装。
 
+`hihost --help` 的开头显示 `hihost 0.1.0`。如果终端找不到 `hihost`，
+可在同一环境中使用 `python -m hipnuc`，后面的参数相同。
+
 ## 读取、录制与发送指令
 
 连接设备，关闭其它占用串口的程序；虚拟机需将 USB 转接器连接到虚拟机系统。
 
 ```sh
-python -m hipnuc list
-python -m hipnuc read
-python -m hipnuc read --duration 60 --record samples.jsonl
+hihost list
+hihost read
+hihost read --duration 60 --record samples.jsonl
 ```
 
 先按 Ctrl-C 停止连续读取，再尝试下一条命令。
-`list` 显示 USB 串口和其它串口的数量，`list --all` 展开全部端口，
-`list --json` 始终返回全部端口。自动发现搜索 USB 串口，最多 30 秒并显示进度。
+`list` 显示 USB 串口和其它串口的数量，`hihost list --all` 展开全部端口，
+`hihost list --json` 始终返回全部端口。自动发现搜索 USB 串口，最多 30 秒并显示进度。
 连接多台设备、板载/GPIO UART 或其它端口时，用 `-p PORT` 指定；
 知道速度时再加 `-b BAUD`：
 
 ```sh
-python -m hipnuc read -p COM3 -b 115200
-python -m hipnuc info -p COM3 -b 115200
-python -m hipnuc command "LOG VERSION" -p COM3 -b 115200
-python -m hipnuc command --file commands.txt -p COM3 -b 115200 --save
+hihost read -p COM3 -b 115200
+hihost info -p COM3 -b 115200
+hihost command "LOG VERSION" -p COM3 -b 115200
+hihost command --file commands.txt -p COM3 -b 115200 --save
 ```
 
 将 `COM3` 替换成实际端口，例如 Linux 的 `/dev/ttyUSB0`。
 连接参数放在**最终命令之后**，包括 `modbus read`。
-`-b` 只设置电脑连接速度，`baudrate NEW_BAUD` 才修改设备速度。
-未知波特率用 `scan -p PORT`，重启用 `reboot`，具体选项在最终命令后加
+`-b` 只设置电脑连接速度，`hihost baudrate NEW_BAUD` 才修改设备速度。
+未知波特率用 `hihost scan -p PORT`，重启用 `reboot`，具体选项在最终命令后加
 `--help` 查看。配置命令要求明确指定端口。
 
 指令文件每行一条产品指令，`#` 和 `;` 开始注释。遇到失败停止执行；
@@ -157,9 +162,9 @@ with (
 `LOG DISABLE` 只临时停发；重启后仍需保持 RTU 时，应关闭定时输出消息并显式保存该配置。
 
 ```sh
-python -m hipnuc modbus info -p COM3 --id 80
-python -m hipnuc modbus read -p COM3 --id 80
-python -m hipnuc modbus read -p COM3 --id 80 --duration 60 --record samples.jsonl
+hihost modbus info -p COM3 --id 80
+hihost modbus read -p COM3 --id 80
+hihost modbus read -p COM3 --id 80 --duration 60 --record samples.jsonl
 ```
 
 `read` 持续到 Ctrl-C、`--duration` 或 `--count`，`--interval` 设置轮询间隔。
@@ -192,8 +197,8 @@ Python 录制时先打开总线，再打开 `Recorder`，写入每次返回的�
 python -m pip install ".[can]"
 sudo ip link set can0 type can bitrate 500000
 sudo ip link set can0 up
-python -m hipnuc can read -i can0
-python -m hipnuc can read -i can0 --id 8 --record samples.jsonl
+hihost can read -i can0
+hihost can read -i can0 --id 8 --record samples.jsonl
 ```
 
 使用 CAN FD 时，先在 Linux 配置仲裁段／数据段波特率，再给 `can read` 加上
@@ -201,8 +206,8 @@ python -m hipnuc can read -i can0 --id 8 --record samples.jsonl
 文件保护；每条记录保留 `node_id`、CAN 标识符和主机接收时间，不合并不同 PGN。
 接口状态和原始抓包使用 `ip`、`candump` 等系统工具。
 
-原始寄存器操作必须指定目标：`can reg read ADDRESS -i can0 --id 8`
-或 `can reg write ADDRESS VALUE -i can0 --id 8`。地址和值支持十进制或 `0x`。
+原始寄存器操作必须指定目标：`hihost can reg read ADDRESS -i can0 --id 8`
+或 `hihost can reg write ADDRESS VALUE -i can0 --id 8`。地址和值支持十进制或 `0x`。
 写入只检查回复，不自动保存、重启，也不证明配置已经生效。不支持的请求可能超时。
 
 集成时直接使用标准 `python-can` 总线和 SDK 函数：
@@ -231,8 +236,8 @@ with can.Bus(interface="socketcan", channel="can0", ignore_config=True) as bus:
 并明确指定目标：
 
 ```sh
-python -m hipnuc update firmware.hex -p /dev/ttyUSB0 -b 115200
-python -m hipnuc can update firmware.hex -i can0 --id 8
+hihost update firmware.hex -p /dev/ttyUSB0 -b 115200
+hihost can update firmware.hex -i can0 --id 8
 ```
 
 Windows 将端口换成 `COM3` 或实际端口。CAN 升级需要可选 CAN 依赖，节点 ID
@@ -252,8 +257,8 @@ bootloader 无法验证固件型号。传输和启动请求成功不代表新应
 | 缺少 Python / venv / pip | 使用 Python 3.10+。支持 Ubuntu 22.04 默认的 3.10，不支持 20.04 默认的 3.8；Ubuntu/Debian/Pi OS 安装 `python3-venv`。 |
 | APT 等待锁 | 等系统更新完成，不删除锁或强杀更新程序。 |
 | `UNKNOWN-0.0.0` / `No module named hipnuc` | 激活正确环境、升级 pip，再从当前 `python/` 目录重新安装。 |
-| PowerShell 阻止激活 | 用 `.\.venv\Scripts\python.exe` 替代 `python`，不必修改全局执行策略。 |
-| 没有串口 / 串口占用 | 检查虚拟机 USB 透传、线缆/驱动和其它串口程序；非 USB 端口用 `list --all`。 |
+| PowerShell 阻止激活 | 用 `.\.venv\Scripts\python.exe` 安装依赖，直接运行 `.\.venv\Scripts\hihost.exe`。 |
+| 没有串口 / 串口占用 | 检查虚拟机 USB 透传、线缆/驱动和其它串口程序；非 USB 端口用 `hihost list --all`。 |
 | 串口打开但无有效样本 | 检查实际波特率、接线、输出方式和频率，低频输出需足够的 `--timeout`。 |
 | 下载 / 证书错误 | 检查网络、时间及所需代理/证书设置，不关闭 TLS 校验。 |
 

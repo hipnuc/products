@@ -402,7 +402,7 @@ class SerialDevice:
             if time.monotonic() >= deadline:
                 raise ResponseTimeout(
                     f"Device did not answer on {self.port} at {self.baudrate} baud within "
-                    f"{timeout:g}s; reconnect with `hipnuc scan` if it moved."
+                    f"{timeout:g}s; reconnect with `hihost scan` if it moved."
                 ) from last_error
             time.sleep(0.05)
 

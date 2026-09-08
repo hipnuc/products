@@ -40,6 +40,9 @@ jobs:
         run: |
           python -m pip check
           python -c "import hipnuc, hipnuc.can, can; print(hipnuc.__version__, hipnuc.__file__)"
+          hihost --version
+          hihost --help
+          hihost can --help
           python -m hipnuc --version
           python -m hipnuc --help
           python -m hipnuc can --help
@@ -64,6 +67,8 @@ jobs:
           source .venv/bin/activate
           python -m pip install --upgrade pip
           python -m pip install .
+          hihost --version
+          hihost --help
           python -m hipnuc --version
           python -m hipnuc --help
       - name: Verify in a fresh shell
@@ -73,6 +78,8 @@ jobs:
           python -m pip check
           cd "$RUNNER_TEMP"
           python -c "import hipnuc; print(hipnuc.__version__, hipnuc.__file__)"
+          hihost --version
+          hihost --help
           python -m hipnuc --version
           python -m hipnuc --help
 
@@ -91,6 +98,9 @@ jobs:
             python -m pip install "/tmp/hipnuc[can]" &&
             python -m pip check &&
             python -c "import hipnuc, hipnuc.can, can; print(hipnuc.__version__, hipnuc.__file__)" &&
+            hihost --version &&
+            hihost --help &&
+            hihost can --help &&
             python -m hipnuc --version &&
             python -m hipnuc --help &&
             python -m hipnuc can --help'

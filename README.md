@@ -14,7 +14,7 @@ HiPNUC IMU/AHRS/MRU and INS devices (firmware 1.6.9 or later).
 | [stm32/](stm32/README.md) | STM32F103 Keil examples for UART and J1939 reception |
 | [ros/](ros/README.md) | ROS 2 Humble/Jazzy/Lyrical and ROS 1 Noetic drivers |
 | [c/](c/README.md) | Copyable serial/CAN decoders, Windows/Linux serial API and C/C++ examples |
-| [python/](python/README.md) | Python SDK and CLI: serial, Modbus RTU, CAN, recording and firmware update |
+| [python/](python/README.md) | Python SDK and `hihost` CLI: serial, Modbus RTU, CAN, recording and firmware update |
 
 Also available: [EtherCAT for HI15](ethercat/README.md),
 [MATLAB analysis of CHCenter HI91 CSV](matlab/README.md)

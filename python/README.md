@@ -25,7 +25,8 @@ py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install .
-python -m hipnuc --help
+hihost --version
+hihost --help
 ```
 
 **Linux / Raspberry Pi / macOS:**
@@ -39,12 +40,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install .
-python -m hipnuc --help
+hihost --version
+hihost --help
 ```
 
 Activate the environment again in each new terminal. For an existing application,
 activate its environment and run `python -m pip install "/path/to/products/python"`;
 select that same environment in your IDE. Reinstall after updating SDK source.
+
+Help starts with `hihost 0.1.0`. If your shell cannot find `hihost`, use
+`python -m hipnuc` with the same arguments in that environment.
 
 ## Read, record and send commands
 
@@ -52,28 +57,28 @@ Connect the device and close other programs using its port. In a VM, attach the
 USB adapter to the guest OS.
 
 ```sh
-python -m hipnuc list
-python -m hipnuc read
-python -m hipnuc read --duration 60 --record samples.jsonl
+hihost list
+hihost read
+hihost read --duration 60 --record samples.jsonl
 ```
 
 Press Ctrl-C to stop a continuous read before trying the next command.
-`list` shows USB serial ports and an other-port count; `list --all` expands all
-ports and `list --json` always returns all ports. Automatic discovery searches
+`list` shows USB serial ports and an other-port count; `hihost list --all` expands all
+ports and `hihost list --json` always returns all ports. Automatic discovery searches
 USB serial ports, showing progress for up to 30 seconds. For multiple devices,
 built-in/GPIO UARTs or other ports, select `-p PORT`; add `-b BAUD` if known:
 
 ```sh
-python -m hipnuc read -p COM3 -b 115200
-python -m hipnuc info -p COM3 -b 115200
-python -m hipnuc command "LOG VERSION" -p COM3 -b 115200
-python -m hipnuc command --file commands.txt -p COM3 -b 115200 --save
+hihost read -p COM3 -b 115200
+hihost info -p COM3 -b 115200
+hihost command "LOG VERSION" -p COM3 -b 115200
+hihost command --file commands.txt -p COM3 -b 115200 --save
 ```
 
 Replace `COM3` with your port, for example `/dev/ttyUSB0` on Linux.
 Connection options follow the **final command**, including `modbus read`.
-`-b` sets host connection speed only; `baudrate NEW_BAUD` changes the device.
-Use `scan -p PORT` for an unknown baudrate, `reboot` to restart, and append
+`-b` sets host connection speed only; `hihost baudrate NEW_BAUD` changes the device.
+Use `hihost scan -p PORT` for an unknown baudrate, `reboot` to restart, and append
 `--help` for options. Configuration commands require an explicit port.
 
 Command files contain one product command per line; `#` and `;` start comments.
@@ -169,9 +174,9 @@ ASCII session first.
 timed output messages and save that configuration explicitly.
 
 ```sh
-python -m hipnuc modbus info -p COM3 --id 80
-python -m hipnuc modbus read -p COM3 --id 80
-python -m hipnuc modbus read -p COM3 --id 80 --duration 60 --record samples.jsonl
+hihost modbus info -p COM3 --id 80
+hihost modbus read -p COM3 --id 80
+hihost modbus read -p COM3 --id 80 --duration 60 --record samples.jsonl
 ```
 
 `read` continues until Ctrl-C, `--duration` or `--count`; `--interval` controls
@@ -208,8 +213,8 @@ at the device's bitrate:
 python -m pip install ".[can]"
 sudo ip link set can0 type can bitrate 500000
 sudo ip link set can0 up
-python -m hipnuc can read -i can0
-python -m hipnuc can read -i can0 --id 8 --record samples.jsonl
+hihost can read -i can0
+hihost can read -i can0 --id 8 --record samples.jsonl
 ```
 
 For CAN FD, configure the arbitration/data bitrates in Linux first, then add
@@ -218,8 +223,8 @@ Recording uses the same JSONL format and file protection as serial. Each record
 keeps `node_id`, CAN identifier and host receive time; separate PGNs are never merged.
 Use system tools such as `ip` and `candump` for interface status and raw captures.
 
-Raw register access requires a target: `can reg read ADDRESS -i can0 --id 8`
-or `can reg write ADDRESS VALUE -i can0 --id 8`. Addresses and values accept
+Raw register access requires a target: `hihost can reg read ADDRESS -i can0 --id 8`
+or `hihost can reg write ADDRESS VALUE -i can0 --id 8`. Addresses and values accept
 decimal or `0x` notation. A write checks the reply; it does not automatically
 save, reboot or prove that a setting took effect. Unsupported requests may time out.
 
@@ -250,8 +255,8 @@ CHCenter is the desktop option. For a terminal or headless Linux, use the
 application firmware for the **exact device model** and specify the target:
 
 ```sh
-python -m hipnuc update firmware.hex -p /dev/ttyUSB0 -b 115200
-python -m hipnuc can update firmware.hex -i can0 --id 8
+hihost update firmware.hex -p /dev/ttyUSB0 -b 115200
+hihost can update firmware.hex -i can0 --id 8
 ```
 
 Use `COM3` or the actual port on Windows. CAN update requires the optional CAN
@@ -274,8 +279,8 @@ it cancels the operation. No CAN dependency is needed for serial updates.
 | Missing Python / venv / pip | Use Python 3.10+. Ubuntu 22.04's default 3.10 works; 20.04's default 3.8 does not. On Ubuntu/Debian/Pi OS, install `python3-venv`. |
 | APT waits for a lock | Wait for the OS updater; do not delete its lock or kill the updater. |
 | `UNKNOWN-0.0.0` / `No module named hipnuc` | Activate the correct environment, upgrade pip, then reinstall from this `python/` directory. |
-| PowerShell blocks activation | Use `.\.venv\Scripts\python.exe` instead of `python`; no global execution-policy change is needed. |
-| No port / busy port | Check USB passthrough in a VM, cable/driver and other serial applications. Use `list --all` for non-USB ports. |
+| PowerShell blocks activation | Use `.\.venv\Scripts\python.exe` for pip and run `.\.venv\Scripts\hihost.exe` directly. |
+| No port / busy port | Check USB passthrough in a VM, cable/driver and other serial applications. Use `hihost list --all` for non-USB ports. |
 | Port opens, no valid samples | Check actual baudrate, wiring, output mode and rate. Give slow output enough `--timeout`. |
 | Download / certificate error | Check network, clock and the required proxy/certificate settings. Do not disable TLS verification. |
 

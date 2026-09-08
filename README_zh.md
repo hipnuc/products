@@ -13,7 +13,7 @@
 | [stm32/](stm32/README_zh.md) | STM32F103 Keil 工程：UART 和 J1939 接收 |
 | [ros/](ros/README_zh.md) | ROS 2 Humble/Jazzy/Lyrical 与 ROS 1 Noetic 驱动 |
 | [c/](c/README_zh.md) | 可复制的串口/CAN 解码器、Windows/Linux 串口 API 和 C/C++ 例程 |
-| [python/](python/README_zh.md) | Python SDK 与命令行：串口、Modbus RTU、CAN、录制和固件升级 |
+| [python/](python/README_zh.md) | Python SDK 与 `hihost` 命令行：串口、Modbus RTU、CAN、录制和固件升级 |
 
 其他资源：[HI15 EtherCAT](ethercat/README_zh.md)、
 [MATLAB 分析 CHCenter HI91 CSV](matlab/README_zh.md)、

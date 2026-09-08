@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hipnuc-sdk"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Synchronous HiPNUC IMU/INS serial, Modbus RTU and CAN SDK"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,12 +20,15 @@ can = ["python-can>=4.6,<5"]
 dev = ["ruff>=0.11,<1"]
 
 [project.scripts]
-hipnuc = "hipnuc.cli:main"
+hihost = "hipnuc.cli:main"
 
 [project.urls]
 Homepage = "https://www.hipnuc.com"
 Documentation = "https://download.hipnuc.com"
 Repository = "https://github.com/hipnuc/products"
+
+[tool.setuptools.dynamic]
+version = {attr = "hipnuc.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
