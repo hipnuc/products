@@ -79,7 +79,8 @@ Its definition is in
 ## Connection tips
 
 - Edit the package's `config/serial.yaml` or `config/can.yaml` for topic switches
-  and frame name. Launch arguments override the connection parameters.
+  and frame name. For ROS 2, rebuild after editing the source YAML files.
+  Launch arguments override the connection parameters.
 - For `Permission denied`, run `sudo usermod -aG dialout "$USER"`, then log out
   and back in. A virtual environment does not grant serial access.
 - Prefer a path under `/dev/serial/by-id/` when several USB adapters are present.

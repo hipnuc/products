@@ -1,138 +1,170 @@
-#include <stdio.h>
-#include <stdint.h>
-#include <time.h>
 #include "hi15.h"
+#include <errno.h>
+#include <signal.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 
+/* Edit these parameters for your master and HI15 position. */
 #define MASTER_INDEX 0
-#define SLAVE_ALIAS  0
-#define SLAVE_POS    0
-#define VENDOR_ID    0x00131415
+#define SLAVE_ALIAS 0
+#define SLAVE_POS 0
+#define VENDOR_ID 0x00131415
 #define PRODUCT_CODE 0x00009253
-
-// ===== DC频率=====
+#define ENABLE_DC 1
 #define ECAT_FREQUENCY_HZ 1000
-
-// 界面刷新频率
+#define SYNC0_SHIFT_NS 0
 #define UI_HZ 20
 
 #define NSEC_PER_SEC 1000000000L
 #define PERIOD_NS (NSEC_PER_SEC / ECAT_FREQUENCY_HZ)
 
-#define CLOCK_TO_USE CLOCK_MONOTONIC
+static volatile sig_atomic_t stop_requested;
 
-static inline uint64_t timespec_to_ns(struct timespec t)
+static void request_stop(int signum)
 {
-    return (uint64_t)t.tv_sec * (uint64_t)NSEC_PER_SEC + (uint64_t)t.tv_nsec;
+    (void)signum;
+    stop_requested = 1;
 }
 
-static inline struct timespec timespec_add_ns(struct timespec t, long ns)
+static uint64_t timespec_to_ns(struct timespec t)
 {
-    t.tv_nsec += ns;
-    while (t.tv_nsec >= NSEC_PER_SEC) {
-        t.tv_sec += 1;
+    return (uint64_t)t.tv_sec * NSEC_PER_SEC + (uint64_t)t.tv_nsec;
+}
+
+static struct timespec next_cycle(struct timespec t)
+{
+    t.tv_nsec += PERIOD_NS;
+    if (t.tv_nsec >= NSEC_PER_SEC) {
+        t.tv_sec++;
         t.tv_nsec -= NSEC_PER_SEC;
     }
     return t;
 }
 
-static const char* al_state_str(uint8_t s)
-{
-    switch (s) {
-        case 0x01: return "INIT";
-        case 0x02: return "PREOP";
-        case 0x04: return "SAFEOP";
-        case 0x08: return "OP";
-        default:   return "UNKNOWN";
-    }
-}
-
-int main()
+int main(void)
 {
     hi15_ctx_t ctx;
     hi15_txpdo_t tx;
-    hi15_rxpdo_t rx;
- 
-    const int enable_dc = 1;
-    const uint32_t sync0_cycle_ns = (uint32_t)PERIOD_NS;
-    const uint32_t sync0_shift_ns = 0;
+    const hi15_rxpdo_t rx = {0}; /* 0x7000:01 is reserved. */
+    struct timespec wakeup, now;
+    struct sigaction action = {0};
+    unsigned ui_count = 0, sync_count = 0;
+    const unsigned ui_div = ECAT_FREQUENCY_HZ / UI_HZ;
+    int result = 0;
 
-    if (hi15_init(&ctx,
-                  MASTER_INDEX,
-                  SLAVE_ALIAS, SLAVE_POS,
-                  VENDOR_ID, PRODUCT_CODE,
-                  enable_dc,
-                  sync0_cycle_ns,
-                  sync0_shift_ns) != 0) {
+    action.sa_handler = request_stop;
+    sigemptyset(&action.sa_mask);
+    if (sigaction(SIGINT, &action, NULL) || sigaction(SIGTERM, &action, NULL)) {
+        perror("Cannot install stop handler");
         return 1;
     }
- 
-    printf("\033[2J\033[H"); 
-    printf("\033[?25l");
-    fflush(stdout);
- 
-    struct timespec wakeup;
-    clock_gettime(CLOCK_TO_USE, &wakeup);
- 
-    const uint32_t ui_div = (UI_HZ > 0) ? (ECAT_FREQUENCY_HZ / UI_HZ) : ECAT_FREQUENCY_HZ;
-    uint32_t ui_count = 0;
- 
-    uint32_t sync_ref_div = 100;  
-    uint32_t sync_ref_cnt = 0;
-
-    uint32_t counter = 0;
-
-    while (1) { 
-        wakeup = timespec_add_ns(wakeup, PERIOD_NS);
-        clock_nanosleep(CLOCK_TO_USE, TIMER_ABSTIME, &wakeup, NULL);
- 
-        hi15_cycle_receive(&ctx);
- 
-        hi15_read_txpdo(&ctx, &tx);
- 
-        static uint32_t out = 0;
-        rx.rpdo_7000_01 = out++;
-        hi15_write_rxpdo(&ctx, &rx);
- 
-        struct timespec now;
-        clock_gettime(CLOCK_TO_USE, &now);
-        ecrt_master_application_time(ctx.master, timespec_to_ns(now));
- 
-        if (++sync_ref_cnt >= sync_ref_div) {
-            sync_ref_cnt = 0;
-            ecrt_master_sync_reference_clock(ctx.master);
-        }
- 
-        ecrt_master_sync_slave_clocks(ctx.master);
- 
-        hi15_cycle_send(&ctx);
- 
-        if (++ui_count >= (ui_div ? ui_div : 1)) {
-            ui_count = 0;
-
-            ec_slave_config_state_t ss;
-            ecrt_slave_config_state(ctx.sc, &ss);
-
-            printf("\033[H");
-            printf("ECAT: %d Hz  (DC=%s, Sync0=%u ns)   UI: %d Hz   counter=%u\n",
-                   ECAT_FREQUENCY_HZ, enable_dc ? "ON" : "OFF",
-                   (unsigned)sync0_cycle_ns, UI_HZ, counter++);
-
-            printf("Slave: alias=%u pos=%u  vendor=0x%08X product=0x%08X\n",
-                   SLAVE_ALIAS, SLAVE_POS, VENDOR_ID, PRODUCT_CODE);
-
-            printf("State: %-6s (0x%02X)  online=%u  operational=%u\n",
-                   al_state_str(ss.al_state), ss.al_state, ss.online, ss.operational);
-
-            printf("acc:  %+10.6f  %+10.6f  %+10.6f\n", tx.acc_x, tx.acc_y, tx.acc_z);
-            printf("gyr:  %+10.6f  %+10.6f  %+10.6f\n", tx.gyr_x, tx.gyr_y, tx.gyr_z);
-            printf("temp: %+10.6f\n", tx.temperature);
-            printf("system_time: %u\n", (unsigned)tx.system_time);
-            printf("rpdo_7000:01 (u32): %u\n", (unsigned)rx.rpdo_7000_01);
-
-            fflush(stdout);
-        }
+    if (hi15_init(&ctx, MASTER_INDEX, SLAVE_ALIAS, SLAVE_POS,
+                  VENDOR_ID, PRODUCT_CODE, ENABLE_DC, PERIOD_NS, SYNC0_SHIFT_NS)) {
+        return 1;
+    }
+    fprintf(stderr, "HI15: master %u, alias %u, position %u; %u Hz, DC %s. Ctrl-C stops.\n",
+            MASTER_INDEX, SLAVE_ALIAS, SLAVE_POS, ECAT_FREQUENCY_HZ,
+            ENABLE_DC ? "on" : "off");
+    if (clock_gettime(CLOCK_MONOTONIC, &wakeup)) {
+        perror("Cannot read monotonic clock");
+        result = 1;
+        goto done;
     }
 
+    while (!stop_requested) {
+        int sleep_error, valid, io_result;
+        wakeup = next_cycle(wakeup);
+        do {
+            sleep_error = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wakeup, NULL);
+        } while (sleep_error == EINTR && !stop_requested);
+        if (stop_requested) break;
+        if (sleep_error) {
+            fprintf(stderr, "Cannot wait for EtherCAT cycle: %s\n", strerror(sleep_error));
+            result = 1;
+            break;
+        }
+        if (clock_gettime(CLOCK_MONOTONIC, &now)) {
+            perror("Cannot read monotonic clock");
+            result = 1;
+            break;
+        }
+        if (ENABLE_DC) {
+            io_result = ecrt_master_application_time(ctx.master, timespec_to_ns(now));
+            if (io_result < 0) {
+                fprintf(stderr, "EtherCAT application time failed (%d)\n", io_result);
+                result = 1;
+                break;
+            }
+        }
+
+        io_result = hi15_cycle_receive(&ctx);
+        if (io_result < 0) {
+            fprintf(stderr, "EtherCAT receive/process failed (%d)\n", io_result);
+            result = 1;
+            break;
+        }
+        valid = hi15_read_txpdo(&ctx, &tx);
+        hi15_write_rxpdo(&ctx, &rx);
+        if (ENABLE_DC) {
+            if (++sync_count == 100) {
+                sync_count = 0;
+                io_result = ecrt_master_sync_reference_clock(ctx.master);
+                /* The reference clock may be unavailable while the slave starts
+                 * or is offline. Keep exchanging PDOs until it is ready. */
+                if (io_result < 0 && !(io_result == -ENXIO && !valid)) {
+                    fprintf(stderr, "EtherCAT reference clock sync failed (%d)\n", io_result);
+                    result = 1;
+                    break;
+                }
+            }
+            io_result = ecrt_master_sync_slave_clocks(ctx.master);
+            if (io_result < 0) {
+                fprintf(stderr, "EtherCAT slave clock sync failed (%d)\n", io_result);
+                result = 1;
+                break;
+            }
+        }
+        io_result = hi15_cycle_send(&ctx);
+        if (io_result < 0) {
+            fprintf(stderr, "EtherCAT queue/send failed (%d)\n", io_result);
+            result = 1;
+            break;
+        }
+
+        if (++ui_count >= ui_div) {
+            ui_count = 0;
+            if (valid) {
+                /* The current exchange can repeat a device timestamp. */
+                printf("time=%u ms  acc[m/s^2]=%.6f %.6f %.6f  gyr[rad/s]=%.6f %.6f %.6f\n"
+                       "quat[WXYZ]=%.6f %.6f %.6f %.6f  temp[degC]=%.3f\n",
+                       tx.system_time, tx.acc_x, tx.acc_y, tx.acc_z,
+                       tx.gyr_x, tx.gyr_y, tx.gyr_z,
+                       tx.qw, tx.qx, tx.qy, tx.qz, tx.temperature);
+            } else {
+                ec_domain_state_t ds = {0};
+                ec_slave_config_state_t ss = {0};
+                ecrt_domain_state(ctx.domain, &ds);
+                ecrt_slave_config_state(ctx.sc, &ss);
+                printf("No valid PDO: WKC=%u, online=%u, operational=%u, AL=0x%02x\n",
+                       ds.working_counter, ss.online, ss.operational, ss.al_state);
+            }
+            if (fflush(stdout)) {
+                perror("Cannot write output");
+                result = 1;
+                break;
+            }
+        }
+        if (clock_gettime(CLOCK_MONOTONIC, &now)) {
+            perror("Cannot read monotonic clock");
+            result = 1;
+            break;
+        }
+        /* Skip missed periods instead of sending a burst of catch-up cycles. */
+        if (timespec_to_ns(now) >= timespec_to_ns(wakeup) + PERIOD_NS) wakeup = now;
+    }
+
+done:
     hi15_release(&ctx);
-    return 0;
+    return result;
 }

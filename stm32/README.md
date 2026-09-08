@@ -2,7 +2,9 @@
 
 [English](README.md) | [中文](README_zh.md)
 
-Two small Keil / standard peripheral library projects for STM32F103:
+Two small Keil / standard peripheral library projects for STM32F103.
+
+Keep the complete repository so the projects can find the shared C sources.
 
 | Device connection | Start here |
 | --- | --- |

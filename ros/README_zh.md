@@ -73,7 +73,7 @@ roslaunch hipnuc_imu serial.launch port:=/dev/ttyUSB0 baudrate:=115200
 ## 连接提示
 
 - 在软件包的 `config/serial.yaml` 或 `config/can.yaml` 中修改话题开关和坐标系名称。
-  启动参数覆盖连接参数。
+  ROS 2 修改源码中的 YAML 后需要重新构建。启动参数覆盖连接参数。
 - 出现 `Permission denied` 时，执行 `sudo usermod -aG dialout "$USER"`，然后注销并重新登录。
   虚拟环境不会授予串口权限。
 - 多个 USB 转接器并存时，优先使用 `/dev/serial/by-id/` 下的路径。

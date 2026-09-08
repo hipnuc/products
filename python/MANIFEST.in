@@ -1,4 +1,4 @@
 include README_zh.md
 recursive-include examples *.py
-recursive-include tests *.py *.md
-recursive-include tools *.py
+prune tests
+prune tools

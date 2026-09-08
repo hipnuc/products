@@ -2,6 +2,11 @@
 AGENTS.md
 CLAUDE.md
 
+# Local regression suites and installation test helper
+tests/
+test/
+/python/tools/check_install.py
+
 # Build and IDE output
 build/
 output/

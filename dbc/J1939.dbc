@@ -60,30 +60,30 @@ BO_ 2365531656 PGN65318_FF26_Velocity: 8 HIPNUC_J1939
  SG_ Ground_Speed : 48|16@1- (0.01,0) [0|0] "m/s" Vector__XXX
 
 BO_ 2365533960 PGN65327_FF2F_Time: 8 HIPNUC_J1939
- SG_ UTC_Year : 0|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ UTC_Month : 8|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ UTC_Day : 16|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ UTC_Hour : 24|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ UTC_Minute : 32|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ UTC_Second : 40|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ UTC_Millisecond : 48|16@1+ (1,0) [0|0] "ms" Vector__XXX
+ SG_ Year_Offset_2000 : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Month : 8|8@1+ (1,0) [0|12] "" Vector__XXX
+ SG_ Day : 16|8@1+ (1,0) [0|31] "" Vector__XXX
+ SG_ Hour : 24|8@1+ (1,0) [0|23] "" Vector__XXX
+ SG_ Minute : 32|8@1+ (1,0) [0|59] "" Vector__XXX
+ SG_ Second : 40|8@1+ (1,0) [0|60] "" Vector__XXX
+ SG_ Millisecond : 48|16@1+ (1,0) [0|999] "ms" Vector__XXX
 
 BO_ 2365535240 PGN65332_FF34_Accel: 8 HIPNUC_J1939
- SG_ Acc_X : 0|16@1- (0.00048828,0) [0|0] "G" Vector__XXX
- SG_ Acc_Y : 16|16@1- (0.00048828,0) [0|0] "G" Vector__XXX
- SG_ Acc_Z : 32|16@1- (0.00048828,0) [0|0] "G" Vector__XXX
+ SG_ Acc_X : 0|16@1- (0.00048828125,0) [-16|15.99951171875] "G" Vector__XXX
+ SG_ Acc_Y : 16|16@1- (0.00048828125,0) [-16|15.99951171875] "G" Vector__XXX
+ SG_ Acc_Z : 32|16@1- (0.00048828125,0) [-16|15.99951171875] "G" Vector__XXX
  SG_ Reserved_FF34 : 48|16@1+ (1,0) [0|0] "" Vector__XXX
 
 BO_ 2365536008 PGN65335_FF37_Gyro: 8 HIPNUC_J1939
- SG_ Gyr_X : 0|16@1- (0.061035,0) [0|0] "deg/s" Vector__XXX
- SG_ Gyr_Y : 16|16@1- (0.061035,0) [0|0] "deg/s" Vector__XXX
- SG_ Gyr_Z : 32|16@1- (0.061035,0) [0|0] "deg/s" Vector__XXX
+ SG_ Gyr_X : 0|16@1- (0.06103515625,0) [-2000|1999.93896484375] "deg/s" Vector__XXX
+ SG_ Gyr_Y : 16|16@1- (0.06103515625,0) [-2000|1999.93896484375] "deg/s" Vector__XXX
+ SG_ Gyr_Z : 32|16@1- (0.06103515625,0) [-2000|1999.93896484375] "deg/s" Vector__XXX
  SG_ Reserved_FF37 : 48|16@1+ (1,0) [0|0] "" Vector__XXX
 
 BO_ 2365536776 PGN65338_FF3A_Mag: 8 HIPNUC_J1939
- SG_ Mag_X : 0|16@1- (0.030517,0) [0|0] "uT" Vector__XXX
- SG_ Mag_Y : 16|16@1- (0.030517,0) [0|0] "uT" Vector__XXX
- SG_ Mag_Z : 32|16@1- (0.030517,0) [0|0] "uT" Vector__XXX
+ SG_ Mag_X : 0|16@1- (0.030517578125,0) [-1000|999.969482421875] "uT" Vector__XXX
+ SG_ Mag_Y : 16|16@1- (0.030517578125,0) [-1000|999.969482421875] "uT" Vector__XXX
+ SG_ Mag_Z : 32|16@1- (0.030517578125,0) [-1000|999.969482421875] "uT" Vector__XXX
  SG_ Reserved_FF3A : 48|16@1+ (1,0) [0|0] "" Vector__XXX
 
 BO_ 2365537544 PGN65341_FF3D_RollPitch: 8 HIPNUC_J1939
@@ -91,13 +91,13 @@ BO_ 2365537544 PGN65341_FF3D_RollPitch: 8 HIPNUC_J1939
  SG_ Pitch : 32|32@1- (0.001,0) [0|0] "deg" Vector__XXX
 
 BO_ 2365538568 PGN65345_FF41_YawDual: 8 HIPNUC_J1939
- SG_ Yaw_360 : 0|32@1+ (0.001,0) [0|360] "deg" Vector__XXX
- SG_ Yaw_pm180 : 32|32@1- (0.001,0) [-180|180] "deg" Vector__XXX
+ SG_ Heading_CW : 0|32@1- (0.001,0) [0|360] "deg" Vector__XXX
+ SG_ Euler_Yaw : 32|32@1- (0.001,0) [-180|180] "deg" Vector__XXX
 
-BO_ 2365539080 PGN65347_FF43_TempPressure: 8 HIPNUC_J1939
+BO_ 2365539080 PGN65347_FF43_Temperature: 8 HIPNUC_J1939
  SG_ Temperature : 0|16@1- (0.01,0) [0|0] "degC" Vector__XXX
  SG_ Reserved_FF43 : 16|16@1+ (1,0) [0|0] "" Vector__XXX
- SG_ Pressure : 32|32@1- (0.01,0) [0|0] "Pa" Vector__XXX
+ SG_ Reserved_FF43_32 : 32|32@1+ (1,0) [0|0] "" Vector__XXX
 
 BO_ 2365539848 PGN65350_FF46_Quaternion: 8 HIPNUC_J1939
  SG_ Quat_W : 0|16@1- (0.0001,0) [-1|1] "" Vector__XXX
@@ -109,6 +109,16 @@ BO_ 2365540872 PGN65354_FF4A_Inclinometer: 8 HIPNUC_J1939
  SG_ Incli_X : 0|32@1- (0.001,0) [0|0] "deg" Vector__XXX
  SG_ Incli_Y : 32|32@1- (0.001,0) [0|0] "deg" Vector__XXX
 
+
+CM_ "HiPNUC proprietary Classic CAN PGNs; priority 3, source address 0x08. Signals describe wire values, not a coherent multi-PGN snapshot. Reserved signals have no physical meaning.";
+CM_ BO_ 2365526024 "INS position. GNSS quality in PGN FF18 is not an INS position-valid flag.";
+CM_ SG_ 2365527048 Altitude "INS ellipsoid height minus GNSS undulation (mean sea level height).";
+CM_ BO_ 2365533960 "With UTC: year is an offset from 2000. Without UTC: year/month/day are zero; remaining fields are uptime modulo 24 hours. Do not interpret a zero date as UTC.";
+CM_ BO_ 2365535240 "Acceleration in device axes; the firmware uses 1 G = 9.8 m/s^2.";
+CM_ SG_ 2365538568 Heading_CW "Clockwise heading derived from Euler yaw, wrapped to [0,360); not Euler yaw.";
+CM_ SG_ 2365538568 Euler_Yaw "Device Euler yaw; coordinate configuration is not changed by this database.";
+CM_ SG_ 2365539080 Reserved_FF43_32 "Reserved placeholder (999 in current firmware), not a pressure measurement.";
+CM_ BO_ 2365539848 "Quaternion component order W, X, Y, Z; device coordinate configuration applies.";
 
 BA_DEF_  "BusType" STRING ;
 BA_DEF_DEF_  "BusType" "CAN";

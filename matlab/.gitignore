@@ -1,5 +1,7 @@
 *.mat
 *.pdf
 *.csv
+!/sample_hi91.csv
 hipnuc_static_data
 allan_results
+analysis_results

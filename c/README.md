@@ -48,6 +48,9 @@ positive result means a new sample. Check `node_id` on a multi-device bus.
 
 ## Read from Windows or Linux
 
+Install CMake 3.16 or later and a C compiler: Visual Studio / Build Tools with
+the C++ build tools on Windows, or GCC/Clang on Linux.
+
 Edit the settings at the top of one example:
 
 | Example | Use |
@@ -63,9 +66,11 @@ cmake -S c -B build/c
 cmake --build build/c --config Release
 ```
 
-Linux: run `./build/c/examples/read_c`, `read_cpp` or `read_can`.
+Linux: run `./build/c/examples/read_c`, `./build/c/examples/read_cpp` or
+`./build/c/examples/read_can`.
 Windows with Visual Studio: run `.\build\c\examples\Release\read_c.exe` or
-`read_cpp.exe`. The C++ example is built when a C++ compiler is available.
+`.\build\c\examples\Release\read_cpp.exe`.
+The C++ example is built when a C++ compiler is available.
 Ctrl-C stops and closes the connection. These are integration examples;
 printing every sample is unsuitable for high-rate recording.
 
@@ -90,8 +95,9 @@ target_link_libraries(my_app PRIVATE hipnuc_core)
 
 Choose `hipnuc_core` for binary/NMEA, `hipnuc_j1939` for CAN, or `hipnuc_json`
 for optional JSON formatting. They share the independent `hipnuc_sample`
-target. A parent project builds only what it links; examples and tests are off.
+target. A parent project builds only what it links; examples are off by default.
 No C++ compiler is needed for a C application.
+The targets supply their include paths and C99 requirement to your application.
 
 For Windows/Linux serial input, set `HIPNUC_BUILD_SERIAL` to `ON` before
 `add_subdirectory()` and link `hipnuc_serial`. Start with a zero-initialized

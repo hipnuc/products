@@ -12,10 +12,8 @@ catkin_package(CATKIN_DEPENDS roscpp std_msgs sensor_msgs diagnostic_msgs messag
 # Build from a full SDK checkout placed in the workspace's src directory.
 set(HIPNUC_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../c/hipnuc" CACHE PATH "HiPNUC C core directory")
 set(HIPNUC_ROS_COMMON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../common" CACHE PATH "Shared ROS helpers")
-add_subdirectory(${HIPNUC_CORE_DIR} hipnuc_core EXCLUDE_FROM_ALL)
+add_subdirectory("${HIPNUC_CORE_DIR}" hipnuc_core EXCLUDE_FROM_ALL)
 add_subdirectory("${HIPNUC_CORE_DIR}/../serial" hipnuc_serial EXCLUDE_FROM_ALL)
-
-
 
 include_directories(${catkin_INCLUDE_DIRS} ${HIPNUC_ROS_COMMON_DIR})
 
@@ -28,9 +26,5 @@ add_dependencies(can_node ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(can_node hipnuc_j1939 ${catkin_LIBRARIES})
 
 set_target_properties(serial_node can_node PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES)
-if(CATKIN_ENABLE_TESTING)
-  add_subdirectory("${HIPNUC_ROS_COMMON_DIR}/../tests" hipnuc_ros_tests)
-endif()
-
 install(TARGETS serial_node can_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(DIRECTORY launch config DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})

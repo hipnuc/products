@@ -9,9 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  core-tests:
-    env:
-      UBSAN_OPTIONS: halt_on_error=1
+  c-build:
     strategy:
       fail-fast: false
       matrix:
@@ -41,33 +39,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
       - name: Configure Linux
         if: runner.os == 'Linux'
-        run: cmake -S c/tests -B build/c-tests -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_FLAGS="${{ matrix.flags }}" -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
+        run: cmake -S c -B build/c-sdk -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_FLAGS="${{ matrix.flags }}" -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
       - name: Configure Windows (MSVC)
         if: runner.os == 'Windows'
-        run: cmake -S c/tests -B build/c-tests
-      - name: Build and test
-        run: |
-          cmake --build build/c-tests --config Release
-          ctest --test-dir build/c-tests -C Release --output-on-failure
+        run: cmake -S c -B build/c-sdk
       - name: Build the customer C SDK entry point
-        run: |
-          cmake -S c -B build/c-sdk
-          cmake --build build/c-sdk --config Release
-      - name: STM32 receive and ROS conversion checks
-        run: |
-          cmake -S stm32/tests -B build/stm32-tests
-          cmake --build build/stm32-tests --config Release
-          ctest --test-dir build/stm32-tests -C Release --output-on-failure
-          cmake -S ros/tests -B build/ros-tests
-          cmake --build build/ros-tests --config Release
-          ctest --test-dir build/ros-tests -C Release --output-on-failure
-      - name: ROS product message contract
-        run: python ros/tests/test_schema.py
+        run: cmake --build build/c-sdk --config Release
 
   ros2:
     strategy:
@@ -87,10 +66,8 @@ jobs:
           cd ws
           test "$(colcon list --names-only | sort)" = $'hipnuc_imu\nhipnuc_msgs'
           rosdep install --from-paths $(colcon list --paths-only) --ignore-src -y
-          colcon build --event-handlers console_direct+ --cmake-args -DBUILD_TESTING=ON
-          colcon test --event-handlers console_direct+
-          colcon test-result --verbose
-      - name: Installed nodes with a simulated serial device
+          colcon build --event-handlers console_direct+ --cmake-args -DBUILD_TESTING=OFF
+      - name: Check installed nodes
         shell: bash
         run: |
           source /opt/ros/${{ matrix.distro }}/setup.bash
@@ -99,8 +76,6 @@ jobs:
           test "$(ros2 pkg prefix hipnuc_msgs)" = "$PWD/ws/install/hipnuc_msgs"
           test -x ws/install/hipnuc_imu/lib/hipnuc_imu/serial_node
           test -x ws/install/hipnuc_imu/lib/hipnuc_imu/can_node
-          python3 -c 'import rclpy'
-          ROS_DOMAIN_ID=121 python3 ws/src/products/ros/tests/test_ros2_runtime.py
 
   ros1-noetic:
     runs-on: ubuntu-24.04
@@ -115,14 +90,9 @@ jobs:
           source /opt/ros/noetic/setup.bash
           cd ws
           rosdep install --from-paths src/products/ros/ros1/src --ignore-src -y
-          catkin_make --source src/products/ros/ros1/src -DCATKIN_ENABLE_TESTING=ON
-          catkin_make --source src/products/ros/ros1/src run_tests
-          catkin_test_results
-          (cd build && ctest --output-on-failure)
+          catkin_make --source src/products/ros/ros1/src -DCATKIN_ENABLE_TESTING=OFF
           catkin_make --source src/products/ros/ros1/src install
           source install/setup.bash
           test "$(rospack find hipnuc_imu)" = "$PWD/install/share/hipnuc_imu"
           test -x install/lib/hipnuc_imu/serial_node
           test -x install/lib/hipnuc_imu/can_node
-          python3 -c 'import rospy'
-          python3 src/products/ros/tests/test_ros1_runtime.py

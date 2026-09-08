@@ -11,7 +11,7 @@ Optional CAN support uses Linux SocketCAN (J1939/CANFD83). Firmware update is
 available over serial on Windows/Linux and over CAN on Linux.
 
 Supported devices: firmware 1.6.9 or later (HI01–HI06, HI12–HI18, HI32,
-HI70/HI71, CH0X0). Legacy HI2xx/CH1xx products use the archived C examples.
+HI70/HI71, CH0X0).
 
 ## Install
 

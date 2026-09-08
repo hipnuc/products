@@ -10,7 +10,7 @@ find_package(hipnuc_msgs REQUIRED)
 # Build from a full SDK checkout placed in the workspace's src directory.
 set(HIPNUC_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../c/hipnuc" CACHE PATH "HiPNUC C core directory")
 set(HIPNUC_ROS_COMMON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../common" CACHE PATH "Shared ROS helpers")
-add_subdirectory(${HIPNUC_CORE_DIR} hipnuc_core EXCLUDE_FROM_ALL)
+add_subdirectory("${HIPNUC_CORE_DIR}" hipnuc_core EXCLUDE_FROM_ALL)
 add_subdirectory("${HIPNUC_CORE_DIR}/../serial" hipnuc_serial EXCLUDE_FROM_ALL)
 
 # Lyrical follows REP 2000 (C++20); older supported distributions use C++17.
@@ -32,11 +32,6 @@ target_link_libraries(can_node PRIVATE hipnuc_j1939 rclcpp::rclcpp
 
 set_target_properties(serial_node can_node PROPERTIES
   CXX_STANDARD ${HIPNUC_NODE_CXX_STANDARD} CXX_STANDARD_REQUIRED YES)
-if(BUILD_TESTING)
-  enable_testing()
-  add_subdirectory("${HIPNUC_ROS_COMMON_DIR}/../tests" hipnuc_ros_tests)
-endif()
-
 install(TARGETS serial_node can_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 

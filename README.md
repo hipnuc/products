@@ -11,17 +11,18 @@ HiPNUC IMU/AHRS/MRU and INS devices (firmware 1.6.9 or later).
 
 | Directory | What it is |
 | --- | --- |
-| [python/](python/README.md) | Python SDK and CLI: serial, Modbus RTU, CAN, recording and firmware update |
-| [c/](c/README.md) | Copyable C protocol library, Windows/Linux serial API and C/C++ examples |
-| [ros/](ros/README.md) | ROS 2 Humble/Jazzy/Lyrical and ROS 1 Noetic drivers |
 | [stm32/](stm32/README.md) | STM32F103 Keil examples for UART and J1939 reception |
+| [ros/](ros/README.md) | ROS 2 Humble/Jazzy/Lyrical and ROS 1 Noetic drivers |
+| [c/](c/README.md) | Copyable serial/CAN decoders, Windows/Linux serial API and C/C++ examples |
+| [python/](python/README.md) | Python SDK and CLI: serial, Modbus RTU, CAN, recording and firmware update |
 
-Also available: [EtherCAT](ethercat/README.md),
-[MATLAB](matlab/allan/README.md) and [CAN DBC files](protocol/dbc/README.md).
+Also available: [EtherCAT for HI15](ethercat/README.md),
+[MATLAB analysis of CHCenter HI91 CSV](matlab/README.md)
+and [Classic CAN DBC files](dbc/README.md).
 
 ## Tools and documentation
 
-- [Official downloads](https://download.hipnuc.com): CHCenter, product manuals and datasheets.
+- [Official downloads](https://download.hipnuc.com): CHCenter for Windows/Linux, product manuals and datasheets.
 - [HiPNUC](https://www.hipnuc.com): products and contact information.
 - Evaluation-board USB drivers: use the [current CP210x driver](https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers) if your OS needs one. Common Linux distributions include it; serial access may require the `dialout` group.
 

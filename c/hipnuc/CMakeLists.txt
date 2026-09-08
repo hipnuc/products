@@ -8,6 +8,7 @@ project(hipnuc_core C)
 
 function(hipnuc_configure target)
     target_include_directories(${target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(${target} PUBLIC c_std_99)
     set_target_properties(${target} PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS OFF)
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(${target} PRIVATE -Wall -Wextra)

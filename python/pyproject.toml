@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hipnuc-sdk"
 version = "0.1.0"
-description = "Synchronous HiPNUC IMU/INS serial and Modbus RTU SDK"
+description = "Synchronous HiPNUC IMU/INS serial, Modbus RTU and CAN SDK"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name = "HiPNUC"}]
@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 can = ["python-can>=4.6,<5"]
-dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+dev = ["ruff>=0.11,<1"]
 
 [project.scripts]
 hipnuc = "hipnuc.cli:main"
@@ -32,10 +32,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 hipnuc = ["py.typed"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-ra"
 
 [tool.ruff]
 target-version = "py310"

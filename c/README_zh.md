@@ -47,6 +47,9 @@ CAN 将驱动收到的帧填入 `hipnuc_can_frame_t`，调用 `hipnuc_j1939_pars
 
 ## Windows 或 Linux 读取设备
 
+需要 CMake 3.16 及以上版本和 C 编译器：Windows 使用带 C++ 构建工具的
+Visual Studio / Build Tools，Linux 使用 GCC 或 Clang。
+
 修改所选例程顶部的参数：
 
 | 示例 | 用途 |
@@ -62,9 +65,11 @@ cmake -S c -B build/c
 cmake --build build/c --config Release
 ```
 
-Linux 运行 `./build/c/examples/read_c`、`read_cpp` 或 `read_can`。
+Linux 运行 `./build/c/examples/read_c`、`./build/c/examples/read_cpp`
+或 `./build/c/examples/read_can`。
 Windows 使用 Visual Studio 时运行 `.\build\c\examples\Release\read_c.exe`
-或 `read_cpp.exe`。检测到 C++ 编译器时才构建 C++ 例程。
+或 `.\build\c\examples\Release\read_cpp.exe`。
+检测到 C++ 编译器时才构建 C++ 例程。
 Ctrl-C 停止并关闭连接。这些示例用于集成；逐条打印不适合高速数据录制。
 
 Ubuntu 串口权限通常通过 `sudo usermod -aG dialout "$USER"` 设置，然后注销并重新登录。
@@ -87,7 +92,8 @@ target_link_libraries(my_app PRIVATE hipnuc_core)
 
 二进制/NMEA 选 `hipnuc_core`，CAN 选 `hipnuc_j1939`，可选 JSON 格式化选
 `hipnuc_json`；它们共用独立的 `hipnuc_sample` target。作为子项目时只构建
-调用方链接的库，默认不构建例程和测试；C 应用无需 C++ 编译器。
+调用方链接的库，默认不构建例程；C 应用无需 C++ 编译器。
+链接目标会自动传递头文件目录和 C99 要求。
 
 Windows/Linux 串口应用在 `add_subdirectory()` 前将 `HIPNUC_BUILD_SERIAL`
 设为 `ON`，然后链接 `hipnuc_serial`。从清零的 `hipnuc_serial_t` 开始，

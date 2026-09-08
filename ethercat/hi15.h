@@ -2,39 +2,34 @@
 #define HI15_PDO_H
 
 #include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <signal.h>
-#include <errno.h>
-#include <sys/mman.h>
-#include <sys/resource.h>
-
 #include "ecrt.h"
+#if ECRT_VERSION_MAGIC < ECRT_VERSION(1, 6)
+#error "This example requires IgH EtherCAT Master 1.6 or newer."
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct {
-    float acc_x, acc_y, acc_z;
-    float gyr_x, gyr_y, gyr_z;
-    float qw, qx, qy, qz;
-    float temperature;
-    uint32_t system_time;
+    float acc_x, acc_y, acc_z; /* m/s^2 */
+    float gyr_x, gyr_y, gyr_z; /* rad/s */
+    float qw, qx, qy, qz;     /* WXYZ; device-configured reference frame */
+    float temperature;       /* degrees C */
+    uint32_t system_time;     /* Device uptime in ms; wraps at UINT32_MAX. */
 } hi15_txpdo_t;
 
 typedef struct {
-    uint32_t rpdo_7000_01;
+    uint32_t rpdo_7000_01; /* Reserved: write zero. */
 } hi15_rxpdo_t;
 
 typedef struct {
-    // IGH handles
+    /* IgH handles, owned until hi15_release(). */
     ec_master_t *master;
     ec_domain_t *domain;
     ec_slave_config_t *sc;
     uint8_t *domain_pd;
 
-    // offsets
+    /* Byte offsets in the fixed HI15 PDO mapping. */
     unsigned int off_rpdo_7000_01;
 
     unsigned int off_acc_x;
@@ -51,23 +46,28 @@ typedef struct {
     unsigned int off_system_time;
 } hi15_ctx_t;
 
-// 初始化（申请 master、创建 domain、注册 PDO、activate）
+/* Initialize an unused context. Returns 0 on success, -1 on error and releases
+ * acquired resources. Errors are printed to stderr by this example helper. */
 int hi15_init(hi15_ctx_t *ctx, unsigned master_index, uint16_t alias, uint16_t pos, uint32_t vendor_id, uint32_t product_code,
               int enable_dc, uint32_t sync0_cycle_ns, uint32_t sync0_shift_ns);
 
-// 一次收发周期：receive + process（读前必须调用）
-void hi15_cycle_receive(hi15_ctx_t *ctx);
+/* Receive and process the current exchange before reading PDOs.
+ * Returns 0 on success or a negative IgH error. Do not read PDOs after an error. */
+int hi15_cycle_receive(hi15_ctx_t *ctx);
 
-// 读 TxPDO 到结构体
-void hi15_read_txpdo(const hi15_ctx_t *ctx, hi15_txpdo_t *out);
+/* Returns 1 for a complete exchange with an operational slave, otherwise 0
+ * and leaves out unchanged. This does not assert a new sensor sample: consecutive
+ * exchanges may carry the same system_time. Call after hi15_cycle_receive(). */
+int hi15_read_txpdo(const hi15_ctx_t *ctx, hi15_txpdo_t *out);
 
-// 写 RxPDO（0x7000:01）
+/* Write the reserved RxPDO (0x7000:01); pass zero. */
 void hi15_write_rxpdo(hi15_ctx_t *ctx, const hi15_rxpdo_t *in);
 
-// 发送：queue + send（写后必须调用）
-void hi15_cycle_send(hi15_ctx_t *ctx);
+/* Queue and send, including while waiting for valid input.
+ * Returns a nonnegative result on success or a negative IgH error. */
+int hi15_cycle_send(hi15_ctx_t *ctx);
 
-// 释放 master
+/* Release the master. Safe after failed initialization or a previous release. */
 void hi15_release(hi15_ctx_t *ctx);
 
 #ifdef __cplusplus
@@ -75,5 +75,3 @@ void hi15_release(hi15_ctx_t *ctx);
 #endif
 
 #endif
-
-

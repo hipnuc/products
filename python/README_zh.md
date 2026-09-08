@@ -10,7 +10,6 @@ Windows、Linux（含 Ubuntu 和树莓派系统）及 macOS。
 串口及 Linux CAN。
 
 支持设备：固件 1.6.9 及以上（HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0）。
-HI2xx/CH1xx 等老产品请使用归档的 C 例程。
 
 ## 安装
 
@@ -47,7 +46,7 @@ python -m hipnuc --help
 
 ## 读取、录制与发送指令
 
-连接设备，关闭其它占用串口的程序；虚拟机需将 USB 转接器连接到客户操作系统。
+连接设备，关闭其它占用串口的程序；虚拟机需将 USB 转接器连接到虚拟机系统。
 
 ```sh
 python -m hipnuc list

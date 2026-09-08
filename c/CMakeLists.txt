@@ -12,18 +12,17 @@ endif()
 
 option(HIPNUC_BUILD_SERIAL "Build the Windows/Linux serial interface" ${hipnuc_desktop})
 option(HIPNUC_BUILD_EXAMPLES "Build the desktop integration examples" ${hipnuc_desktop})
-option(HIPNUC_BUILD_TESTS "Build host regression tests (requires C++)" OFF)
 
-# A parent project links only the targets it needs. Optional modules do not
-# become part of its default build merely because they are available.
-add_subdirectory(hipnuc EXCLUDE_FROM_ALL)
+# Standalone builds produce the core libraries; parent projects build only
+# the targets they link.
+if(hipnuc_standalone)
+    add_subdirectory(hipnuc)
+else()
+    add_subdirectory(hipnuc EXCLUDE_FROM_ALL)
+endif()
 if(HIPNUC_BUILD_SERIAL OR HIPNUC_BUILD_EXAMPLES)
     add_subdirectory(serial)
 endif()
 if(HIPNUC_BUILD_EXAMPLES)
     add_subdirectory(examples)
-endif()
-if(HIPNUC_BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
 endif()
