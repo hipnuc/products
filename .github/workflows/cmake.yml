@@ -59,6 +59,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: ws/src/products
+      - name: Prepare ROS dependency index
+        shell: bash
+        run: |
+          apt-get update
+          # GitHub sets HOME=/github/home; rosdep's image cache lives in /root.
+          rosdep update --rosdistro ${{ matrix.distro }}
       - name: Build complete checkout in a workspace
         shell: bash
         run: |
@@ -84,6 +90,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: ws/src/products
+      - name: Prepare ROS dependency index
+        shell: bash
+        run: |
+          apt-get update
+          # Noetic is EOL and must be explicitly included in the dependency index.
+          rosdep update --rosdistro noetic --include-eol-distros
       - name: Build complete checkout with catkin
         shell: bash
         run: |

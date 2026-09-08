@@ -9,6 +9,8 @@
 **启动前，请将设备配置为 ENU 输出，并使用默认姿态约定。**
 驱动不验证或修改设备配置。`frame_id` 表示传感器机体坐标系，驱动不发布 TF。
 
+若这台电脑尚未初始化 rosdep，先执行一次 `sudo rosdep init`。
+
 ## ROS 2
 
 安装 ROS 后，将完整仓库放入工作空间：
@@ -19,6 +21,7 @@ mkdir -p ~/hipnuc_ws/src
 cd ~/hipnuc_ws/src
 git clone https://github.com/hipnuc/products.git
 cd ..
+rosdep update --rosdistro "$ROS_DISTRO"
 rosdep install --from-paths $(colcon list --paths-only) --ignore-src -r -y
 colcon build --packages-up-to hipnuc_imu
 source install/setup.bash
@@ -42,6 +45,7 @@ mkdir -p ~/hipnuc_ros1_ws/src
 cd ~/hipnuc_ros1_ws/src
 git clone https://github.com/hipnuc/products.git
 cd ..
+rosdep update --rosdistro noetic --include-eol-distros
 rosdep install --from-paths src/products/ros/ros1/src --ignore-src -r -y
 catkin_make --source src/products/ros/ros1/src
 source devel/setup.bash

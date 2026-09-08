@@ -10,6 +10,8 @@ Lyrical (26.04), and ROS 1 Noetic (20.04).
 convention.** The driver does not verify or change device configuration.
 Set `frame_id` to your sensor's body frame; the driver does not publish TF.
 
+If rosdep has never been initialized on this machine, run `sudo rosdep init` once.
+
 ## ROS 2
 
 With ROS installed, keep the complete repository inside your workspace:
@@ -20,6 +22,7 @@ mkdir -p ~/hipnuc_ws/src
 cd ~/hipnuc_ws/src
 git clone https://github.com/hipnuc/products.git
 cd ..
+rosdep update --rosdistro "$ROS_DISTRO"
 rosdep install --from-paths $(colcon list --paths-only) --ignore-src -r -y
 colcon build --packages-up-to hipnuc_imu
 source install/setup.bash
@@ -43,6 +46,7 @@ mkdir -p ~/hipnuc_ros1_ws/src
 cd ~/hipnuc_ros1_ws/src
 git clone https://github.com/hipnuc/products.git
 cd ..
+rosdep update --rosdistro noetic --include-eol-distros
 rosdep install --from-paths src/products/ros/ros1/src --ignore-src -r -y
 catkin_make --source src/products/ros/ros1/src
 source devel/setup.bash
