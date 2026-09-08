@@ -2,51 +2,86 @@
 
 [English](README.md) | [中文](README_zh.md)
 
-Thin ROS packages on top of the C core in `c/hipnuc`. Both publish the same
-topics; `ros2/` targets Humble and Jazzy, `ros1/` targets Noetic.
+Serial and SocketCAN drivers for HiPNUC IMU/AHRS/MRU/INS devices, using the
+shared C decoder. Supported targets: ROS 2 Humble (Ubuntu 22.04), Jazzy (24.04),
+Lyrical (26.04), and ROS 1 Noetic (20.04).
 
-| Topic | Type | When |
-| --- | --- | --- |
-| `imu/data` | `sensor_msgs/Imu` | every frame with acceleration, gyro or quaternion |
-| `imu/mag` | `sensor_msgs/MagneticField` | magnetometer present |
-| `imu/temperature`, `imu/pressure` | `sensor_msgs/Temperature`, `FluidPressure` | present |
-| `gnss/fix` | `sensor_msgs/NavSatFix` | INS/GNSS position present (altitude is ellipsoid height, NaN when the geoid separation is unknown) |
-| `ins/velocity` | `geometry_msgs/TwistWithCovarianceStamped` | ENU velocity present, `frame_id` = `enu_frame_id` |
-| `hipnuc/imu` | `hipnuc_msgs/HipnucImu` (ROS 1: `hipnuc_imu/HipnucImu`) | every frame; all fields in SI with a validity mask |
-| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | once per second: connection, frame rate, CRC/invalid counts |
-
-Stamps use the node clock. Covariances are zero (unknown) or `-1` in the first
-element when the quantity is not provided. Conventions are documented in
-`ros/common/hipnuc_convert.hpp`.
+**Before starting, configure the device for ENU output with its default attitude
+convention.** The driver does not verify or change device configuration.
+Set `frame_id` to your sensor's body frame; the driver does not publish TF.
 
 ## ROS 2
 
+With ROS installed, keep the complete repository inside your workspace:
+
 ```sh
-cd ros/ros2
-colcon build
+source /opt/ros/jazzy/setup.bash   # use your installed distribution
+mkdir -p ~/hipnuc_ws/src
+cd ~/hipnuc_ws/src
+git clone https://github.com/hipnuc/products.git
+cd ..
+rosdep install --from-paths $(colcon list --paths-only) --ignore-src -r -y
+colcon build --packages-up-to hipnuc_imu
 source install/setup.bash
 ros2 launch hipnuc_imu serial.launch.py port:=/dev/ttyUSB0 baudrate:=115200
+```
+
+For CAN, configure your SocketCAN interface at the device's bitrate, then run:
+
+```sh
 ros2 launch hipnuc_imu can.launch.py interface:=can0 node_id:=8
 ```
 
 ## ROS 1
 
+With Noetic installed, use a separate workspace from ROS 2. Keep the complete
+checkout under `src`; the source selection below builds its ROS 1 packages:
+
 ```sh
-cd ros/ros1
-catkin_make
+source /opt/ros/noetic/setup.bash
+mkdir -p ~/hipnuc_ros1_ws/src
+cd ~/hipnuc_ros1_ws/src
+git clone https://github.com/hipnuc/products.git
+cd ..
+rosdep install --from-paths src/products/ros/ros1/src --ignore-src -r -y
+catkin_make --source src/products/ros/ros1/src
 source devel/setup.bash
 roslaunch hipnuc_imu serial.launch port:=/dev/ttyUSB0 baudrate:=115200
-roslaunch hipnuc_imu can.launch interface:=can0 node_id:=8
+# Or: roslaunch hipnuc_imu can.launch interface:=can0 node_id:=8
 ```
 
-## Notes
+## Messages
 
-- Parameters live in `config/serial.yaml` and `config/can.yaml`; launch
-  arguments override port/baudrate and interface/node_id.
-- Serial access needs the `dialout` group; `99-hipnuc.rules` (in the package)
-  gives a stable `/dev/hipnuc` name for the evaluation board.
-- The CAN node merges the J1939 PGNs of one device (`node_id`) and publishes
-  when `trigger_pgn` (default yaw, 0xFF41) arrives; CANFD83 frames publish
-  directly. Frames from other source addresses are counted, not published.
-- To use the packages in your own workspace, copy `ros/common` and the
-  package, and set `HIPNUC_CORE_DIR` to the `c/hipnuc` directory.
+| Topic | Message | Contents |
+| --- | --- | --- |
+| `imu/data` | `sensor_msgs/Imu` | current acceleration, angular velocity and/or quaternion |
+| `imu/mag` | `sensor_msgs/MagneticField` | magnetic field, T |
+| `imu/temperature` | `sensor_msgs/Temperature` | temperature, °C |
+| `hipnuc/imu` | `HipnucImu` | product fields, source, device time, status and presence bits |
+| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | connection, receive rate and error counts |
+
+Only quantities present in the current frame are published. Classic CAN
+publishes each PGN independently; it does not wait for yaw or merge old fields.
+An `Imu` covariance starting with `-1` marks a missing quantity; zero covariance
+means unknown. Check whether your consumer accepts partial IMU messages and
+provide application-specific uncertainty where required.
+
+Headers carry host reception time from the ROS clock, not device sampling time.
+Acceleration is specific force, including gravity. Navigation position and
+velocity remain in the independent product message; standard navigation topics
+are not provided. The product message is not a drop-in input for a generic
+fusion node. Read only fields whose `VALID_*` bits are set; presence is separate
+from convergence and GNSS fix status. Pressure is retained only as a raw product
+field because its availability and freshness are not established by the protocol.
+Its definition is in
+[HipnucImu.msg](ros2/hipnuc_msgs/msg/HipnucImu.msg).
+
+## Connection tips
+
+- Edit the package's `config/serial.yaml` or `config/can.yaml` for topic switches
+  and frame name. Launch arguments override the connection parameters.
+- For `Permission denied`, run `sudo usermod -aG dialout "$USER"`, then log out
+  and back in. A virtual environment does not grant serial access.
+- Prefer a path under `/dev/serial/by-id/` when several USB adapters are present.
+  The driver retries an unavailable port/interface and continues publishing
+  diagnostics, including when ROS simulated time is paused.

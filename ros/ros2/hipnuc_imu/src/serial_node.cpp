@@ -1,29 +1,21 @@
-// HiPNUC serial driver node (ROS 2). Reads HI91/HI81/HI83 binary frames and
-// GGA/RMC sentences from a serial port and publishes standard sensor
-// messages plus the full-field hipnuc_msgs/HipnucImu.
-
+// One decoded frame produces one sample. No cross-frame measurement cache.
 #include <chrono>
-#include <cstring>
 #include <memory>
+#include <stdexcept>
 #include <string>
+#include <thread>
 
 #include <rclcpp/rclcpp.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
-#include <geometry_msgs/msg/twist_with_covariance_stamped.hpp>
-#include <sensor_msgs/msg/fluid_pressure.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/magnetic_field.hpp>
-#include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <sensor_msgs/msg/temperature.hpp>
 #include <hipnuc_msgs/msg/hipnuc_imu.hpp>
 
-#include "hipnuc_dec.h"
-#include "hipnuc_sample.h"
-#include "nmea_dec.h"
+#include "hipnuc_serial.h"
 #include "hipnuc_convert.hpp"
-#include "posix_serial.hpp"
 
-using namespace std::chrono_literals;
+using SteadyClock = std::chrono::steady_clock;
 
 class SerialNode : public rclcpp::Node {
 public:
@@ -32,121 +24,94 @@ public:
         port_ = declare_parameter<std::string>("port", "/dev/ttyUSB0");
         baudrate_ = declare_parameter<int>("baudrate", 115200);
         frame_id_ = declare_parameter<std::string>("frame_id", "imu_link");
-        gnss_frame_id_ = declare_parameter<std::string>("gnss_frame_id", "gnss_antenna");
-        enu_frame_id_ = declare_parameter<std::string>("enu_frame_id", "enu");
-        auto p = [this](const char *name, bool def) { return declare_parameter<bool>(name, def); };
-        publish_imu_ = p("publish_imu", true);
-        publish_mag_ = p("publish_mag", true);
-        publish_env_ = p("publish_temperature_pressure", true);
-        publish_fix_ = p("publish_navsatfix", true);
-        publish_vel_ = p("publish_velocity", true);
-        publish_full_ = p("publish_hipnuc", true);
-
+        publish_imu_ = declare_parameter<bool>("publish_imu", true);
+        publish_mag_ = declare_parameter<bool>("publish_mag", true);
+        publish_temperature_ = declare_parameter<bool>("publish_temperature", true);
+        publish_hipnuc_ = declare_parameter<bool>("publish_hipnuc", true);
+        if (port_.empty() || baudrate_ <= 0 || frame_id_.empty())
+            throw std::invalid_argument("port/frame_id must be nonempty and baudrate positive");
         imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("imu/data", 100);
         mag_pub_ = create_publisher<sensor_msgs::msg::MagneticField>("imu/mag", 100);
         temp_pub_ = create_publisher<sensor_msgs::msg::Temperature>("imu/temperature", 10);
-        press_pub_ = create_publisher<sensor_msgs::msg::FluidPressure>("imu/pressure", 10);
-        fix_pub_ = create_publisher<sensor_msgs::msg::NavSatFix>("gnss/fix", 10);
-        vel_pub_ = create_publisher<geometry_msgs::msg::TwistWithCovarianceStamped>("ins/velocity", 10);
         full_pub_ = create_publisher<hipnuc_msgs::msg::HipnucImu>("hipnuc/imu", 100);
         diag_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
-
-        std::memset(&raw_, 0, sizeof(raw_));
-        std::memset(&nmea_, 0, sizeof(nmea_));
+        RCLCPP_INFO(get_logger(), "Requires device ENU output configuration; the driver does not verify or change it.");
     }
 
-    // Blocking read loop; returns when ROS shuts down.
+    ~SerialNode() { hipnuc_serial_close(&serial_); }
+
     void run()
     {
-        uint8_t buf[512];
-        auto last_diag = now();
+        auto last_diag = SteadyClock::now();
+        auto next_retry = last_diag;
+        auto next_warning = last_diag;
         while (rclcpp::ok()) {
-            if (!serial_.is_open()) {
-                std::string err = serial_.open(port_, baudrate_);
-                if (!err.empty()) {
-                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
-                                         "cannot open %s: %s (check the cable, the dialout group and the port name)",
-                                         port_.c_str(), err.c_str());
-                    rclcpp::sleep_for(1s);
-                    continue;
+            auto current = SteadyClock::now();
+            if (!serial_.is_open && current >= next_retry) {
+                const bool opened = hipnuc_serial_open(&serial_, port_.c_str(), baudrate_) == 0;
+                next_retry = current + std::chrono::seconds(1);
+                if (opened) {
+                    received_sample_ = false;
+                    bytes_at_last_diag_ = 0;
+                    RCLCPP_INFO(get_logger(), "opened %s at %d baud", port_.c_str(), baudrate_);
+                } else if (current >= next_warning) {
+                    RCLCPP_WARN(get_logger(), "cannot open %s: %s", port_.c_str(), hipnuc_serial_last_error(&serial_));
+                    next_warning = current + std::chrono::seconds(5);
                 }
-                RCLCPP_INFO(get_logger(), "opened %s at %d baud", port_.c_str(), baudrate_);
-                std::memset(&raw_, 0, sizeof(raw_));
-                std::memset(&nmea_, 0, sizeof(nmea_));
             }
-            int n = serial_.read(buf, sizeof(buf), 100);
-            if (n < 0) {
-                RCLCPP_ERROR(get_logger(), "%s disconnected; reopening", port_.c_str());
-                serial_.close();
-                continue;
+            if (serial_.is_open) {
+                hipnuc_sample_t sample;
+                const int result = hipnuc_serial_read_sample(&serial_, &sample, 50);
+                if (result > 0) publish(sample);
+                if (result < 0) {
+                    RCLCPP_ERROR(get_logger(), "%s read failed: %s; reopening", port_.c_str(), hipnuc_serial_last_error(&serial_));
+                    hipnuc_serial_close(&serial_);
+                    received_sample_ = false;
+                    next_retry = SteadyClock::now() + std::chrono::seconds(1);
+                }
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
-            for (int i = 0; i < n; ++i) feed(buf[i]);
-            bytes_ += n;
+            // Failure and idle paths must still service ROS and diagnostics.
             rclcpp::spin_some(shared_from_this());
-            if (now() - last_diag > 1s) {
-                publish_diagnostics();
-                last_diag = now();
+            current = SteadyClock::now();
+            const double elapsed = std::chrono::duration<double>(current - last_diag).count();
+            if (elapsed >= 1.0) {
+                publish_diagnostics(current, elapsed);
+                last_diag = current;
             }
         }
     }
 
 private:
-    void feed(uint8_t byte)
-    {
-        hipnuc_sample_t s;
-        int ret = hipnuc_input(&raw_, byte);
-        if (ret > 0 && hipnuc_sample_from_raw(&raw_, &s)) publish(s);
-        if (nmea_input(&nmea_, byte) > 0 && hipnuc_sample_from_nmea(&nmea_, &s)) publish(s);
-    }
-
     void publish(const hipnuc_sample_t &s)
     {
         const auto stamp = now();
-        frames_++;
-        last_frame_ = stamp;
-        if (publish_imu_ && (s.valid & (HIPNUC_VALID_ACC | HIPNUC_VALID_GYR | HIPNUC_VALID_QUAT))) {
+        ++frames_;
+        last_frame_ = SteadyClock::now();
+        received_sample_ = true;
+        if (publish_imu_ && hipnuc_ros::has_imu(s)) {
             sensor_msgs::msg::Imu m;
             m.header.stamp = stamp;
             m.header.frame_id = frame_id_;
             hipnuc_ros::fill_imu(s, m);
             imu_pub_->publish(m);
         }
-        if (publish_mag_ && (s.valid & HIPNUC_VALID_MAG)) {
+        if (publish_mag_ && (s.valid & HIPNUC_VALID_MAG) && hipnuc_ros::finite_vector(s.mag)) {
             sensor_msgs::msg::MagneticField m;
             m.header.stamp = stamp;
             m.header.frame_id = frame_id_;
             hipnuc_ros::fill_mag(s, m);
             mag_pub_->publish(m);
         }
-        if (publish_env_ && (s.valid & HIPNUC_VALID_TEMPERATURE)) {
+        if (publish_temperature_ && (s.valid & HIPNUC_VALID_TEMPERATURE) && std::isfinite(s.temperature)) {
             sensor_msgs::msg::Temperature m;
             m.header.stamp = stamp;
             m.header.frame_id = frame_id_;
             hipnuc_ros::fill_temperature(s, m);
             temp_pub_->publish(m);
         }
-        if (publish_env_ && (s.valid & HIPNUC_VALID_PRESSURE)) {
-            sensor_msgs::msg::FluidPressure m;
-            m.header.stamp = stamp;
-            m.header.frame_id = frame_id_;
-            hipnuc_ros::fill_pressure(s, m);
-            press_pub_->publish(m);
-        }
-        if (publish_fix_ && (s.valid & HIPNUC_VALID_POSITION)) {
-            sensor_msgs::msg::NavSatFix m;
-            m.header.stamp = stamp;
-            m.header.frame_id = gnss_frame_id_;
-            hipnuc_ros::fill_navsatfix(s, m);
-            fix_pub_->publish(m);
-        }
-        if (publish_vel_ && (s.valid & HIPNUC_VALID_VELOCITY_ENU)) {
-            geometry_msgs::msg::TwistWithCovarianceStamped m;
-            m.header.stamp = stamp;
-            m.header.frame_id = enu_frame_id_;
-            hipnuc_ros::fill_velocity_enu(s, m);
-            vel_pub_->publish(m);
-        }
-        if (publish_full_) {
+        if (publish_hipnuc_) {
             hipnuc_msgs::msg::HipnucImu m;
             m.header.stamp = stamp;
             m.header.frame_id = frame_id_;
@@ -155,46 +120,54 @@ private:
         }
     }
 
-    void publish_diagnostics()
+    void publish_diagnostics(SteadyClock::time_point current, double elapsed)
     {
         diagnostic_msgs::msg::DiagnosticArray arr;
         diagnostic_msgs::msg::DiagnosticStatus st;
         arr.header.stamp = now();
         st.name = std::string(get_name()) + ": serial";
         st.hardware_id = port_;
-        const double age = last_frame_.nanoseconds() ? (now() - last_frame_).seconds() : -1.0;
-        if (!serial_.is_open()) { st.level = st.ERROR; st.message = "port not open"; }
-        else if (age < 0 || age > 2.0) { st.level = st.WARN; st.message = bytes_ ? "no valid frames (baudrate?)" : "no data"; }
-        else { st.level = st.OK; st.message = "receiving"; }
-        auto kv = [&](const char *k, const std::string &v) {
-            diagnostic_msgs::msg::KeyValue e; e.key = k; e.value = v; st.values.push_back(e);
+        const double age = received_sample_ ? std::chrono::duration<double>(current - last_frame_).count() : -1.0;
+        if (!serial_.is_open) {
+            st.level = st.ERROR;
+            st.message = "port not open";
+        } else if (age < 0.0 || age > 2.0) {
+            st.level = st.WARN;
+            st.message = serial_.bytes_received > bytes_at_last_diag_ ? "bytes received but no valid frames (check baudrate/output)" : "no data";
+        } else {
+            st.level = st.OK;
+            st.message = "receiving";
+        }
+        auto kv = [&](const char *key, const std::string &value) {
+            diagnostic_msgs::msg::KeyValue entry;
+            entry.key = key;
+            entry.value = value;
+            st.values.push_back(entry);
         };
-        kv("bytes", std::to_string(bytes_));
         kv("frames", std::to_string(frames_));
-        kv("frame_rate_hz", std::to_string(frames_ - frames_at_last_diag_));
-        kv("crc_errors", std::to_string(raw_.crc_error_count));
-        kv("invalid_frames", std::to_string(raw_.invalid_count));
-        kv("nmea_checksum_errors", std::to_string(nmea_.checksum_error_count));
+        kv("frame_rate_hz", std::to_string((frames_ - frames_at_last_diag_) / elapsed));
+        kv("connection_bytes", std::to_string(serial_.bytes_received));
+        kv("connection_crc_errors", std::to_string(serial_.binary.crc_error_count));
+        kv("connection_invalid_frames", std::to_string(serial_.binary.invalid_count));
+        kv("connection_nmea_checksum_errors", std::to_string(serial_.nmea.checksum_error_count));
+        kv("last_error", hipnuc_serial_last_error(&serial_));
+        bytes_at_last_diag_ = serial_.bytes_received;
         frames_at_last_diag_ = frames_;
         arr.status.push_back(st);
         diag_pub_->publish(arr);
     }
 
-    std::string port_, frame_id_, gnss_frame_id_, enu_frame_id_;
+    std::string port_, frame_id_;
     int baudrate_;
-    bool publish_imu_, publish_mag_, publish_env_, publish_fix_, publish_vel_, publish_full_;
-    hipnuc_ros::PosixSerial serial_;
-    hipnuc_raw_t raw_;
-    nmea_raw_t nmea_;
-    uint64_t bytes_ = 0, frames_ = 0, frames_at_last_diag_ = 0;
-    rclcpp::Time last_frame_{0, 0, RCL_ROS_TIME};
-
+    bool publish_imu_, publish_mag_, publish_temperature_, publish_hipnuc_;
+    hipnuc_serial_t serial_{};
+    uint64_t frames_ = 0, frames_at_last_diag_ = 0;
+    uint64_t bytes_at_last_diag_ = 0;
+    bool received_sample_ = false;
+    SteadyClock::time_point last_frame_{};
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
     rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr mag_pub_;
     rclcpp::Publisher<sensor_msgs::msg::Temperature>::SharedPtr temp_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::FluidPressure>::SharedPtr press_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::TwistWithCovarianceStamped>::SharedPtr vel_pub_;
     rclcpp::Publisher<hipnuc_msgs::msg::HipnucImu>::SharedPtr full_pub_;
     rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
 };
@@ -202,8 +175,14 @@ private:
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<SerialNode>();
-    node->run();
+    try {
+        auto node = std::make_shared<SerialNode>();
+        node->run();
+    } catch (const std::exception &error) {
+        RCLCPP_ERROR(rclcpp::get_logger("hipnuc"), "%s", error.what());
+        rclcpp::shutdown();
+        return 1;
+    }
     rclcpp::shutdown();
     return 0;
 }

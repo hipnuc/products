@@ -22,7 +22,7 @@ class Recorder:
     Files are flushed every second while writes are active, on ``flush()``, and
     when closed. No background work runs while the recorder is idle. Raw output
     must receive the original byte chunks, never the per-sample ``raw`` field:
-    multiple samples can share a frame, and undecodable bytes have no sample.
+    undecodable bytes and command replies have no measurement sample.
     File failures raise normal Python I/O exceptions.
     """
 

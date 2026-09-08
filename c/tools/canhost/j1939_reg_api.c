@@ -5,19 +5,21 @@
 #include "can_interface.h"
 #include "hipnuc_j1939.h"
 #include "utils.h"
+#include "cli.h"
 
-static int await_reply(int fd, uint8_t da, uint16_t expect_addr, hipnuc_j1939_cmd_t expect_cmd,
+static int await_reply(int fd, uint8_t da, uint8_t sa, uint16_t expect_addr, hipnuc_j1939_cmd_t expect_cmd,
                        j1939_reg_result_t *out, int timeout_ms)
 {
     uint64_t deadline = utils_now_ms() + (uint64_t)(timeout_ms > 0 ? timeout_ms : 0);
 
-    for (;;) {
+    while (!canhost_stop) {
         uint64_t now = utils_now_ms();
-        if (now > deadline) {
+        if (now >= deadline) {
             break;
         }
         can_rx_frame_t rx;
-        int r = can_receive_frames(fd, &rx, 1, (int)(deadline - now));
+        int remaining = (int)(deadline - now);
+        int r = can_receive_frames(fd, &rx, 1, remaining < 50 ? remaining : 50);
         if (r < 0) {
             return -1;
         }
@@ -34,7 +36,8 @@ static int await_reply(int fd, uint8_t da, uint16_t expect_addr, hipnuc_j1939_cm
         }
         /* Only the reply of the addressed node counts; several devices may
          * answer on one bus. */
-        if (source != da || addr != expect_addr || cmd != expect_cmd) {
+        if (source != da || ((rx.frame.id >> 8) & 0xff) != sa ||
+            addr != expect_addr || cmd != expect_cmd) {
             continue;
         }
         if (out) {
@@ -53,7 +56,7 @@ int j1939_reg_read(int fd, uint8_t da, uint8_t sa, uint16_t addr, int timeout_ms
     if (can_send_frame(fd, &req) < 0) {
         return -1;
     }
-    return await_reply(fd, da, addr, HIPNUC_J1939_CMD_READ, out, timeout_ms);
+    return await_reply(fd, da, sa, addr, HIPNUC_J1939_CMD_READ, out, timeout_ms);
 }
 
 int j1939_reg_write(int fd, uint8_t da, uint8_t sa, uint16_t addr, uint32_t val, int timeout_ms, j1939_reg_result_t *out)
@@ -63,5 +66,5 @@ int j1939_reg_write(int fd, uint8_t da, uint8_t sa, uint16_t addr, uint32_t val,
     if (can_send_frame(fd, &req) < 0) {
         return -1;
     }
-    return await_reply(fd, da, addr, HIPNUC_J1939_CMD_WRITE, out, timeout_ms);
+    return await_reply(fd, da, sa, addr, HIPNUC_J1939_CMD_WRITE, out, timeout_ms);
 }

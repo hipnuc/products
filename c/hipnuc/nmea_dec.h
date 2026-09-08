@@ -5,7 +5,7 @@
  *
  * NMEA 0183 decoder for the sentences emitted by HiPNUC INS products:
  * GGA and RMC. Portable C99, no dynamic memory, no stdio, no global state.
- * Copy nmea_dec.c and nmea_dec.h into your project.
+ * Copy nmea_dec.c/.h and hipnuc_sample.c/.h into your project.
  */
 
 #ifndef NMEA_DEC_H
@@ -13,6 +13,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "hipnuc_sample.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,14 +34,17 @@ typedef enum {
 typedef struct {
     uint8_t  hour;            /* UTC time of day */
     uint8_t  minute;
-    float    second;
+    double   second;
     uint8_t  has_time;
     double   lat;             /* deg, north positive */
     double   lon;             /* deg, east positive */
     uint8_t  has_position;    /* both coordinates present */
     uint8_t  quality;         /* 0 = no fix, 1 = GNSS, 2 = differential, 4 = RTK fixed, 5 = RTK float */
+    uint8_t  has_quality;
     uint8_t  satellites;      /* satellites used */
+    uint8_t  has_satellites;
     float    hdop;
+    uint8_t  has_hdop;
     double   altitude_msl;    /* m above mean sea level */
     uint8_t  has_altitude;
     float    undulation;      /* m, geoid separation (ellipsoid = msl + undulation) */
@@ -60,8 +64,9 @@ typedef struct {
     uint8_t  has_date;
     uint8_t  hour;
     uint8_t  minute;
-    float    second;
+    double   second;
     uint8_t  has_time;
+    uint8_t  has_status;
     char     status;          /* 'A' = valid, 'V' = void */
     double   lat;             /* deg, north positive */
     double   lon;             /* deg, east positive */
@@ -70,6 +75,7 @@ typedef struct {
     uint8_t  has_sog;
     float    cog;             /* deg true, course over ground */
     uint8_t  has_cog;
+    uint8_t  has_mode;
     char     mode;            /* A autonomous, D differential, R RTK fixed, F RTK float, E estimated, N not valid */
 } nmea_rmc_t;
 
@@ -95,6 +101,12 @@ typedef struct {
  *         -1 on checksum or framing error. Test `> 0`.
  */
 int nmea_input(nmea_raw_t *raw, uint8_t data);
+
+/* SI conversion; coordinates are raw GNSS, not the INS origin. Availability
+ * does not imply a fix: quality and RMC status/mode are retained separately. */
+void hipnuc_sample_from_gga(const nmea_gga_t *g, hipnuc_sample_t *s);
+void hipnuc_sample_from_rmc(const nmea_rmc_t *r, hipnuc_sample_t *s);
+int hipnuc_sample_from_nmea(const nmea_raw_t *raw, hipnuc_sample_t *s);
 
 #ifdef __cplusplus
 }

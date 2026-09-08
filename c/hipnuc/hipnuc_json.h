@@ -3,14 +3,16 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * JSON formatting of hipnuc_sample_t (optional; uses stdio and libm).
+ * JSON formatting of hipnuc_sample_t (optional; uses stdio).
  *
  * Output is one JSON object without a trailing newline, in SI units, with
  * the same key names as the Python SDK: acceleration_m_s2,
  * angular_velocity_rad_s, magnetic_field_t, euler_rad, quaternion_wxyz,
  * heading_rad, pressure_pa, temperature_c, device_time_us, utc,
  * longitude_deg, latitude_deg, altitude_msl_m, velocity_enu_m_s, ... Only
- * fields whose validity bit is set are emitted.
+ * fields whose availability bit is set are emitted. Partial euler_rad arrays
+ * use null for absent components. INS and raw GNSS coordinates are separate.
+ * Numeric output always uses a decimal point, without changing the locale.
  */
 
 #ifndef HIPNUC_JSON_H

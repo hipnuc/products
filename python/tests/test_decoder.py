@@ -146,6 +146,9 @@ def test_fixed_vectors_and_independent_crc(entry):
     assert len(raw) == int.from_bytes(raw[2:4], "little") + 6
     assert binascii.crc_hqx(raw[:4] + raw[6:], 0) == int.from_bytes(raw[4:6], "little")
     samples = Decoder().feed(raw)
+    if not entry["complete"]:
+        assert samples == []
+        return
     assert len(samples) == 1
     sample = samples[0]
     assert sample.type == entry["protocol"]
@@ -159,11 +162,11 @@ def test_fixed_vectors_and_independent_crc(entry):
 @pytest.mark.parametrize("name", list(VECTORS))
 def test_every_binary_split_point(name):
     raw = vector(name)
-    expected = Decoder().feed(raw)[0].to_dict()
+    expected = [sample.to_dict() for sample in Decoder().feed(raw)]
     for split in range(len(raw) + 1):
         decoder = Decoder()
         samples = decoder.feed(raw[:split]) + decoder.feed(raw[split:])
-        assert [sample.to_dict() for sample in samples] == [expected], split
+        assert [sample.to_dict() for sample in samples] == expected, split
         assert decoder.buffered_bytes == 0
 
 
@@ -207,9 +210,8 @@ def test_corrupt_crc_resynchronizes_without_emitting_embedded_ascii_or_nmea():
 def test_valid_binary_payload_cannot_emit_ascii_or_nmea():
     decoder = Decoder()
     samples = decoder.feed(frame(b"\x99\r\nOK\r\n" + GGA))
-    assert [sample.type for sample in samples] == ["UNKNOWN"]
-    assert samples[0].complete is False
-    assert samples[0].issues == ("unknown_payload_tag:0x99",)
+    assert samples == []
+    assert decoder.statistics["malformed_packets"] == 1
     assert decoder.drain_lines() == []
 
 
@@ -318,13 +320,13 @@ def test_drain_lines_can_discard_stale_half_line_without_resetting_frame():
     assert [sample.type for sample in decoder.feed(GGA[20:])] == ["GGA"]
 
 
-def test_multiple_known_payloads_and_atomic_truncation():
+def test_multiple_payloads_are_rejected_and_next_frame_recovers():
     decoder = Decoder()
     samples = decoder.feed(frame(vector()[6:] + vector("hi81_si")[6:]))
-    assert [sample.type for sample in samples] == ["HI91", "HI81"]
-    assert [sample.metadata["payload_offset"] for sample in samples] == [0, 76]
+    assert samples == []
     assert decoder.feed(frame(vector()[6:] + b"\x81\x00")) == []
-    assert decoder.statistics["malformed_packets"] == 1
+    assert decoder.statistics["malformed_packets"] == 2
+    assert [sample.type for sample in decoder.feed(vector())] == ["HI91"]
 
 
 def test_hi81_reserved_bytes_pressure_and_heading_semantics():
@@ -354,15 +356,14 @@ def test_hi81_invalid_utc_never_invents_a_date(parts, issue):
     assert issue in sample.issues
 
 
-def test_hi83_time_and_unknown_bits_preserve_only_reliable_prefix():
+def test_hi83_time_and_unknown_layout_rejection():
     current = Decoder().feed(vector("hi83_current"))[0]
     assert current.values["device_time_s"] == pytest.approx(424242.424242)
     assert current.metadata["device_time_reference"] == "local_counter"
-    partial = Decoder().feed(vector("hi83_unknown_prefix"))[0]
-    assert not partial.complete
-    assert "gnss_longitude_deg" not in partial.values
-    assert partial.metadata["undecoded_payload_offset"] == 20
-    assert partial.metadata["undecoded_payload_hex"].startswith("91756e6b6e6f776e")
+    decoder = Decoder()
+    assert decoder.feed(vector("hi83_unknown_prefix")) == []
+    assert decoder.statistics["malformed_packets"] == 1
+    assert [sample.type for sample in decoder.feed(vector())] == ["HI91"]
 
 
 def test_hi83_legacy_millisecond_layout_is_rejected():
@@ -372,15 +373,13 @@ def test_hi83_legacy_millisecond_layout_is_rejected():
     assert decoder.statistics["malformed_packets"] == 1
 
 
-def test_hi83_internal_bits_stop_decoding_before_them():
+def test_hi83_internal_bits_reject_the_frame():
     payload = struct.pack(
         "<BHBI3fQ", 0x83, 0, 0, (1 << 0) | (1 << 5) | (1 << 25), 1, 2, 3, 123456
     ) + bytes(64)
-    sample = Decoder().feed(frame(payload))[0]
-    assert sample.values["acceleration_m_s2"] == [1, 2, 3]
-    assert sample.values["device_time_us"] == 123456
-    assert sample.complete is False
-    assert sample.issues == ("unknown_hi83_bitmap:0x02000000",)
+    decoder = Decoder()
+    assert decoder.feed(frame(payload)) == []
+    assert decoder.statistics["malformed_packets"] == 1
 
 
 @pytest.mark.parametrize(

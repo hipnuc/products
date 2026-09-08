@@ -6,8 +6,8 @@
  * HiPNUC serial binary protocol decoder (0x5A 0xA5 frames).
  *
  * Portable C99, no dynamic memory, no stdio, no global state. Copy
- * hipnuc_dec.c and hipnuc_dec.h into your project, keep one hipnuc_raw_t per
- * serial port and feed received bytes with hipnuc_input().
+ * hipnuc_dec.c/.h and hipnuc_sample.c/.h into your project, keep one
+ * hipnuc_raw_t per serial port and feed received bytes with hipnuc_input().
  *
  * Structure fields keep the units used on the wire (see comments). Use
  * hipnuc_sample.h to obtain SI units with validity flags.
@@ -22,6 +22,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "hipnuc_sample.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,23 +54,6 @@ extern "C" {
 #define HIPNUC_ID_HI91          0x91U
 #define HIPNUC_ID_HI81          0x81U
 #define HIPNUC_ID_HI83          0x83U
-
-/* MAIN_STATUS bits (a set bit is a warning) */
-#define HIPNUC_STATUS_WB_CONV      (1U << 3)   /* set: gyro bias NOT converged yet */
-#define HIPNUC_STATUS_MAG_DIST     (1U << 4)   /* set: magnetic disturbance detected */
-#define HIPNUC_STATUS_ACC_SAT      (1U << 5)   /* set: accelerometer over range */
-#define HIPNUC_STATUS_GYR_SAT      (1U << 6)   /* set: gyroscope over range */
-#define HIPNUC_STATUS_ATT_CONV     (1U << 7)   /* set: attitude NOT converged yet */
-#define HIPNUC_STATUS_STATIC       (1U << 9)   /* set: device detected as static */
-#define HIPNUC_STATUS_MAG_AIDING   (1U << 10)  /* set: magnetometer aiding enabled */
-#define HIPNUC_STATUS_UTC_UNSYNC   (1U << 11)  /* set: device time NOT synchronized to UTC */
-#define HIPNUC_STATUS_SOUT_PULSE   (1U << 12)  /* set: frame corresponds to a SYNC_OUT pulse */
-
-/* INS status values (hi81_t.ins_status, hi83_t.ins_status) */
-#define HIPNUC_INS_INVALID          0
-#define HIPNUC_INS_ALIGNING         1
-#define HIPNUC_INS_NAVIGATING       3
-#define HIPNUC_INS_DEAD_RECKONING   6
 
 HIPNUC_PACKED_BEGIN
 
@@ -214,7 +198,7 @@ HIPNUC_PACKED_END
 
 /**
  * Decoder state. Zero-initialize before first use; one per serial port.
- * After hipnuc_input() returns 1, the sub-packet with a nonzero tag holds
+ * After hipnuc_input() returns 1, exactly one sub-packet with a nonzero tag holds
  * the newly decoded data. All tags are cleared before decoding a frame, so a
  * stale packet is never presented as new.
  */
@@ -235,13 +219,18 @@ typedef struct {
  *
  * @return 1 when a frame was decoded (inspect raw->hi91/hi81/hi83 tags),
  *         0 when more bytes are needed, -1 when the frame was invalid
- *         (CRC, length, unknown tag or unsupported HI83 bits). Test `> 0`.
+ *         (CRC, length, multiple sub-packets, unknown tag or unsupported
+ *         HI83 bits). Test `> 0`.
+ * On CRC/length failure, an unfinished next-frame prefix is retained.
+ * Complete candidates already swallowed by a damaged frame are discarded;
+ * this byte API does not queue samples. CRC-valid unsupported envelopes are
+ * always discarded whole. Continue feeding bytes after a negative result.
  */
 int hipnuc_input(hipnuc_raw_t *raw, uint8_t data);
 
 /**
- * Feed a block of received bytes. Stops after the first decoded frame so the
- * caller can consume it before continuing with the remaining bytes.
+ * Feed a block of received bytes. Stops at the first complete or invalid
+ * frame; continue with data + consumed even after a negative result.
  *
  * @param consumed receives the number of bytes taken from data
  * @return same as hipnuc_input(); 0 when the block ended without a frame
@@ -252,6 +241,14 @@ int hipnuc_input_buffer(hipnuc_raw_t *raw, const uint8_t *data, size_t len, size
  * CRC-16/XMODEM (poly 0x1021, init 0) as used by the frame header.
  */
 uint16_t hipnuc_crc16(uint16_t crc, const uint8_t *data, size_t len);
+
+/* Convert the one packet returned by hipnuc_input(); clears the destination.
+ * Wire values remain available in the packet structures above. */
+void hipnuc_sample_from_hi91(const hi91_t *p, hipnuc_sample_t *s);
+void hipnuc_sample_from_hi81(const hi81_t *p, hipnuc_sample_t *s);
+void hipnuc_sample_from_hi83(const hi83_t *p, hipnuc_sample_t *s);
+/* Returns 1 for exactly one tagged packet, 0 otherwise. */
+int hipnuc_sample_from_raw(const hipnuc_raw_t *raw, hipnuc_sample_t *s);
 
 #ifdef __cplusplus
 }

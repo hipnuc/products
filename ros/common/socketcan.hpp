@@ -31,10 +31,16 @@ public:
     std::string open(const std::string &interface)
     {
         close();
-        fd_ = ::socket(PF_CAN, SOCK_RAW | SOCK_CLOEXEC, CAN_RAW);
+        if (interface.empty() || interface.size() >= IFNAMSIZ)
+            return "invalid interface name";
+        fd_ = ::socket(PF_CAN, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, CAN_RAW);
         if (fd_ < 0) return std::string("socket: ") + std::strerror(errno);
         int fd_frames = 1;
-        ::setsockopt(fd_, SOL_CAN_RAW, CAN_RAW_FD_FRAMES, &fd_frames, sizeof(fd_frames));
+        if (::setsockopt(fd_, SOL_CAN_RAW, CAN_RAW_FD_FRAMES, &fd_frames, sizeof(fd_frames)) != 0) {
+            std::string error = std::string("CAN FD setup: ") + std::strerror(errno);
+            close();
+            return error;
+        }
 
         struct ifreq ifr;
         std::memset(&ifr, 0, sizeof(ifr));
@@ -68,18 +74,21 @@ public:
         int r = ::poll(&p, 1, timeout_ms);
         if (r < 0) return errno == EINTR ? 0 : -1;
         if (r == 0) return 0;
+        if (p.revents & (POLLERR | POLLHUP | POLLNVAL)) return -1;
+        if (!(p.revents & POLLIN)) return 0;
 
         struct canfd_frame frame;
         ssize_t n = ::read(fd_, &frame, sizeof(frame));
         if (n < 0) return (errno == EAGAIN || errno == EINTR) ? 0 : -1;
         if (n != CAN_MTU && n != CANFD_MTU) return 0;
+        if (frame.len > (n == CAN_MTU ? CAN_MAX_DLEN : CANFD_MAX_DLEN)) return 0;
 
         std::memset(&out, 0, sizeof(out));
         out.is_extended = (frame.can_id & CAN_EFF_FLAG) ? 1 : 0;
         out.is_remote = (frame.can_id & CAN_RTR_FLAG) ? 1 : 0;
         out.is_error = (frame.can_id & CAN_ERR_FLAG) ? 1 : 0;
         out.id = frame.can_id & (out.is_extended ? CAN_EFF_MASK : CAN_SFF_MASK);
-        out.len = frame.len > 64 ? 64 : frame.len;
+        out.len = frame.len;
         std::memcpy(out.data, frame.data, out.len);
         return 1;
     }

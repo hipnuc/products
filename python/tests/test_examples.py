@@ -15,7 +15,7 @@ import pytest
 
 import hipnuc
 from hipnuc import DeviceError, Recorder, ResponseTimeout, TransportError, modbus, serial_device
-from test_decoder import GGA, frame as protocol_frame
+from test_decoder import GGA
 from test_modbus import FakeServer
 from test_serial_device import Clock, FakeSerial, IDENTITY, frame
 
@@ -189,7 +189,7 @@ def test_record_example_preserves_original_chunks_and_closes_on_exit(ending, mon
             events.append("recorder closed")
             super().close()
 
-    shared_frame = protocol_frame(frame()[6:] * 2)
+    shared_frame = frame() * 2
     chunks = [b"\x00noise\r\n" + shared_frame[:13], shared_frame[13:70], shared_frame[70:] + GGA]
     port = EndingSerial()
     port.pending.extend(chunks)

@@ -1,19 +1,14 @@
-// HiPNUC CAN (J1939 / CANFD83) driver node (ROS 2). Frames from the
-// configured source address are merged into one sample; the merged sample
-// is published when the trigger PGN arrives (the last PGN of the device's
-// output cycle) and then cleared, so fields never outlive one cycle.
-
+// One decoded frame produces one sample. No cross-frame measurement cache.
 #include <chrono>
-#include <cstring>
 #include <memory>
+#include <stdexcept>
 #include <string>
+#include <thread>
 
 #include <rclcpp/rclcpp.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
-#include <geometry_msgs/msg/twist_with_covariance_stamped.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/magnetic_field.hpp>
-#include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <sensor_msgs/msg/temperature.hpp>
 #include <hipnuc_msgs/msg/hipnuc_imu.hpp>
 
@@ -21,56 +16,69 @@
 #include "hipnuc_convert.hpp"
 #include "socketcan.hpp"
 
-using namespace std::chrono_literals;
+using SteadyClock = std::chrono::steady_clock;
 
 class CanNode : public rclcpp::Node {
 public:
     CanNode() : Node("hipnuc_can")
     {
         interface_ = declare_parameter<std::string>("interface", "can0");
-        node_id_ = declare_parameter<int>("node_id", HIPNUC_J1939_DEFAULT_NODE);
-        trigger_pgn_ = declare_parameter<int>("trigger_pgn", HIPNUC_J1939_PGN_YAW);
+        node_id_ = declare_parameter<int>("node_id", 8);
         frame_id_ = declare_parameter<std::string>("frame_id", "imu_link");
-        gnss_frame_id_ = declare_parameter<std::string>("gnss_frame_id", "gnss_antenna");
-        enu_frame_id_ = declare_parameter<std::string>("enu_frame_id", "enu");
-        publish_full_ = declare_parameter<bool>("publish_hipnuc", true);
-
+        publish_imu_ = declare_parameter<bool>("publish_imu", true);
+        publish_mag_ = declare_parameter<bool>("publish_mag", true);
+        publish_temperature_ = declare_parameter<bool>("publish_temperature", true);
+        publish_hipnuc_ = declare_parameter<bool>("publish_hipnuc", true);
+        if (interface_.empty() || node_id_ < 0 || node_id_ > 255 || frame_id_.empty())
+            throw std::invalid_argument("interface/frame_id must be nonempty and node_id in 0..255");
         imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("imu/data", 100);
         mag_pub_ = create_publisher<sensor_msgs::msg::MagneticField>("imu/mag", 100);
         temp_pub_ = create_publisher<sensor_msgs::msg::Temperature>("imu/temperature", 10);
-        fix_pub_ = create_publisher<sensor_msgs::msg::NavSatFix>("gnss/fix", 10);
-        vel_pub_ = create_publisher<geometry_msgs::msg::TwistWithCovarianceStamped>("ins/velocity", 10);
         full_pub_ = create_publisher<hipnuc_msgs::msg::HipnucImu>("hipnuc/imu", 100);
         diag_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
-        hipnuc_sample_clear(&merged_);
+        RCLCPP_INFO(get_logger(), "Requires device ENU output configuration; the driver does not verify or change it.");
     }
 
     void run()
     {
-        auto last_diag = now();
+        auto last_diag = SteadyClock::now();
+        auto next_retry = last_diag;
+        auto next_warning = last_diag;
         while (rclcpp::ok()) {
-            if (!can_.is_open()) {
-                std::string err = can_.open(interface_);
-                if (!err.empty()) {
-                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
-                                         "cannot open %s: %s (is the interface up?)", interface_.c_str(), err.c_str());
-                    rclcpp::sleep_for(1s);
-                    continue;
+            auto current = SteadyClock::now();
+            if (!can_.is_open() && current >= next_retry) {
+                const std::string error = can_.open(interface_);
+                const bool opened = error.empty();
+                next_retry = current + std::chrono::seconds(1);
+                if (opened) {
+                    received_sample_ = false;
+                    other_nodes_at_open_ = other_nodes_;
+                    RCLCPP_INFO(get_logger(), "listening on %s for source address %d", interface_.c_str(), node_id_);
+                } else if (current >= next_warning) {
+                    RCLCPP_WARN(get_logger(), "cannot open %s: %s", interface_.c_str(), error.c_str());
+                    next_warning = current + std::chrono::seconds(5);
                 }
-                RCLCPP_INFO(get_logger(), "listening on %s for node %d", interface_.c_str(), node_id_);
             }
-            hipnuc_can_frame_t frame;
-            int r = can_.read(frame, 100);
-            if (r < 0) {
-                RCLCPP_ERROR(get_logger(), "%s read failed; reopening", interface_.c_str());
-                can_.close();
-                continue;
+            if (can_.is_open()) {
+                hipnuc_can_frame_t frame;
+                const int result = can_.read(frame, 50);
+                if (result > 0) handle(frame);
+                if (result < 0) {
+                    RCLCPP_ERROR(get_logger(), "%s read failed; reopening", interface_.c_str());
+                    can_.close();
+                    received_sample_ = false;
+                    next_retry = SteadyClock::now() + std::chrono::seconds(1);
+                }
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
-            if (r > 0) handle(frame);
+            // Failure and idle paths must still service ROS and diagnostics.
             rclcpp::spin_some(shared_from_this());
-            if (now() - last_diag > 1s) {
-                publish_diagnostics();
-                last_diag = now();
+            current = SteadyClock::now();
+            const double elapsed = std::chrono::duration<double>(current - last_diag).count();
+            if (elapsed >= 1.0) {
+                publish_diagnostics(current, elapsed);
+                last_diag = current;
             }
         }
     }
@@ -78,63 +86,42 @@ public:
 private:
     void handle(const hipnuc_can_frame_t &frame)
     {
-        hipnuc_sample_t part;
-        int type = hipnuc_j1939_parse(&frame, &part, nullptr);
-        if (type < 0) { invalid_++; return; }
+        hipnuc_sample_t sample;
+        const int type = hipnuc_j1939_parse(&frame, &sample, nullptr);
+        if (type < 0) { ++invalid_; return; }
         if (type == HIPNUC_J1939_MSG_NONE) return;
-        if (part.node_id != node_id_) { other_nodes_++; return; }
-        frames_++;
-        last_frame_ = now();
-        if (type == HIPNUC_J1939_MSG_CANFD83) {
-            publish(part);                       // one frame carries a complete sample
-            return;
-        }
-        hipnuc_j1939_merge(&merged_, &part);
-        if (static_cast<int>(hipnuc_j1939_pgn(frame.id)) == trigger_pgn_) {
-            publish(merged_);
-            hipnuc_sample_clear(&merged_);
-        }
+        if (sample.node_id != node_id_) { ++other_nodes_; return; }
+        publish(sample);
     }
 
     void publish(const hipnuc_sample_t &s)
     {
         const auto stamp = now();
-        if (s.valid & (HIPNUC_VALID_ACC | HIPNUC_VALID_GYR | HIPNUC_VALID_QUAT)) {
+        ++frames_;
+        last_frame_ = SteadyClock::now();
+        received_sample_ = true;
+        if (publish_imu_ && hipnuc_ros::has_imu(s)) {
             sensor_msgs::msg::Imu m;
             m.header.stamp = stamp;
             m.header.frame_id = frame_id_;
             hipnuc_ros::fill_imu(s, m);
             imu_pub_->publish(m);
         }
-        if (s.valid & HIPNUC_VALID_MAG) {
+        if (publish_mag_ && (s.valid & HIPNUC_VALID_MAG) && hipnuc_ros::finite_vector(s.mag)) {
             sensor_msgs::msg::MagneticField m;
             m.header.stamp = stamp;
             m.header.frame_id = frame_id_;
             hipnuc_ros::fill_mag(s, m);
             mag_pub_->publish(m);
         }
-        if (s.valid & HIPNUC_VALID_TEMPERATURE) {
+        if (publish_temperature_ && (s.valid & HIPNUC_VALID_TEMPERATURE) && std::isfinite(s.temperature)) {
             sensor_msgs::msg::Temperature m;
             m.header.stamp = stamp;
             m.header.frame_id = frame_id_;
             hipnuc_ros::fill_temperature(s, m);
             temp_pub_->publish(m);
         }
-        if (s.valid & HIPNUC_VALID_POSITION) {
-            sensor_msgs::msg::NavSatFix m;
-            m.header.stamp = stamp;
-            m.header.frame_id = gnss_frame_id_;
-            hipnuc_ros::fill_navsatfix(s, m);
-            fix_pub_->publish(m);
-        }
-        if (s.valid & HIPNUC_VALID_VELOCITY_ENU) {
-            geometry_msgs::msg::TwistWithCovarianceStamped m;
-            m.header.stamp = stamp;
-            m.header.frame_id = enu_frame_id_;
-            hipnuc_ros::fill_velocity_enu(s, m);
-            vel_pub_->publish(m);
-        }
-        if (publish_full_) {
+        if (publish_hipnuc_) {
             hipnuc_msgs::msg::HipnucImu m;
             m.header.stamp = stamp;
             m.header.frame_id = frame_id_;
@@ -143,22 +130,32 @@ private:
         }
     }
 
-    void publish_diagnostics()
+    void publish_diagnostics(SteadyClock::time_point current, double elapsed)
     {
         diagnostic_msgs::msg::DiagnosticArray arr;
         diagnostic_msgs::msg::DiagnosticStatus st;
         arr.header.stamp = now();
         st.name = std::string(get_name()) + ": can";
         st.hardware_id = interface_;
-        const double age = last_frame_.nanoseconds() ? (now() - last_frame_).seconds() : -1.0;
-        if (!can_.is_open()) { st.level = st.ERROR; st.message = "interface not open"; }
-        else if (age < 0 || age > 2.0) { st.level = st.WARN; st.message = other_nodes_ ? "no frames from the configured node id" : "no frames"; }
-        else { st.level = st.OK; st.message = "receiving"; }
-        auto kv = [&](const char *k, const std::string &v) {
-            diagnostic_msgs::msg::KeyValue e; e.key = k; e.value = v; st.values.push_back(e);
+        const double age = received_sample_ ? std::chrono::duration<double>(current - last_frame_).count() : -1.0;
+        if (!can_.is_open()) {
+            st.level = st.ERROR;
+            st.message = "interface not open";
+        } else if (age < 0.0 || age > 2.0) {
+            st.level = st.WARN;
+            st.message = other_nodes_ > other_nodes_at_open_ ? "no frames from the configured source address" : "no valid frames";
+        } else {
+            st.level = st.OK;
+            st.message = "receiving";
+        }
+        auto kv = [&](const char *key, const std::string &value) {
+            diagnostic_msgs::msg::KeyValue entry;
+            entry.key = key;
+            entry.value = value;
+            st.values.push_back(entry);
         };
         kv("frames", std::to_string(frames_));
-        kv("frame_rate_hz", std::to_string(frames_ - frames_at_last_diag_));
+        kv("frame_rate_hz", std::to_string((frames_ - frames_at_last_diag_) / elapsed));
         kv("invalid_frames", std::to_string(invalid_));
         kv("frames_from_other_nodes", std::to_string(other_nodes_));
         frames_at_last_diag_ = frames_;
@@ -166,19 +163,17 @@ private:
         diag_pub_->publish(arr);
     }
 
-    std::string interface_, frame_id_, gnss_frame_id_, enu_frame_id_;
-    int node_id_, trigger_pgn_;
-    bool publish_full_;
+    std::string interface_, frame_id_;
+    int node_id_;
+    bool publish_imu_, publish_mag_, publish_temperature_, publish_hipnuc_;
     hipnuc_ros::SocketCan can_;
-    hipnuc_sample_t merged_;
-    uint64_t frames_ = 0, frames_at_last_diag_ = 0, invalid_ = 0, other_nodes_ = 0;
-    rclcpp::Time last_frame_{0, 0, RCL_ROS_TIME};
-
+    uint64_t frames_ = 0, frames_at_last_diag_ = 0;
+    uint64_t invalid_ = 0, other_nodes_ = 0, other_nodes_at_open_ = 0;
+    bool received_sample_ = false;
+    SteadyClock::time_point last_frame_{};
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
     rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr mag_pub_;
     rclcpp::Publisher<sensor_msgs::msg::Temperature>::SharedPtr temp_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::TwistWithCovarianceStamped>::SharedPtr vel_pub_;
     rclcpp::Publisher<hipnuc_msgs::msg::HipnucImu>::SharedPtr full_pub_;
     rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
 };
@@ -186,8 +181,14 @@ private:
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<CanNode>();
-    node->run();
+    try {
+        auto node = std::make_shared<CanNode>();
+        node->run();
+    } catch (const std::exception &error) {
+        RCLCPP_ERROR(rclcpp::get_logger("hipnuc"), "%s", error.what());
+        rclcpp::shutdown();
+        return 1;
+    }
     rclcpp::shutdown();
     return 0;
 }

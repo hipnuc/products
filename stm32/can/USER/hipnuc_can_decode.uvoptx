@@ -22,7 +22,7 @@
   </DaveTm>
 
   <Target>
-    <TargetName>hipnuc_serial_decode</TargetName>
+    <TargetName>hipnuc_can_decode</TargetName>
     <ToolsetNumber>0x4</ToolsetNumber>
     <ToolsetName>ARM-ADS</ToolsetName>
     <TargetOption>

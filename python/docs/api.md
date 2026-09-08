@@ -91,8 +91,10 @@ samples += decoder.finish()  # at end of a file
 
 The decoder handles binary, NMEA and ASCII replies in one stream, verifies
 CRC-16 and checksums, and exposes `statistics` (frames, CRC errors, noise).
-Malformed frames are counted and skipped; `complete=False` marks a sample whose
-HI83 bitmap contains undecoded bits.
+Malformed frames, unsupported HI83 layouts and binary envelopes containing
+multiple packets are counted and skipped. Each accepted binary frame contains
+one complete supported packet. `complete=False` identifies unsupported NMEA
+sentence types whose raw sentence is retained.
 
 ## Recorder
 

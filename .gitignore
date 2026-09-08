@@ -1,3 +1,7 @@
+# Local agent instructions
+AGENTS.md
+CLAUDE.md
+
 # Build and IDE output
 build/
 output/
@@ -37,6 +41,8 @@ RTE/
 # ROS workspaces
 ros/ros1/build/
 ros/ros1/devel/
+ros/ros1/install/
+ros/ros1/src/CMakeLists.txt
 ros/ros2/build/
 ros/ros2/install/
 ros/ros2/log/

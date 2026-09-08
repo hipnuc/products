@@ -42,14 +42,16 @@ typedef enum {
     HIPNUC_CAN_UPDATE_ERR_TIMEOUT = -3,
     HIPNUC_CAN_UPDATE_ERR_ACK     = -4,   /* unexpected reply */
     HIPNUC_CAN_UPDATE_ERR_ABORT   = -5,   /* SDO abort from the device */
-    HIPNUC_CAN_UPDATE_ERR_SIZE    = -6
+    HIPNUC_CAN_UPDATE_ERR_SIZE    = -6,
+    HIPNUC_CAN_UPDATE_ERR_RECEIVE = -7
 } hipnuc_can_update_status_t;
 
 typedef struct {
     /* Send one frame; return 0 on success. */
     int  (*send)(void *user, const hipnuc_can_frame_t *frame);
     /* Wait up to timeout_ms for a standard frame with identifier `id`;
-     * return 0 and fill `frame` on success, nonzero on timeout. Frames with
+     * return 0 and fill `frame` on success, positive on timeout, negative
+     * on a receive/transport failure. Frames with
      * other identifiers must be skipped (they may be measurement traffic). */
     int  (*wait)(void *user, uint32_t id, hipnuc_can_frame_t *frame, uint32_t timeout_ms);
     void (*delay_ms)(void *user, uint32_t ms);                       /* optional */
@@ -74,10 +76,14 @@ void hipnuc_can_update_init(hipnuc_can_update_ctx_t *ctx, const hipnuc_can_updat
 int hipnuc_can_update_sdo_write(hipnuc_can_update_ctx_t *ctx, uint8_t node_id, uint16_t index,
                                 uint8_t subindex, uint32_t value, uint32_t timeout_ms);
 
-/* Enter the bootloader and confirm. */
+/* Enter the bootloader and confirm. Only missing handshake replies are
+ * retried; transport failures and explicit rejection stop immediately. */
 int hipnuc_can_update_connect(hipnuc_can_update_ctx_t *ctx, uint8_t node_id);
 
-/* Segmented download of the image and jump to the application. */
+/* Segmented download and one application-start request. OK means all image
+ * segments were acknowledged; it does not verify the running application.
+ * A missing start reply is allowed because the bootloader may already reset;
+ * an explicit rejection or a send failure is still returned as an error. */
 int hipnuc_can_update_download(hipnuc_can_update_ctx_t *ctx, uint8_t node_id,
                                const uint8_t *image, uint32_t size);
 

@@ -428,7 +428,12 @@ def test_continuous_binary_does_not_extend_ack_cleanup(monkeypatch):
         assert len(seen) == dev.decoder.statistics["samples"]
 
 
-def test_reboot_does_not_query_identity_in_old_five_ms_reset_window(fake):
+def test_reboot_does_not_query_identity_in_old_five_ms_reset_window(fake, monkeypatch):
+    # Older Windows interpreters have a monotonic clock coarser than 5 ms.
+    # Verify protocol ordering with deterministic time, not OS tick timing.
+    clock = Clock()
+    monkeypatch.setattr(implementation.time, "monotonic", clock.monotonic)
+    monkeypatch.setattr(implementation.time, "sleep", clock.sleep)
     reset_at = []
     queries = []
 

@@ -7,12 +7,11 @@
  * J1939 register access (configuration) frames.
  *
  * Portable C99, no dynamic memory, no stdio, no global state. Copy
- * hipnuc_j1939.c, hipnuc_j1939.h, hipnuc_can_frame.h and hipnuc_sample.h
- * (with hipnuc_dec.h and nmea_dec.h, which it includes) into your project.
+ * hipnuc_j1939.c/.h, hipnuc_can_frame.h and hipnuc_sample.c/.h into your project.
  *
  * Every data PGN is decoded into a hipnuc_sample_t whose `valid` bits name
- * only the fields carried by that frame; the caller merges frames as it sees
- * fit (see hipnuc_j1939_merge()). Remote and error frames are rejected, and
+ * only the fields carried by that frame. It never combines different epochs
+ * or source addresses. Remote and error frames are rejected, and
  * the full 8-bit source address is reported so several devices on one bus
  * stay apart.
  */
@@ -88,7 +87,7 @@ typedef enum {
 /**
  * Decode one received frame into a sample.
  *
- * On success the sample is cleared, `source` is HIPNUC_SOURCE_J1939 (or
+ * The destination is cleared on every call. On success, `source` is HIPNUC_SOURCE_J1939 (or
  * HIPNUC_SOURCE_CANFD83), `node_id` is the 8-bit source address and `valid`
  * names the fields carried by this frame. CANFD83 also fills main_status and
  * ins_status; `canfd83_sequence` receives the frame counter when not NULL.
@@ -100,16 +99,11 @@ typedef enum {
  */
 int hipnuc_j1939_parse(const hipnuc_can_frame_t *frame, hipnuc_sample_t *sample, uint8_t *canfd83_sequence);
 
-/**
- * Copy the valid fields of `part` into `into` (same source address) and
- * merge the valid bits. Used to assemble one sample from several PGNs.
- */
-void hipnuc_j1939_merge(hipnuc_sample_t *into, const hipnuc_sample_t *part);
 
 /* Identifier helpers */
-uint32_t hipnuc_j1939_pgn(uint32_t id);              /* PF/PS of a 29-bit identifier */
+uint32_t hipnuc_j1939_pgn(uint32_t id);              /* 18-bit PGN; PS zero for PDU1 */
 uint8_t  hipnuc_j1939_source_address(uint32_t id);   /* low 8 bits */
-uint32_t hipnuc_j1939_data_id(uint32_t pgn, uint8_t source);  /* priority 3 data frame id */
+uint32_t hipnuc_j1939_data_id(uint32_t pgn, uint8_t source);  /* priority 3 PDU2 data frame id */
 
 /* Register access over CAN: PGN 0xEF00, payload addr(u16 LE), cmd, status, value(u32 LE). */
 typedef enum {

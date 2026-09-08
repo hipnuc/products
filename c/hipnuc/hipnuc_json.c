@@ -8,6 +8,7 @@
 
 #include "hipnuc_json.h"
 
+#include <float.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -41,12 +42,30 @@ static void key(json_writer_t *w, const char *name)
 static void number(json_writer_t *w, double value, int digits)
 {
     char text[40];
-    if (!(value == value) || value > 1e300 || value < -1e300) {  /* NaN or infinite */
+    char normalized[40];
+    size_t in = 0, out = 0;
+    int length;
+    if (!(value == value) || value > DBL_MAX || value < -DBL_MAX) {
         w->failed = 1;
         return;
     }
-    snprintf(text, sizeof(text), "%.*g", digits, value);
-    put(w, text);
+    length = snprintf(text, sizeof(text), "%.*g", digits, value);
+    if (length < 0 || (size_t)length >= sizeof(text)) { w->failed = 1; return; }
+    /* Without the grouping flag, %g localizes only the radix character.
+     * Normalize that possibly multibyte token in this result, without
+     * changing the process locale or allocating a platform locale object. */
+    while (text[in]) {
+        char c = text[in++];
+        if ((c >= '0' && c <= '9') || c == '-' || c == '+' || c == 'e' || c == 'E') {
+            normalized[out++] = c;
+        } else {
+            normalized[out++] = '.';
+            while (text[in] && !(text[in] >= '0' && text[in] <= '9') &&
+                   text[in] != 'e' && text[in] != 'E') in++;
+        }
+    }
+    normalized[out] = '\0';
+    put(w, normalized);
 }
 
 /* Decimal formatting without %llu, which some C libraries lack. */
@@ -108,7 +127,7 @@ static const char *ins_status_name(uint8_t status)
 int hipnuc_json_sample(const hipnuc_sample_t *s, char *buf, size_t size)
 {
     json_writer_t w;
-    uint32_t v;
+    uint64_t v;
 
     if (!s || (buf == NULL && size != 0) || (buf != NULL && size == 0)) {
         if (buf && size) buf[0] = '\0';
@@ -170,6 +189,13 @@ int hipnuc_json_sample(const hipnuc_sample_t *s, char *buf, size_t size)
         key(&w, "utc");
         put(&w, text);
     }
+    if ((v & HIPNUC_VALID_UTC_TIME_OF_DAY) && !(v & HIPNUC_VALID_UTC)) {
+        char text[24];
+        snprintf(text, sizeof(text), "\"%02u:%02u:%02u.%03u\"",
+                 (unsigned)s->utc.hour, (unsigned)s->utc.minute,
+                 (unsigned)s->utc.second, (unsigned)s->utc.millisecond);
+        key(&w, "utc_time_of_day"); put(&w, text);
+    }
     if (v & HIPNUC_VALID_GPS_TIME) {
         key(&w, "gps_week"); integer(&w, s->gps_week);
         key(&w, "gps_time_of_week_ms"); integer(&w, s->gps_tow_ms);
@@ -177,47 +203,55 @@ int hipnuc_json_sample(const hipnuc_sample_t *s, char *buf, size_t size)
     if (v & HIPNUC_VALID_ACC) vector(&w, "acceleration_m_s2", s->acc, 3, 7);
     if (v & HIPNUC_VALID_GYR) vector(&w, "angular_velocity_rad_s", s->gyr, 3, 7);
     if (v & HIPNUC_VALID_MAG) vector(&w, "magnetic_field_t", s->mag, 3, 7);
-    if (v & HIPNUC_VALID_EULER) {
-        float e[3];
-        e[0] = s->roll; e[1] = s->pitch; e[2] = s->yaw;
-        vector(&w, "euler_rad", e, 3, 7);
+    if (v & (HIPNUC_VALID_ROLL_PITCH | HIPNUC_VALID_YAW)) {
+        key(&w, "euler_rad"); put(&w, "[");
+        if (v & HIPNUC_VALID_ROLL_PITCH) {
+            number(&w, s->roll, 7); put(&w, ","); number(&w, s->pitch, 7);
+        } else {
+            put(&w, "null,null");
+        }
+        put(&w, ",");
+        if (v & HIPNUC_VALID_YAW) number(&w, s->yaw, 7); else put(&w, "null");
+        put(&w, "]");
     }
     if (v & HIPNUC_VALID_HEADING) scalar(&w, "heading_rad", s->heading, 7);
     if (v & HIPNUC_VALID_QUAT) vector(&w, "quaternion_wxyz", s->quat, 4, 7);
     if (v & HIPNUC_VALID_INCLINATION) vector(&w, "inclination_rad", s->inclination, 2, 7);
     if (v & HIPNUC_VALID_PRESSURE) scalar(&w, "pressure_pa", s->pressure, 8);
     if (v & HIPNUC_VALID_TEMPERATURE) scalar(&w, "temperature_c", s->temperature, 6);
-    if (v & HIPNUC_VALID_HEAVE) {
-        vector(&w, "heave_surge_sway_m", s->heave_m, 3, 6);
-        vector(&w, "heave_surge_sway_hz", s->heave_hz, 3, 6);
-    }
+    if (v & HIPNUC_VALID_HEAVE) vector(&w, "heave_surge_sway_m", s->heave_m, 3, 6);
+    if (v & HIPNUC_VALID_HEAVE_FREQUENCY) vector(&w, "heave_surge_sway_hz", s->heave_hz, 3, 6);
     if (v & HIPNUC_VALID_POSITION) {
         scalar(&w, "longitude_deg", s->longitude, 10);
         scalar(&w, "latitude_deg", s->latitude, 10);
-        scalar(&w, "altitude_msl_m", s->altitude_msl, 9);
     }
+    if (v & HIPNUC_VALID_ALTITUDE) scalar(&w, "altitude_msl_m", s->altitude_msl, 9);
     if (v & HIPNUC_VALID_VELOCITY_ENU) vector(&w, "velocity_enu_m_s", s->vel_enu, 3, 6);
     if (v & HIPNUC_VALID_ACC_ENU) vector(&w, "acceleration_enu_m_s2", s->acc_enu, 3, 6);
-    if (v & HIPNUC_VALID_SOG_COG) {
-        scalar(&w, "speed_over_ground_m_s", s->sog, 6);
-        scalar(&w, "course_over_ground_rad", s->cog, 7);
-    }
+    if (v & HIPNUC_VALID_SOG) scalar(&w, "speed_over_ground_m_s", s->sog, 6);
+    if (v & HIPNUC_VALID_COG) scalar(&w, "course_over_ground_rad", s->cog, 7);
     if (v & HIPNUC_VALID_ODOMETER) scalar(&w, "odometer_speed_m_s", s->odometer_speed, 6);
     if (v & HIPNUC_VALID_GNSS_POSITION) {
         scalar(&w, "gnss_longitude_deg", s->gnss_longitude, 10);
         scalar(&w, "gnss_latitude_deg", s->gnss_latitude, 10);
-        scalar(&w, "gnss_altitude_msl_m", s->gnss_altitude_msl, 9);
     }
+    if (v & HIPNUC_VALID_GNSS_ALTITUDE) scalar(&w, "gnss_altitude_msl_m", s->gnss_altitude_msl, 9);
     if (v & HIPNUC_VALID_GNSS_VELOCITY) vector(&w, "gnss_velocity_enu_m_s", s->gnss_vel_enu, 3, 6);
-    if (v & HIPNUC_VALID_GNSS_QUALITY) {
-        key(&w, "position_quality"); integer(&w, s->position_quality);
-        key(&w, "position_satellites"); integer(&w, s->position_satellites);
-        key(&w, "heading_quality"); integer(&w, s->heading_quality);
-        key(&w, "heading_satellites"); integer(&w, s->heading_satellites);
+    if (v & HIPNUC_VALID_POSITION_QUALITY) { key(&w, "position_quality"); integer(&w, s->position_quality); }
+    if (v & HIPNUC_VALID_POSITION_SATELLITES) { key(&w, "position_satellites"); integer(&w, s->position_satellites); }
+    if (v & HIPNUC_VALID_HEADING_QUALITY) { key(&w, "heading_quality"); integer(&w, s->heading_quality); }
+    if (v & HIPNUC_VALID_HEADING_SATELLITES) { key(&w, "heading_satellites"); integer(&w, s->heading_satellites); }
+    if (v & HIPNUC_VALID_PDOP) scalar(&w, "pdop", s->pdop, 4);
+    if (v & HIPNUC_VALID_HDOP) scalar(&w, "hdop", s->hdop, 4);
+    if (v & HIPNUC_VALID_NMEA_STATUS) {
+        char text[] = {'"', s->nmea_status, '"', '\0'};
+        if (s->nmea_status != 'A' && s->nmea_status != 'V') w.failed = 1;
+        key(&w, "nmea_status"); put(&w, text);
     }
-    if (v & HIPNUC_VALID_DOP) {
-        scalar(&w, "pdop", s->pdop, 4);
-        scalar(&w, "hdop", s->hdop, 4);
+    if (v & HIPNUC_VALID_NMEA_MODE) {
+        char text[] = {'"', s->nmea_mode, '"', '\0'};
+        if (s->nmea_mode < 'A' || s->nmea_mode > 'Z') w.failed = 1;
+        key(&w, "nmea_mode"); put(&w, text);
     }
     if (v & HIPNUC_VALID_DIFF_AGE) scalar(&w, "differential_age_s", s->diff_age, 5);
     if (v & HIPNUC_VALID_UNDULATION) scalar(&w, "geoid_separation_m", s->undulation, 6);

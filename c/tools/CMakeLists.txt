@@ -1,15 +1,14 @@
-# Linux command line tools for HiPNUC devices.
-#
-#   cmake -S c/tools -B build/tools && cmake --build build/tools
-#   build/tools/hihost/hihost --help
-#   build/tools/canhost/canhost --help
-#
-# Each tool directory can also be configured on its own, e.g.
-# cmake -S c/tools/hihost -B build/hihost.
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 project(hipnuc_tools C)
 
+if(CANHOST_BUILD_TESTS)
+    enable_testing()
+endif()
+
 add_subdirectory(../hipnuc hipnuc)
+add_subdirectory(../serial serial)
 add_subdirectory(common)
-add_subdirectory(hihost)
-add_subdirectory(canhost)
+add_subdirectory(serial_update)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_subdirectory(canhost)
+endif()

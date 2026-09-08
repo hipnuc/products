@@ -123,7 +123,7 @@ static int kboot_read_exact(const hipnuc_kboot_ctx_t *ctx, uint8_t *buf, size_t 
         int n = ctx->port.read(ctx->port.user, buf + got, len - got, timeout_ms);
         if (n < 0) {
             kboot_log(ctx, "serial read failed");
-            return HIPNUC_KBOOT_ERR_TIMEOUT;
+            return HIPNUC_KBOOT_ERR_READ;
         }
         if (n == 0) {
             return HIPNUC_KBOOT_ERR_TIMEOUT;
@@ -404,6 +404,8 @@ int hipnuc_kboot_connect(hipnuc_kboot_ctx_t *ctx)
         if (ret == HIPNUC_KBOOT_OK) {
             break;
         }
+        if (ret == HIPNUC_KBOOT_ERR_READ || ret == HIPNUC_KBOOT_ERR_WRITE ||
+            ret == HIPNUC_KBOOT_ERR_PARAM) return ret;
         if (i + 1U < attempts) {
             kboot_delay(ctx, KBOOT_PING_RETRY_DELAY_MS);
         }
@@ -599,6 +601,7 @@ const char *hipnuc_kboot_strerror(int status)
     case HIPNUC_KBOOT_ERR_RESPONSE: return "unexpected response";
     case HIPNUC_KBOOT_ERR_STATUS:   return "bootloader reported an error status";
     case HIPNUC_KBOOT_ERR_SIZE:     return "image or packet too large";
+    case HIPNUC_KBOOT_ERR_READ:     return "serial read failed";
     default:                        return "unknown error";
     }
 }

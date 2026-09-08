@@ -2,48 +2,61 @@
 
 [English](README.md) | [中文](README_zh.md)
 
-Receives HiPNUC data on USART2 and prints attitude on USART1.
-Board: 正点原子 战舰 V3 (STM32F103ZET6), Keil MDK 5 with ARM Compiler 5,
-StdPeriph library. Any STM32F10x board works after changing the pins in
-`USER/hipnuc_board.c`.
+Read HiPNUC binary data on USART2 and view a few measurements on USART1.
+The supplied project targets the 正点原子 战舰 V3 board (STM32F103ZET6),
+Keil MDK 5 / ARM Compiler 5 and the STM32 standard peripheral library.
 
-## Wiring
+## Connect and run
 
-| IMU | Board |
+| Signal | STM32 pin |
 | --- | --- |
-| TXD | PA3 (USART2 RX) |
-| RXD | PA2 (USART2 TX) |
-| 3.3V / GND | 3V3 / GND |
+| Device TX | PA3 — USART2 RX |
+| Device RX | PA2 — USART2 TX |
+| Device GND | GND |
+| Console TX | PA9 — USART1 TX |
 
-Console: the board's USART1 (PA9/PA10) USB-serial at 115200.
+Use 3.3 V TTL serial signals. Power the device according to its model; do
+not connect an RS-232 or RS-485 signal directly to the MCU. Connect a USB-TTL
+adapter to PA9/GND and open its terminal at 115200, 8N1.
 
-## Run
+1. Set `IMU_BAUDRATE` at the top of [main.c](USER/main.c) to the device baudrate.
+2. Open `USER/hipnuc_serial_decode.uvprojx`, build and download.
+3. Enable a supported binary output on the device (for example HI91). A new
+   sample is displayed at most every 200 ms; every two seconds the console
+   reports reception, missing data or recovery.
 
-1. Open `USER/hipnuc_serial_decode.uvprojx`, build, download.
-2. Open a terminal on the console port. Every 200 ms you see roll/pitch/yaw,
-   acceleration and the frame rate; hints appear when no data or no valid
-   frames arrive.
-3. Edit `IMU_BAUDRATE` in `USER/main.c` if the device does not use 115200.
+## Use the measurements
 
-## Use the data in your own code
-
-`main.c` is the whole application:
+Add your code to the marked application block in `main.c`:
 
 ```c
-hipnuc_board_init(IMU_BAUDRATE);
-while (1) {
-    if (hipnuc_board_poll(&sample)) {
-        /* sample.roll, sample.pitch, sample.yaw (rad), sample.acc (m/s^2), ... */
-    }
+if (sample.valid & HIPNUC_VALID_ACC) {
+    float acceleration_x = sample.acc[0]; /* m/s^2 */
+    /* Use acceleration_x here. */
 }
 ```
 
-`USER/hipnuc_board.c` owns the UART (DMA circular buffer by default, or one
-interrupt per byte with `HIPNUC_BOARD_USE_DMA 0`), the decoder and the
-conversion to `hipnuc_sample_t`; `hipnuc_board_stats()` reports bytes, frames,
-CRC errors and receive overruns. The decoder files come straight from
-`c/hipnuc` (see its README for the field reference).
+Each call to `hipnuc_board_poll(&sample)` returns at most one new sample.
+Check the matching `HIPNUC_VALID_*` bit before reading a field; absent
+fields are not measurements. Angles are rad and angular velocity is rad/s.
+The [C sample header](../../c/hipnuc/hipnuc_sample.h) defines all fields.
 
-Call `hipnuc_board_poll()` at least every 10 ms at 921600 baud (the receive
-buffer holds 1024 bytes), and keep `printf` off the critical path: at 500 Hz
-output a 115200 baud console cannot print every frame.
+[hipnuc_board.c](USER/hipnuc_board.c) contains the UART setup and reception.
+It owns DMA1 channel 6, USART2 and the 1 ms SysTick; do not configure these
+resources elsewhere. The decoder is referenced directly from `c/hipnuc/`.
+
+The default DMA buffer holds 1024 bytes: 88.9 ms at 115200 or 11.1 ms at
+921600 baud, 8N1. The main loop **and the DMA interrupt** must be serviced
+faster than one buffer time. Keep your application short and increase
+`PRINT_PERIOD_MS` (or set it to 0) for heavy traffic. Console
+printing is blocking; the example does not guarantee lossless reception
+under every application load.
+
+An overwrite increments the overrun counter and discards the affected
+partial frame. A DMA flag cannot count multiple wraps while interrupts are
+blocked, so an overrun counter of zero is not proof that no bytes were lost.
+UART overrun, framing and noise errors have a separate counter. After an
+observed error, the next poll discards buffered bytes and the partial frame
+before resuming reception. This counts observed error events, not lost bytes.
+For byte-interrupt reception, set `HIPNUC_BOARD_USE_DMA` to `0` in
+[hipnuc_board.h](USER/hipnuc_board.h); DMA is preferable at high baudrates.

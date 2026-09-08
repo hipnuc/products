@@ -37,7 +37,7 @@ INS_STATUS_NAMES = {0: "invalid", 1: "aligning", 3: "navigating", 6: "dead_recko
 # fields; 12-19, 30 and 31 are INS delivery extensions. Bits 25-29 are
 # internal diagnostics and are not decoded. On the wire, bits 30/31 follow
 # bit 27 and precede bits 28/29, so ascending decoding is only valid while
-# no undecoded bit precedes a decoded one; unknown bits stop decoding.
+# no undecoded bit is present. Unknown layouts are rejected as a whole.
 _HI83_SIZES = {
     0: 12,
     1: 12,
@@ -445,36 +445,17 @@ class Decoder:
     @staticmethod
     def _decode_payload(frame: bytes) -> list[Sample]:
         payload = frame[6:]
-        result = []
-        offset = 0
-        while offset < len(payload):
-            tag = payload[offset]
-            if tag == 0x91:
-                if len(payload) - offset < 76:
-                    raise ValueError("truncated HI91")
-                result.append(_decode_hi91(payload[offset : offset + 76], frame, offset))
-                offset += 76
-            elif tag == 0x81:
-                if len(payload) - offset < 104:
-                    raise ValueError("truncated HI81")
-                result.append(_decode_hi81(payload[offset : offset + 104], frame, offset))
-                offset += 104
-            elif tag == 0x83:
-                result.append(_decode_hi83(payload[offset:], frame, offset))
-                break
-            else:
-                result.append(
-                    _make_sample(
-                        "UNKNOWN",
-                        {"tag": tag},
-                        frame,
-                        _binary_metadata(offset),
-                        [f"unknown_payload_tag:0x{tag:02x}"],
-                        complete=False,
-                    )
-                )
-                break
-        return result
+        if not payload:
+            raise ValueError("empty binary payload")
+        # Current products emit exactly one packet per CRC envelope. Do not
+        # silently prefer one packet or invent a multi-packet delivery policy.
+        if payload[0] == 0x91 and len(payload) == 76:
+            return [_decode_hi91(payload, frame, 0)]
+        if payload[0] == 0x81 and len(payload) == 104:
+            return [_decode_hi81(payload, frame, 0)]
+        if payload[0] == 0x83:
+            return [_decode_hi83(payload, frame, 0)]
+        raise ValueError("unsupported tag or payload length")
 
 
 def _decode_hi91(data: bytes, frame: bytes, offset: int) -> Sample:
@@ -558,10 +539,11 @@ def _decode_hi81(data: bytes, frame: bytes, offset: int) -> Sample:
 def _decode_hi83(data: bytes, frame: bytes, offset: int) -> Sample:
     _, status, ins_status, bitmap = struct.unpack_from("<BHBI", data)
     unknown = bitmap & ~sum(1 << bit for bit in _HI83_SIZES)
-    if not unknown:
-        expected = 8 + sum(size for bit, size in _HI83_SIZES.items() if bitmap & (1 << bit))
-        if len(data) != expected:
-            raise ValueError("HI83 bitmap does not match payload length")
+    if unknown:
+        raise ValueError(f"unsupported HI83 bitmap: 0x{unknown:08x}")
+    expected = 8 + sum(size for bit, size in _HI83_SIZES.items() if bitmap & (1 << bit))
+    if len(data) != expected:
+        raise ValueError("HI83 bitmap does not match payload length")
     values: dict[str, Any] = {
         "main_status": status,
         "status_flags": status_flags(status),
@@ -576,9 +558,6 @@ def _decode_hi83(data: bytes, frame: bytes, offset: int) -> Sample:
     for bit in range(32):
         if not bitmap & (1 << bit):
             continue
-        if bit not in _HI83_SIZES:
-            issues.append(f"unknown_hi83_bitmap:0x{unknown:08x}")
-            break
         size = _HI83_SIZES[bit]
         if cursor + size > len(data):
             raise ValueError("truncated HI83 field")
@@ -634,12 +613,9 @@ def _decode_hi83(data: bytes, frame: bytes, offset: int) -> Sample:
         elif bit == 19:
             values["node_id"] = data[cursor]
         cursor += size
-    if unknown:
-        metadata["undecoded_payload_offset"] = offset + cursor
-        metadata["undecoded_payload_hex"] = data[cursor:].hex()
     if bitmap & _HI83_EXTENSION_MASK:
         metadata["hi83_extension_bits"] = "bits 12-19, 30, 31 are INS delivery extensions"
-    return _make_sample("HI83", values, frame, metadata, issues, complete=not unknown)
+    return _make_sample("HI83", values, frame, metadata, issues)
 
 
 def _nmea_number(value: str, scale: float = 1) -> float | None:

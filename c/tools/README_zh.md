@@ -1,64 +1,76 @@
-# HiPNUC Linux 工具
-
 [English](README.md) | [中文](README_zh.md)
 
-基于 `c/hipnuc` C 核心的两个命令行工具：
+# 固件升级与 CAN 工具
 
-- `hihost` — 串口：查找设备、显示与记录数据流、发送 ASCII 命令、固件升级。
-- `canhost` — SocketCAN：J1939 与 CANFD83 解码、寄存器读写、触发帧、CAN 固件升级。
+串口发现、配置和录制使用 [Python SDK](../../python/README_zh.md)。
+这里提供 Windows/Linux 串口升级工具，以及 Linux SocketCAN 工具。
 
-两者仅支持 Linux（termios、SocketCAN）。`common/` 存放共用的辅助模块（日志、Intel HEX
-加载、INI 读取）。
+## 构建
 
-## 编译
-
-```sh
-cmake -S c/tools -B build/tools -DCMAKE_BUILD_TYPE=Release
-cmake --build build/tools -j
-build/tools/hihost/hihost --help
-build/tools/canhost/canhost --help
-```
-
-每个工具也可单独编译：`cmake -S c/tools/hihost -B build/hihost`。需要 CMake 3.10
-和 C99 编译器。
-
-## hihost
+安装 C 编译器和 CMake 后，在本目录执行：
 
 ```sh
-hihost list                                # 列出串口
-hihost probe --save                        # 查找端口/波特率并写入 ./hihost.ini
-hihost read                                # 实时 JSON 显示
-hihost -r raw.bin -j data.jsonl read       # 记录原始字节与 JSON 行
-hihost write "LOG VERSION"                 # 发送一条 ASCII 命令
-hihost write hihost/device_setup.ini       # 按文件逐行发送命令
-hihost update firmware.hex                 # 串口固件升级
+cmake -S . -B build
+cmake --build build --config Release
 ```
 
-端口与波特率来自 `-p`/`-b`，否则依次查找 `$HIHOST_CONF`、`./hihost.ini`、
-`~/.hihost.ini`（键 `port=`、`baud=`）。只有 `probe --save` 才会写文件。访问串口通常需要
-加入 `dialout` 组。
+Linux 可执行文件为 `build/serial_update/hipnuc-update`、`build/canhost/canhost`；
+Windows 使用 Visual Studio 时，升级程序为
+`build\serial_update\Release\hipnuc-update.exe`。
 
-`read` 每帧输出一个 JSON 对象（SI 单位，键名与 Python SDK 一致）。`update` 对正在运行的
-设备和已处于 bootloader 的设备都可用。
+## 串口升级
 
-## canhost
+使用与设备型号匹配的 Intel HEX 固件，指定当前连接速度和端口：
+
+```powershell
+.\build\serial_update\Release\hipnuc-update.exe firmware.hex -p COM3 -b 115200
+```
+
+Linux：
 
 ```sh
-sudo ip link set can0 type can bitrate 500000 && sudo ip link set can0 up
-
-canhost device list
-canhost device probe                       # J1939 地址声明扫描
-canhost stream read                        # 每个解码帧一行 JSON
-canhost stream record -o run.jsonl         # 同上，写入文件并带 rx_time_us
-canhost trigger sync --count 1             # 触发 canhost.ini 中列出的 PGN
-canhost config reg read 0x70
-canhost config reg write 0x06 1
-canhost action run version                 # reset / save 需要 --yes
-canhost firmware update -f app.hex         # CAN 固件升级，遍历全部目标节点
-canhost -n 8,9 stream read                 # 临时覆盖节点列表
+./build/serial_update/hipnuc-update firmware.hex -p /dev/ttyUSB0 -b 115200
 ```
 
-配置文件依次查找 `$CANHOST_CONF`、`./canhost.ini`、`~/.canhost.ini`、`/etc/canhost.ini`；
-`canhost/canhost.ini` 注释了全部键（接口、节点列表、主机源地址、CAN FD、`sync.<pgn>`
-周期）。只解码 J1939 源地址在节点列表中的帧。寄存器应答按目标节点匹配，多台设备可共用
-一条总线。
+升级失败后停止，不自动重启。传输及重启请求得到确认，不代表已验证新程序成功启动。
+
+## CAN（Linux）
+
+先按设备实际速率启动 CAN 接口，例如：
+
+```sh
+sudo ip link set can0 type can bitrate 500000
+sudo ip link set can0 up
+```
+
+在本目录运行：
+
+```sh
+./build/canhost/canhost list
+./build/canhost/canhost scan -i can0 --duration 2
+./build/canhost/canhost read -i can0 -n 8 --duration 10
+./build/canhost/canhost read -i can0 -n 8 --record samples.jsonl
+```
+
+`scan` 观察有效测量报文，无法发现静默设备。`read` 将 JSONL 输出到 stdout
+或 `--record` 文件，诊断进入 stderr。省略 `-n` 时接收全部源地址。
+Ctrl-C、`--count`、`--duration` 均在处理完当前批次后停止；
+只有显式指定 `--overwrite` 才覆盖已有记录文件。
+
+寄存器地址、数值含义和适用型号以产品手册为准。
+直接使用原始数值，支持十进制和 `0x` 十六进制：
+
+```text
+./build/canhost/canhost reg read ADDRESS -i can0 -n 8
+./build/canhost/canhost reg write ADDRESS VALUE -i can0 -n 8
+./build/canhost/canhost sync PGN -i can0 -n 8 --interval 0.01 --count 10
+./build/canhost/canhost update firmware.hex -i can0 -n 8
+```
+
+仅使用产品支持的地址和触发 PGN。保存、重启需显式写对应寄存器；
+普通写入不会自动保存。寄存器请求使用主机地址 `0x55`，与设备回复协议一致。
+CAN 升级支持设备地址 1–127，只有升级流程使用 CANopen SDO；
+原始二进制固件使用 `--bin`。
+
+在最终子命令后加 `--help` 查看参数。工具不读取 INI，也不修改接口波特率。
+退出码：0 成功，1 运行失败，2 参数错误，130 Ctrl-C。

@@ -7,7 +7,9 @@
  */
 
 #include <math.h>
+#include <locale.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "hipnuc_dec.h"
@@ -121,11 +123,90 @@ static void test_hi91(void)
     CHECK(s.attitude_converged == 1);
     CHECK(s.magnetic_disturbance == 0);
     CHECK((s.valid & HIPNUC_VALID_UTC) == 0);
-    CHECK((s.valid & (HIPNUC_VALID_ACC | HIPNUC_VALID_GYR | HIPNUC_VALID_MAG | HIPNUC_VALID_EULER |
+    CHECK((s.valid & (HIPNUC_VALID_ACC | HIPNUC_VALID_GYR | HIPNUC_VALID_MAG | (HIPNUC_VALID_ROLL_PITCH | HIPNUC_VALID_YAW) |
                       HIPNUC_VALID_QUAT | HIPNUC_VALID_DEVICE_TIME)) ==
-          (HIPNUC_VALID_ACC | HIPNUC_VALID_GYR | HIPNUC_VALID_MAG | HIPNUC_VALID_EULER |
+          (HIPNUC_VALID_ACC | HIPNUC_VALID_GYR | HIPNUC_VALID_MAG | (HIPNUC_VALID_ROLL_PITCH | HIPNUC_VALID_YAW) |
            HIPNUC_VALID_QUAT | HIPNUC_VALID_DEVICE_TIME));
     CHECK((s.valid & HIPNUC_VALID_POSITION) == 0);
+}
+
+static void test_crc_resync_after_missing_bytes(void)
+{
+    uint8_t good[128], stream[256];
+    size_t n = build_hi91(good), missing;
+
+    /* A damaged frame can consume the next frame's sync/header/payload before
+     * its CRC fails. Preserve each possible unfinished next-frame prefix. */
+    for (missing = 1; missing <= 76; ++missing) {
+        hipnuc_raw_t raw = {0};
+        size_t i;
+        int decoded = 0;
+        memcpy(stream, good, n - missing);
+        memcpy(stream + n - missing, good, n);
+        for (i = 0; i < n * 2 - missing; ++i) {
+            if (hipnuc_input(&raw, stream[i]) > 0) decoded++;
+        }
+        CHECK(decoded == 1 && raw.frame_count == 1);
+        CHECK(raw.crc_error_count == 1);
+        CHECK(raw.hi91.system_time == 123456);
+    }
+
+    /* An invalid length can also overlap the following sync/header. */
+    for (missing = 1; missing <= 4; ++missing) {
+        hipnuc_raw_t raw = {0};
+        uint8_t header[6] = {0x5A, 0xA5, 0xFF, 0xFF, 0, 0};
+        memcpy(header + sizeof(header) - missing, good, missing);
+        CHECK(feed(&raw, header, sizeof(header)) == -1);
+        CHECK(feed(&raw, good + missing, n - missing) == 1);
+        CHECK(raw.frame_count == 1 && raw.invalid_count == 1);
+    }
+
+    /* A checksummed but unsupported envelope must never expose its interior. */
+    {
+        hipnuc_raw_t raw = {0};
+        uint8_t payload[160] = {0x99};
+        size_t i, length;
+        int decoded = 0;
+        memcpy(payload + 1, good, n);
+        length = frame(stream, payload, n + 1);
+        for (i = 0; i < length; ++i) {
+            if (hipnuc_input(&raw, stream[i]) > 0) decoded++;
+        }
+        CHECK(decoded == 0 && raw.invalid_count == 1 && raw.nbyte == 0);
+        CHECK(feed(&raw, good, n) == 1);
+    }
+
+    /* Complete frames already swallowed by a damaged envelope are discarded;
+     * an unfinished following frame is still retained without a sample queue. */
+    {
+        hipnuc_raw_t raw = {0};
+        uint8_t payload[160] = {0x99};
+        size_t i, length;
+        int decoded = 0;
+        memcpy(payload + 1, good, n);
+        length = frame(stream, payload, sizeof(payload));
+        stream[4] ^= 1;
+        memcpy(stream + length - 3, good, n);
+        for (i = 0; i < length - 3 + n; ++i) {
+            if (hipnuc_input(&raw, stream[i]) > 0) decoded++;
+        }
+        CHECK(decoded == 1 && raw.frame_count == 1 && raw.crc_error_count == 1);
+    }
+
+    /* Discarding a contained complete candidate also discards its final sync
+     * byte; it must not combine with an unrelated following 0xA5. */
+    {
+        hipnuc_raw_t raw = {0};
+        uint8_t payload[160] = {0x99};
+        size_t length;
+        memcpy(payload + 1, good, n);
+        payload[n] = 0x5A;
+        length = frame(stream, payload, n + 1);
+        stream[4] ^= 1;
+        CHECK(feed(&raw, stream, length) == -1);
+        CHECK(hipnuc_input(&raw, 0xA5) == 0 && raw.nbyte == 0);
+        CHECK(feed(&raw, good, n) == 1);
+    }
 }
 
 /* ---- HI81 ---------------------------------------------------------------- */
@@ -202,6 +283,10 @@ static void test_hi81(void)
     CHECK(s.utc.hour == 12 && s.utc.minute == 34 && s.utc.second == 56 && s.utc.millisecond == 789);
     CHECK((s.valid & HIPNUC_VALID_GPS_TIME) != 0);
     CHECK(s.gps_week == 2400);
+    CHECK(s.valid & HIPNUC_VALID_ROLL_PITCH);
+    CHECK(!(s.valid & HIPNUC_VALID_YAW));
+    CHECK(s.valid & HIPNUC_VALID_ALTITUDE);
+    CHECK(s.valid & HIPNUC_VALID_HDOP);
 }
 
 /* ---- HI83 ---------------------------------------------------------------- */
@@ -272,6 +357,8 @@ static void test_hi83(void)
     CHECK(s.node_id == 8 && (s.valid & HIPNUC_VALID_NODE_ID));
     CHECK(near(s.gnss_longitude, 112.1, 1e-12) && s.gnss_vel_enu[0] == 4.0f);
     CHECK(s.ins_status == HIPNUC_INS_DEAD_RECKONING);
+    CHECK(s.valid & HIPNUC_VALID_HEAVE_FREQUENCY);
+    CHECK(s.valid & HIPNUC_VALID_GNSS_ALTITUDE);
 
     /* Default map 0xFF: acc, gyr, mag, rpy, quat, time, utc, pressure -> 8+12*4+16+8+8+4 = 92 */
     n = build_hi83(f, 0xFF, 1 << 11);
@@ -371,7 +458,7 @@ static void test_framing(void)
         CHECK(raw.invalid_count == 1);
     }
 
-    /* Two sub-packets in one frame */
+    /* The product contract permits exactly one sub-packet per outer frame. */
     {
         uint8_t p[76 + 104];
         size_t nf;
@@ -379,9 +466,11 @@ static void test_framing(void)
         memcpy(p + 76, b + 6, 104);
         nf = frame(stream, p, sizeof(p));
         memset(&raw, 0, sizeof(raw));
-        CHECK(feed(&raw, stream, nf) == 1);
-        CHECK(raw.hi91.tag == 0x91 && raw.hi81.tag == 0x81);
-        CHECK(hipnuc_sample_from_raw(&raw, &s) == 1 && s.source == HIPNUC_SOURCE_HI81);
+        CHECK(feed(&raw, stream, nf) == -1);
+        CHECK(raw.hi91.tag == 0 && raw.hi81.tag == 0);
+        CHECK(raw.invalid_count == 1);
+        CHECK(hipnuc_sample_from_raw(&raw, &s) == 0);
+        CHECK(feed(&raw, a, na) == 1);
     }
 
     /* Truncated sub-packet inside a valid frame -> rejected */
@@ -466,9 +555,11 @@ static void test_nmea(void)
     CHECK(raw.gga.has_position && raw.gga.has_time && raw.gga.has_altitude);
     CHECK(hipnuc_sample_from_nmea(&raw, &s) == 1);
     CHECK(s.source == HIPNUC_SOURCE_NMEA_GGA);
-    CHECK((s.valid & HIPNUC_VALID_POSITION) && near(s.altitude_msl, 545.4, 1e-6));
+    CHECK((s.valid & HIPNUC_VALID_GNSS_POSITION) && near(s.gnss_altitude_msl, 545.4, 1e-6));
     CHECK((s.valid & HIPNUC_VALID_UTC) == 0);    /* no date in GGA */
     CHECK(s.position_quality == 4);
+    CHECK(s.valid & HIPNUC_VALID_HDOP);
+    CHECK(!(s.valid & (HIPNUC_VALID_PDOP | HIPNUC_VALID_HEADING_QUALITY | HIPNUC_VALID_HEADING_SATELLITES)));
 
     /* Southern / western hemisphere */
     nmea_line(line, "GNGGA,000000.00,3351.000,S,15112.000,W,1,05,1.0,10.0,M,0.0,M,,");
@@ -494,8 +585,12 @@ static void test_nmea(void)
     CHECK(near(raw.rmc.sog, 22.4, 1e-5) && near(raw.rmc.cog, 84.4, 1e-5));
     CHECK(hipnuc_sample_from_nmea(&raw, &s) == 1);
     CHECK((s.valid & HIPNUC_VALID_UTC) && s.utc.year == 1994 && s.utc.hour == 12);
-    CHECK((s.valid & HIPNUC_VALID_SOG_COG) && near(s.sog, 11.5235556, 1e-5));   /* 22.4 kn */
+    CHECK((s.valid & (HIPNUC_VALID_SOG | HIPNUC_VALID_COG)) && near(s.sog, 11.5235556, 1e-5));   /* 22.4 kn */
     CHECK(near(s.cog, 1.47305, 1e-5));
+    CHECK(s.nmea_status == 'A' && s.nmea_mode == 'D');
+    CHECK(s.valid & HIPNUC_VALID_NMEA_STATUS);
+    CHECK(s.valid & HIPNUC_VALID_NMEA_MODE);
+    CHECK(!(s.valid & HIPNUC_VALID_GNSS_ALTITUDE));
 
     /* RMC without mode field and void status */
     nmea_line(line, "GPRMC,123519.00,V,,,,,,,230394,,");
@@ -574,14 +669,143 @@ static void test_json(void)
     CHECK(n > 0 && strcmp(json, "{\"type\":\"NONE\"}") == 0);
 }
 
+static void test_missing_fields_and_bad_nmea(void)
+{
+    char line[160], json[4096];
+    nmea_raw_t raw = {0};
+    hipnuc_sample_t s;
+    hi83_t p = {0};
+    hi81_t ins = {0};
+
+    /* A frequency-only bitmap must not require the displacement bitmap. */
+    p.data_bitmap = HI83_BMAP_HSS_FRQ;
+    p.hss_frq[0] = 0.25f;
+    hipnuc_sample_from_hi83(&p, &s);
+    CHECK(hipnuc_json_sample(&s, json, sizeof(json)) > 0);
+    CHECK(strstr(json, "\"heave_surge_sway_hz\":[0.25,0,0]") != NULL);
+    CHECK(strstr(json, "\"heave_surge_sway_m\"") == NULL);
+
+    ins.yaw = 9000;
+    hipnuc_sample_from_hi81(&ins, &s);
+    CHECK(s.yaw == 0); /* HI81 carries heading, not Euler yaw. */
+
+    nmea_line(line, "GPRMC,99999999999999999,A,999999999999999,N,18100.0,E,1,90,310299,,,E");
+    CHECK(feed_nmea(&raw, line) == 1);
+    CHECK(!raw.rmc.has_time && !raw.rmc.has_date && !raw.rmc.has_position);
+    nmea_line(line, "GPRMC,126060,A,9000.01,N,18000.01,E,-1,361,310426,,,A");
+    CHECK(feed_nmea(&raw, line) == 1);
+    CHECK(!raw.rmc.has_time && !raw.rmc.has_date && !raw.rmc.has_position);
+    CHECK(!raw.rmc.has_sog && !raw.rmc.has_cog);
+    nmea_line(line, "GPGGA,123519,4807.038,N,01131.000,E,4294967296,256,,,,,,,");
+    CHECK(feed_nmea(&raw, line) == 1);
+    CHECK(raw.gga.quality == 0 && raw.gga.satellites == 0);
+
+    /* A subsequent good sentence still works; lack of height stays visible. */
+    nmea_line(line, "GPRMC,123519.25,A,4807.038,N,01131.000,E,1,,290224,,,E");
+    CHECK(feed_nmea(&raw, line) == 1);
+    CHECK(raw.rmc.has_date && raw.rmc.has_position);
+    hipnuc_sample_from_nmea(&raw, &s);
+    CHECK(hipnuc_json_sample(&s, json, sizeof(json)) > 0);
+    CHECK(strstr(json, "\"gnss_latitude_deg\":48.1173") != NULL);
+    CHECK(strstr(json, "\"altitude_msl_m\"") == NULL);
+    CHECK(strstr(json, "\"gnss_altitude_msl_m\"") == NULL);
+    CHECK(strstr(json, "\"latitude_deg\"") == NULL);
+    CHECK(strstr(json, "\"nmea_mode\":\"E\"") != NULL);
+    CHECK(strstr(json, "\"speed_over_ground_m_s\"") != NULL);
+    CHECK(strstr(json, "\"course_over_ground_rad\"") == NULL);
+
+    nmea_line(line, "GPGGA,123519,4807.038,N,01131.000,E,,,,,,,,,");
+    CHECK(feed_nmea(&raw, line) == 1);
+    hipnuc_sample_from_nmea(&raw, &s);
+    CHECK(s.valid & HIPNUC_VALID_GNSS_POSITION);
+    CHECK(!(s.valid & (HIPNUC_VALID_POSITION_QUALITY | HIPNUC_VALID_POSITION_SATELLITES |
+                      HIPNUC_VALID_HDOP | HIPNUC_VALID_GNSS_ALTITUDE)));
+    CHECK(s.valid & HIPNUC_VALID_UTC_TIME_OF_DAY);
+    CHECK(!(s.valid & HIPNUC_VALID_UTC));
+
+    /* Invalid float-width values must not turn into infinities after parsing. */
+    nmea_line(line, "GPGGA,123519,4807.038,N,01131.000,E,1,8,99999999999999999999999999999999999999999,1,M,2,M,,");
+    CHECK(feed_nmea(&raw, line) == 1);
+    CHECK(!raw.gga.has_hdop);
+    CHECK(feed_nmea(&raw, "$GPGGA,*\n") == -1); /* truncated checksum */
+    CHECK(feed_nmea(&raw, "$GPGGA,*1\n") == -1);
+}
+
+static void test_json_size_and_locale(void)
+{
+    uint8_t f[320];
+    hipnuc_raw_t raw = {0};
+    hipnuc_sample_t s;
+    int length;
+    char *json;
+    char saved_locale[128];
+    const char *current = setlocale(LC_NUMERIC, NULL);
+    const char *locales[] = {"de_DE.UTF-8", "fr_FR.UTF-8", "German_Germany.1252", "de-DE"};
+    unsigned i;
+
+    CHECK(feed(&raw, f, build_hi83(f, HI83_BMAP_SUPPORTED, 0x16F8)) == 1);
+    hipnuc_sample_from_raw(&raw, &s);
+    length = hipnuc_json_sample(&s, NULL, 0);
+    CHECK(length > 1024); /* the old CAN/CLI buffer could silently skip this */
+    json = (char *)malloc((size_t)length + 2);
+    CHECK(json != NULL);
+    if (!json) return;
+    json[length + 1] = '#';
+    CHECK(hipnuc_json_sample(&s, json, (size_t)length + 1) == length);
+    CHECK(json[length + 1] == '#');
+    CHECK(hipnuc_json_sample(&s, json, (size_t)length) == -1 && json[0] == '\0');
+    free(json);
+
+    snprintf(saved_locale, sizeof(saved_locale), "%s", current ? current : "C");
+    for (i = 0; i < sizeof(locales) / sizeof(locales[0]); ++i) {
+        if (setlocale(LC_NUMERIC, locales[i])) {
+            char output[256];
+            hipnuc_sample_clear(&s);
+            s.valid = HIPNUC_VALID_TEMPERATURE | HIPNUC_VALID_MAG;
+            s.temperature = -12.5f;
+            s.mag[0] = 0.00000125f;
+            CHECK(hipnuc_json_sample(&s, output, sizeof(output)) > 0);
+            CHECK(strstr(output, "\"temperature_c\":-12.5") != NULL);
+            /* C libraries may use two or three exponent digits. */
+            CHECK(strstr(output, "\"magnetic_field_t\":[1.25e-0") != NULL);
+            CHECK(strcmp(setlocale(LC_NUMERIC, NULL), locales[i]) == 0);
+            break;
+        }
+    }
+    CHECK(setlocale(LC_NUMERIC, saved_locale) != NULL);
+}
+
+static void test_calendar(void)
+{
+    hi81_t p = {0};
+    hipnuc_sample_t s;
+    p.utc_year = 24; p.utc_month = 2; p.utc_day = 29;
+    p.utc_hour = 23; p.utc_min = 59; p.utc_msec = 59999;
+    hipnuc_sample_from_hi81(&p, &s);
+    CHECK(s.valid & HIPNUC_VALID_UTC);
+    p.utc_year = 25;
+    hipnuc_sample_from_hi81(&p, &s);
+    CHECK(!(s.valid & HIPNUC_VALID_UTC));
+    p.utc_year = 24; p.utc_msec = 61000;
+    hipnuc_sample_from_hi81(&p, &s);
+    CHECK(!(s.valid & HIPNUC_VALID_UTC));
+    p.utc_msec = 0; p.utc_hour = 24;
+    hipnuc_sample_from_hi81(&p, &s);
+    CHECK(!(s.valid & HIPNUC_VALID_UTC));
+}
+
 int main(void)
 {
+    test_crc_resync_after_missing_bytes();
     test_hi91();
     test_hi81();
     test_hi83();
     test_framing();
     test_nmea();
     test_json();
+    test_missing_fields_and_bad_nmea();
+    test_json_size_and_locale();
+    test_calendar();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;

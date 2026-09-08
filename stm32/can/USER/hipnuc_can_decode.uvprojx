@@ -7,7 +7,7 @@
 
   <Targets>
     <Target>
-      <TargetName>hipnuc_serial_decode</TargetName>
+      <TargetName>hipnuc_can_decode</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
       <pCCUsed>5060960::V5.06 update 7 (build 960)::.\ARMCC</pCCUsed>
@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_HD,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\SYSTEM\delay;..\SYSTEM\sys;..\USER;..\STM32F10x_FWLib\inc;..\CORE;..\..\..\c\hipnuc</IncludePath>
+              <IncludePath>..\SYSTEM\sys;..\USER;..\STM32F10x_FWLib\inc;..\CORE;..\..\..\c\hipnuc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -390,6 +390,11 @@
               <FilePath>.\main.c</FilePath>
             </File>
             <File>
+              <FileName>hipnuc_board.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\hipnuc_board.c</FilePath>
+            </File>
+            <File>
               <FileName>stm32f10x_it.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\stm32f10x_it.c</FilePath>
@@ -404,11 +409,6 @@
         <Group>
           <GroupName>SYSTEM</GroupName>
           <Files>
-            <File>
-              <FileName>delay.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\SYSTEM\delay\delay.c</FilePath>
-            </File>
             <File>
               <FileName>sys.c</FileName>
               <FileType>1</FileType>

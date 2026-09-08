@@ -100,15 +100,16 @@ static int cu_exchange(const hipnuc_can_update_ctx_t *ctx, uint8_t node_id,
                        const hipnuc_can_frame_t *tx, hipnuc_can_frame_t *rx, uint32_t timeout_ms)
 {
     uint32_t response_id = HIPNUC_CAN_UPDATE_SDO_RESPONSE_BASE + node_id;
+    int result;
 
     if (ctx->port.send(ctx->port.user, tx) != 0) {
         cu_log(ctx, node_id, "CAN send failed");
         return HIPNUC_CAN_UPDATE_ERR_SEND;
     }
     memset(rx, 0, sizeof(*rx));
-    if (ctx->port.wait(ctx->port.user, response_id, rx, timeout_ms) != 0) {
-        return HIPNUC_CAN_UPDATE_ERR_TIMEOUT;
-    }
+    result = ctx->port.wait(ctx->port.user, response_id, rx, timeout_ms);
+    if (result > 0) return HIPNUC_CAN_UPDATE_ERR_TIMEOUT;
+    if (result < 0) return HIPNUC_CAN_UPDATE_ERR_RECEIVE;
     if (rx->id != response_id || rx->is_extended || rx->is_remote || rx->is_error || rx->len < 1U) {
         return HIPNUC_CAN_UPDATE_ERR_ACK;
     }
@@ -214,9 +215,7 @@ int hipnuc_can_update_connect(hipnuc_can_update_ctx_t *ctx, uint8_t node_id)
                 return HIPNUC_CAN_UPDATE_OK;
             }
         }
-        if (ret == HIPNUC_CAN_UPDATE_ERR_SEND || ret == HIPNUC_CAN_UPDATE_ERR_PARAM) {
-            return ret;
-        }
+        if (ret != HIPNUC_CAN_UPDATE_ERR_TIMEOUT) return ret;
         if (i + 1U < attempts) {
             cu_delay(ctx, ctx->retry_delay_ms);
         }
@@ -301,14 +300,17 @@ int hipnuc_can_update_download(hipnuc_can_update_ctx_t *ctx, uint8_t node_id,
     }
     cu_log(ctx, node_id, "download complete");
 
-    /* Jump to the application. The device may reset before replying, so the
-     * result is only logged. */
+    /* Some bootloaders reset before replying. Only that timeout is allowed;
+     * a send failure, explicit abort or malformed ACK remains a failure. */
     ret = hipnuc_can_update_sdo_write(ctx, node_id, HIPNUC_CAN_UPDATE_OD_INDEX,
                                       HIPNUC_CAN_UPDATE_SUB_GOTO_APP, 0, ctx->expedited_timeout_ms);
     if (ret == HIPNUC_CAN_UPDATE_OK) {
-        cu_log(ctx, node_id, "jumped to application");
+        cu_log(ctx, node_id, "application start request acknowledged; startup not verified");
+    } else if (ret == HIPNUC_CAN_UPDATE_ERR_TIMEOUT) {
+        cu_log(ctx, node_id, "image transfer confirmed; application start request had no reply");
     } else {
-        cu_log(ctx, node_id, "no reply to jump-to-application; power-cycle the device if it does not start");
+        cu_log(ctx, node_id, "image transfer confirmed; application start request failed");
+        return ret;
     }
     return HIPNUC_CAN_UPDATE_OK;
 }
@@ -342,6 +344,7 @@ const char *hipnuc_can_update_strerror(int status)
     case HIPNUC_CAN_UPDATE_ERR_ACK:     return "unexpected SDO reply";
     case HIPNUC_CAN_UPDATE_ERR_ABORT:   return "SDO abort from device";
     case HIPNUC_CAN_UPDATE_ERR_SIZE:    return "image too large";
+    case HIPNUC_CAN_UPDATE_ERR_RECEIVE: return "CAN receive failed";
     default:                            return "unknown error";
     }
 }

@@ -647,7 +647,8 @@ static void test_kboot_read_failure(void)
     kboot_setup(&ctx, &f);
 
     ret = hipnuc_kboot_update(&ctx, IMAGE_ADDR, image, IMAGE_LEN);
-    CHECK(ret < 0);
+    CHECK(ret == HIPNUC_KBOOT_ERR_READ);
+    CHECK(tx_count_type(&f, KB_PING) == 1);
     CHECK(tx_count_tag(&f, TAG_ERASE) == 0);
 
     /* Individual commands must also fail cleanly. */
@@ -655,9 +656,9 @@ static void test_kboot_read_failure(void)
     f.read_fails = 1;
     ctx.max_packet_size = 512;
     ret = hipnuc_kboot_erase_region(&ctx, IMAGE_ADDR, IMAGE_LEN);
-    CHECK(ret < 0);
+    CHECK(ret == HIPNUC_KBOOT_ERR_READ);
     ret = hipnuc_kboot_write_memory(&ctx, IMAGE_ADDR, image, IMAGE_LEN);
-    CHECK(ret < 0);
+    CHECK(ret == HIPNUC_KBOOT_ERR_READ);
     CHECK(tx_count_type(&f, KB_DATA) == 0);
 }
 
@@ -735,6 +736,7 @@ typedef struct {
     int silent;                /* never reply */
     uint8_t enter_bl_cs;       /* reply cs to 0x1F51:05 */
     int abort_on_segment;      /* 1-based, 0 = never */
+    int goto_result;           /* 1 no reply, 2 send failure, 3 abort, 4 bad ACK, 5 receive failure */
     int interleave_j1939;      /* queue a J1939 frame ahead of every reply */
     int seg_count;
     int j1939_seen_by_wait;    /* frames with a foreign id skipped by wait() */
@@ -772,6 +774,8 @@ static int fake_can_send(void *user, const hipnuc_can_frame_t *frame)
         return -1;
     }
     f->tx[f->tx_count++] = *frame;
+    if (cs == 0x23 && frame->data[3] == 0x09 && f->goto_result == 2) return -1;
+    if (cs == 0x23 && frame->data[3] == 0x09 && f->goto_result == 1) return 0;
     if (f->silent) {
         return 0;
     }
@@ -795,6 +799,8 @@ static int fake_can_send(void *user, const hipnuc_can_frame_t *frame)
 
     if (cs == 0x23) {
         reply.data[0] = (frame->data[3] == 0x05) ? f->enter_bl_cs : 0x60;
+        if (frame->data[3] == 0x09 && f->goto_result == 3) reply.data[0] = 0x80;
+        if (frame->data[3] == 0x09 && f->goto_result == 4) reply.data[0] = 0x20;
         memset(reply.data + 4, 0, 4);
     } else if (cs == 0x21) {
         reply.data[0] = 0x60;
@@ -818,6 +824,8 @@ static int fake_can_wait(void *user, uint32_t id, hipnuc_can_frame_t *frame, uin
     fake_can_t *f = (fake_can_t *)user;
 
     (void)timeout_ms;
+    if (f->goto_result == 5 && f->tx_count > 0 &&
+        f->tx[f->tx_count - 1].data[0] == 0x23 && f->tx[f->tx_count - 1].data[3] == 0x09) return -1;
     while (f->queue_len > 0) {
         hipnuc_can_frame_t head = f->queue[0];
         memmove(&f->queue[0], &f->queue[1], (size_t)(f->queue_len - 1) * sizeof(f->queue[0]));
@@ -969,22 +977,22 @@ static void test_can_enter_bootloader_reply(void)
     CHECK(ret == HIPNUC_CAN_UPDATE_OK);
     CHECK(f.tx_count == 2);
 
-    /* Anything else is not; the handshake is retried and finally times out. */
+    /* An explicit malformed reply is not a missing response. */
     fake_can_reset(&f);
     f.enter_bl_cs = 0x00;
     can_setup(&ctx, &f);
     ret = hipnuc_can_update_connect(&ctx, 1);
-    CHECK(ret == HIPNUC_CAN_UPDATE_ERR_TIMEOUT);
-    CHECK(f.tx_count == 5);
+    CHECK(ret == HIPNUC_CAN_UPDATE_ERR_ACK);
+    CHECK(f.tx_count == 1);
 
-    /* An SDO abort on enter-bootloader is also retried. */
+    /* A device rejection stops immediately; never mask it as a timeout. */
     fake_can_reset(&f);
     f.enter_bl_cs = 0x80;
     can_setup(&ctx, &f);
     ctx.handshake_retries = 2;
     ret = hipnuc_can_update_connect(&ctx, 1);
-    CHECK(ret == HIPNUC_CAN_UPDATE_ERR_TIMEOUT);
-    CHECK(f.tx_count == 2);
+    CHECK(ret == HIPNUC_CAN_UPDATE_ERR_ABORT);
+    CHECK(f.tx_count == 1);
 }
 
 static void test_can_abort_on_segment(void)
@@ -1026,6 +1034,25 @@ static void test_can_no_reply(void)
     /* A single expedited write also times out. */
     ret = hipnuc_can_update_sdo_write(&ctx, 8, 0x1F51, 0x06, 0, 10);
     CHECK(ret == HIPNUC_CAN_UPDATE_ERR_TIMEOUT);
+}
+
+static void test_can_jump_result(void)
+{
+    static fake_can_t f;
+    uint8_t image[8] = {0};
+    hipnuc_can_update_ctx_t ctx;
+    int mode;
+    const int expected[] = {HIPNUC_CAN_UPDATE_OK, HIPNUC_CAN_UPDATE_OK,
+        HIPNUC_CAN_UPDATE_ERR_SEND, HIPNUC_CAN_UPDATE_ERR_ABORT,
+        HIPNUC_CAN_UPDATE_ERR_ACK, HIPNUC_CAN_UPDATE_ERR_RECEIVE};
+    for (mode = 0; mode < 6; ++mode) {
+        fake_can_reset(&f);
+        f.goto_result = mode;
+        can_setup(&ctx, &f);
+        CHECK(hipnuc_can_update_node(&ctx, 8, image, sizeof(image)) == expected[mode]);
+        CHECK(f.tx_count == 6); /* the jump request is sent exactly once */
+        CHECK(f.last_percent == 100); /* transfer was acknowledged before jump */
+    }
 }
 
 static void test_can_params(void)
@@ -1111,6 +1138,7 @@ int main(void)
     test_can_enter_bootloader_reply();
     test_can_abort_on_segment();
     test_can_no_reply();
+    test_can_jump_result();
     test_can_params();
     test_can_interleaved_j1939();
 

@@ -10,61 +10,143 @@ permissions:
 
 jobs:
   core-tests:
+    env:
+      UBSAN_OPTIONS: halt_on_error=1
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: ubuntu-22.04
+            cc: gcc
+            cxx: g++
             flags: ""
           - os: ubuntu-24.04
-            flags: "-fsanitize=undefined,address -g"
+            cc: gcc
+            cxx: g++
+            flags: ""
+          - os: ubuntu-26.04
+            cc: gcc
+            cxx: g++
+            flags: ""
+          - os: ubuntu-24.04-arm
+            cc: gcc
+            cxx: g++
+            flags: ""
+          - os: ubuntu-24.04
+            cc: clang
+            cxx: clang++
+            flags: "-fsanitize=undefined,address,float-cast-overflow -g"
           - os: windows-latest
             flags: ""
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake -S c/tests -B build/c-tests -DCMAKE_C_FLAGS="${{ matrix.flags }}" -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
-      - name: Build
-        run: cmake --build build/c-tests --config Release
-      - name: Test
-        run: ctest --test-dir build/c-tests -C Release --output-on-failure
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Configure Linux
+        if: runner.os == 'Linux'
+        run: cmake -S c/tests -B build/c-tests -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_FLAGS="${{ matrix.flags }}" -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
+      - name: Configure Windows (MSVC)
+        if: runner.os == 'Windows'
+        run: cmake -S c/tests -B build/c-tests
+      - name: Build and test
+        run: |
+          cmake --build build/c-tests --config Release
+          ctest --test-dir build/c-tests -C Release --output-on-failure
+      - name: Build customer C and C++ examples
+        run: |
+          cmake -S c/examples -B build/examples
+          cmake --build build/examples --config Release
+      - name: STM32 receive and ROS conversion checks
+        run: |
+          cmake -S stm32/tests -B build/stm32-tests
+          cmake --build build/stm32-tests --config Release
+          ctest --test-dir build/stm32-tests -C Release --output-on-failure
+          cmake -S ros/tests -B build/ros-tests
+          cmake --build build/ros-tests --config Release
+          ctest --test-dir build/ros-tests -C Release --output-on-failure
+      - name: ROS product message contract
+        run: python ros/tests/test_schema.py
 
-  linux-tools:
-    runs-on: ubuntu-24.04
+  tools:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build hihost and canhost
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build specialized tools
         run: |
-          cmake -S c/tools -B build/tools -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-Wall -Wextra -Werror"
-          cmake --build build/tools
-          ./build/tools/hihost/hihost --help
-          ./build/tools/canhost/canhost --help
+          cmake -S c/tools -B build/tools -DCANHOST_BUILD_TESTS=ON
+          cmake --build build/tools --config Release
+      - name: Serial updater help and argument checks
+        shell: bash
+        run: |
+          python c/tests/check_tools.py build/tools
+      - name: CAN tool regressions
+        if: runner.os == 'Linux'
+        run: |
+          ctest --test-dir build/tools --output-on-failure
 
   ros2:
     strategy:
       fail-fast: false
       matrix:
-        distro: [humble, jazzy]
-    runs-on: ubuntu-latest
+        distro: [humble, jazzy, lyrical]
+    runs-on: ubuntu-24.04
     container: ros:${{ matrix.distro }}-ros-base
     steps:
       - uses: actions/checkout@v4
-      - name: colcon build
+        with:
+          path: ws/src/products
+      - name: Build complete checkout in a workspace
         shell: bash
         run: |
           source /opt/ros/${{ matrix.distro }}/setup.bash
-          cd ros/ros2
-          colcon build --event-handlers console_direct+
+          cd ws
+          test "$(colcon list --names-only | sort)" = $'hipnuc_imu\nhipnuc_msgs'
+          rosdep install --from-paths $(colcon list --paths-only) --ignore-src -y
+          colcon build --event-handlers console_direct+ --cmake-args -DBUILD_TESTING=ON
+          colcon test --event-handlers console_direct+
+          colcon test-result --verbose
+      - name: Installed nodes with a simulated serial device
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          source ws/install/setup.bash
+          test "$(ros2 pkg prefix hipnuc_imu)" = "$PWD/ws/install/hipnuc_imu"
+          test "$(ros2 pkg prefix hipnuc_msgs)" = "$PWD/ws/install/hipnuc_msgs"
+          test -x ws/install/hipnuc_imu/lib/hipnuc_imu/serial_node
+          test -x ws/install/hipnuc_imu/lib/hipnuc_imu/can_node
+          python3 -c 'import rclpy'
+          ROS_DOMAIN_ID=121 python3 ws/src/products/ros/tests/test_ros2_runtime.py
 
   ros1-noetic:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container: ros:noetic-ros-base
     steps:
       - uses: actions/checkout@v4
-      - name: catkin_make
+        with:
+          path: ws/src/products
+      - name: Build complete checkout with catkin
         shell: bash
         run: |
           source /opt/ros/noetic/setup.bash
-          cd ros/ros1
-          catkin_make
+          cd ws
+          rosdep install --from-paths src/products/ros/ros1/src --ignore-src -y
+          catkin_make --source src/products/ros/ros1/src -DCATKIN_ENABLE_TESTING=ON
+          catkin_make --source src/products/ros/ros1/src run_tests
+          catkin_test_results
+          (cd build && ctest --output-on-failure)
+          catkin_make --source src/products/ros/ros1/src install
+          source install/setup.bash
+          test "$(rospack find hipnuc_imu)" = "$PWD/install/share/hipnuc_imu"
+          test -x install/lib/hipnuc_imu/serial_node
+          test -x install/lib/hipnuc_imu/can_node
+          python3 -c 'import rospy'
+          python3 src/products/ros/tests/test_ros1_runtime.py

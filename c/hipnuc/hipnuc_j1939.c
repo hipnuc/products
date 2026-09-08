@@ -72,7 +72,10 @@ static void wr_u32(uint8_t *p, uint32_t v)
 
 uint32_t hipnuc_j1939_pgn(uint32_t id)
 {
-    return (id >> 8) & 0xFFFFU;
+    uint32_t pgn = (id >> 8) & 0x3FFFFU;
+    /* For PDU1, PS is a destination address, not part of the PGN. */
+    if (((pgn >> 8) & 0xFFU) < 0xF0U) pgn &= 0x3FF00U;
+    return pgn;
 }
 
 uint8_t hipnuc_j1939_source_address(uint32_t id)
@@ -82,7 +85,7 @@ uint8_t hipnuc_j1939_source_address(uint32_t id)
 
 uint32_t hipnuc_j1939_data_id(uint32_t pgn, uint8_t source)
 {
-    return (HIPNUC_J1939_PRIORITY << 26) | ((pgn & 0xFFFFU) << 8) | (uint32_t)source;
+    return (HIPNUC_J1939_PRIORITY << 26) | ((pgn & 0x3FFFFU) << 8) | (uint32_t)source;
 }
 
 /* PDU1 frame: PF 0xEF, PS = destination address. Priority 3, no data page. */
@@ -152,7 +155,9 @@ static void set_utc(hipnuc_sample_t *s, uint8_t year2, uint8_t month, uint8_t da
     s->utc.minute = minute;
     s->utc.second = second;
     s->utc.millisecond = ms;
-    if (synchronized && (year2 != 0 || month != 0)) s->valid |= HIPNUC_VALID_UTC;
+    if (synchronized && hipnuc_utc_is_valid(&s->utc)) {
+        s->valid |= HIPNUC_VALID_UTC | HIPNUC_VALID_UTC_TIME_OF_DAY;
+    }
 }
 
 static int canfd83_logical_length(uint32_t bitmap)
@@ -210,7 +215,7 @@ static int parse_canfd83(const hipnuc_can_frame_t *frame, hipnuc_sample_t *s, ui
         s->roll = rd_f32(d + pos) * HIPNUC_DEG2RAD;
         s->pitch = rd_f32(d + pos + 4) * HIPNUC_DEG2RAD;
         s->yaw = rd_f32(d + pos + 8) * HIPNUC_DEG2RAD;
-        s->valid |= HIPNUC_VALID_EULER;
+        s->valid |= HIPNUC_VALID_ROLL_PITCH | HIPNUC_VALID_YAW;
         pos += CANFD83_SIZE_RPY;
     }
     if (bitmap & CANFD83_MAP_QUAT) {
@@ -247,14 +252,16 @@ int hipnuc_j1939_parse(const hipnuc_can_frame_t *frame, hipnuc_sample_t *sample,
     int i;
 
     if (!frame || !sample) return -1;
+    hipnuc_sample_clear(sample);
     if (!frame->is_extended) return HIPNUC_J1939_MSG_NONE;   /* HiPNUC data is J1939 only */
 
     msg = lookup_pgn(hipnuc_j1939_pgn(frame->id), &min_len);
     if (msg == HIPNUC_J1939_MSG_NONE) return HIPNUC_J1939_MSG_NONE;   /* other PGNs, config frames */
     if (frame->is_remote || frame->is_error) return -1;
+    if (frame->len > sizeof(frame->data)) return -1;
+    if (msg != HIPNUC_J1939_MSG_CANFD83 && frame->len > 8) return -1;
     if (frame->len < min_len) return -1;
 
-    hipnuc_sample_clear(sample);
     sample->source = HIPNUC_SOURCE_J1939;
     sample->node_id = hipnuc_j1939_source_address(frame->id);
     sample->valid |= HIPNUC_VALID_NODE_ID;
@@ -277,26 +284,23 @@ int hipnuc_j1939_parse(const hipnuc_can_frame_t *frame, hipnuc_sample_t *sample,
             break;
 
         case HIPNUC_J1939_MSG_ROLL_PITCH:
-            /*
-             * Only roll and pitch travel in this PGN. HIPNUC_VALID_EULER is set
-             * anyway so the two angles are usable on their own; yaw stays 0
-             * until a YAW frame is merged (hipnuc_j1939_merge() keeps a yaw
-             * that arrived earlier).
-             */
+            /* This PGN has no yaw; do not reuse one from an earlier frame. */
             sample->roll = (float)rd_i32(d) * J1939_MDEG2RAD;
             sample->pitch = (float)rd_i32(d + 4) * J1939_MDEG2RAD;
-            sample->valid |= HIPNUC_VALID_EULER;
+            sample->valid |= HIPNUC_VALID_ROLL_PITCH;
             break;
 
         case HIPNUC_J1939_MSG_YAW:
             /*
              * First i32: heading, clockwise 0..360 deg. Second i32 (when
              * present): yaw in the device Euler convention (counter-clockwise).
-             * HIPNUC_VALID_HEADING covers both; HIPNUC_VALID_EULER belongs to
-             * the ROLL_PITCH frame.
+             * Each independently available quantity gets its own flag.
              */
             sample->heading = (float)rd_i32(d) * J1939_MDEG2RAD;
-            if (frame->len >= 8) sample->yaw = (float)rd_i32(d + 4) * J1939_MDEG2RAD;
+            if (frame->len >= 8) {
+                sample->yaw = (float)rd_i32(d + 4) * J1939_MDEG2RAD;
+                sample->valid |= HIPNUC_VALID_YAW;
+            }
             sample->valid |= HIPNUC_VALID_HEADING;
             break;
 
@@ -322,22 +326,18 @@ int hipnuc_j1939_parse(const hipnuc_can_frame_t *frame, hipnuc_sample_t *sample,
             break;
 
         case HIPNUC_J1939_MSG_POSITION:
-            /* Latitude first. altitude_msl stays 0 until an ALTITUDE frame is merged. */
+            /* INS latitude first; altitude is absent in this PGN. */
             sample->latitude = rd_i32(d) * 1e-7;
             sample->longitude = rd_i32(d + 4) * 1e-7;
             sample->valid |= HIPNUC_VALID_POSITION;
             break;
 
         case HIPNUC_J1939_MSG_ALTITUDE:
-            /*
-             * Height above mean sea level without a position, so
-             * HIPNUC_VALID_POSITION is not set; hipnuc_j1939_merge() carries
-             * altitude_msl over together with the undulation.
-             */
+            /* INS altitude without horizontal position. */
             sample->altitude_msl = rd_i32(d) * 0.01;
             sample->undulation = rd_i16(d + 4) * 0.01f;
             sample->diff_age = rd_i16(d + 6) * 0.01f;
-            sample->valid |= HIPNUC_VALID_UNDULATION | HIPNUC_VALID_DIFF_AGE;
+            sample->valid |= HIPNUC_VALID_ALTITUDE | HIPNUC_VALID_UNDULATION | HIPNUC_VALID_DIFF_AGE;
             break;
 
         case HIPNUC_J1939_MSG_GNSS_STATUS:
@@ -346,7 +346,8 @@ int hipnuc_j1939_parse(const hipnuc_can_frame_t *frame, hipnuc_sample_t *sample,
             sample->position_satellites = d[2];
             sample->heading_satellites = d[3];
             sample->ins_status = d[4];
-            sample->valid |= HIPNUC_VALID_GNSS_QUALITY | HIPNUC_VALID_INS_STATUS;
+            sample->valid |= HIPNUC_VALID_POSITION_QUALITY | HIPNUC_VALID_HEADING_QUALITY |
+                             HIPNUC_VALID_POSITION_SATELLITES | HIPNUC_VALID_HEADING_SATELLITES | HIPNUC_VALID_INS_STATUS;
             break;
 
         case HIPNUC_J1939_MSG_VELOCITY:
@@ -369,92 +370,6 @@ int hipnuc_j1939_parse(const hipnuc_can_frame_t *frame, hipnuc_sample_t *sample,
             return HIPNUC_J1939_MSG_NONE;
     }
     return (int)msg;
-}
-
-/* ------------------------------------------------------------------------- */
-/* Merge                                                                     */
-/* ------------------------------------------------------------------------- */
-
-void hipnuc_j1939_merge(hipnuc_sample_t *into, const hipnuc_sample_t *part)
-{
-    uint32_t v = part->valid;
-    int i;
-
-    if (into->source == HIPNUC_SOURCE_NONE) {
-        into->source = part->source;
-        into->node_id = part->node_id;
-    }
-    if (v & HIPNUC_VALID_NODE_ID) into->node_id = part->node_id;
-    if (v & HIPNUC_VALID_STATUS) hipnuc_sample_set_status(into, part->main_status);
-    if (v & HIPNUC_VALID_INS_STATUS) into->ins_status = part->ins_status;
-    if (v & HIPNUC_VALID_ACC) for (i = 0; i < 3; ++i) into->acc[i] = part->acc[i];
-    if (v & HIPNUC_VALID_GYR) for (i = 0; i < 3; ++i) into->gyr[i] = part->gyr[i];
-    if (v & HIPNUC_VALID_MAG) for (i = 0; i < 3; ++i) into->mag[i] = part->mag[i];
-    if (v & HIPNUC_VALID_EULER) {
-        into->roll = part->roll;
-        into->pitch = part->pitch;
-        /* A ROLL_PITCH frame has no yaw: keep one that already came from a YAW frame. */
-        if ((v & HIPNUC_VALID_HEADING) || !(into->valid & HIPNUC_VALID_HEADING)) into->yaw = part->yaw;
-    }
-    if (v & HIPNUC_VALID_HEADING) {
-        into->heading = part->heading;
-        into->yaw = part->yaw;
-    }
-    if (v & HIPNUC_VALID_QUAT) for (i = 0; i < 4; ++i) into->quat[i] = part->quat[i];
-    if (v & HIPNUC_VALID_DEVICE_TIME) into->device_time_us = part->device_time_us;
-    if (v & HIPNUC_VALID_UTC) into->utc = part->utc;
-    if (v & HIPNUC_VALID_GPS_TIME) {
-        into->gps_week = part->gps_week;
-        into->gps_tow_ms = part->gps_tow_ms;
-    }
-    if (v & HIPNUC_VALID_PRESSURE) into->pressure = part->pressure;
-    if (v & HIPNUC_VALID_TEMPERATURE) into->temperature = part->temperature;
-    if (v & HIPNUC_VALID_INCLINATION) {
-        into->inclination[0] = part->inclination[0];
-        into->inclination[1] = part->inclination[1];
-    }
-    if (v & HIPNUC_VALID_HEAVE) {
-        for (i = 0; i < 3; ++i) {
-            into->heave_m[i] = part->heave_m[i];
-            into->heave_hz[i] = part->heave_hz[i];
-        }
-    }
-    if (v & HIPNUC_VALID_POSITION) {
-        into->longitude = part->longitude;
-        into->latitude = part->latitude;
-        /* J1939 splits the position over two PGNs: POSITION has no altitude. */
-        if (part->source != HIPNUC_SOURCE_J1939) into->altitude_msl = part->altitude_msl;
-    }
-    if (v & HIPNUC_VALID_UNDULATION) {
-        into->undulation = part->undulation;
-        /* ...and ALTITUDE carries altitude_msl next to the undulation. */
-        if (part->source == HIPNUC_SOURCE_J1939 && !(v & HIPNUC_VALID_POSITION)) into->altitude_msl = part->altitude_msl;
-    }
-    if (v & HIPNUC_VALID_VELOCITY_ENU) for (i = 0; i < 3; ++i) into->vel_enu[i] = part->vel_enu[i];
-    if (v & HIPNUC_VALID_ACC_ENU) for (i = 0; i < 3; ++i) into->acc_enu[i] = part->acc_enu[i];
-    if (v & HIPNUC_VALID_GNSS_QUALITY) {
-        into->position_quality = part->position_quality;
-        into->position_satellites = part->position_satellites;
-        into->heading_quality = part->heading_quality;
-        into->heading_satellites = part->heading_satellites;
-    }
-    if (v & HIPNUC_VALID_DOP) {
-        into->pdop = part->pdop;
-        into->hdop = part->hdop;
-    }
-    if (v & HIPNUC_VALID_DIFF_AGE) into->diff_age = part->diff_age;
-    if (v & HIPNUC_VALID_ODOMETER) into->odometer_speed = part->odometer_speed;
-    if (v & HIPNUC_VALID_GNSS_POSITION) {
-        into->gnss_longitude = part->gnss_longitude;
-        into->gnss_latitude = part->gnss_latitude;
-        into->gnss_altitude_msl = part->gnss_altitude_msl;
-    }
-    if (v & HIPNUC_VALID_GNSS_VELOCITY) for (i = 0; i < 3; ++i) into->gnss_vel_enu[i] = part->gnss_vel_enu[i];
-    if (v & HIPNUC_VALID_SOG_COG) {
-        into->sog = part->sog;
-        into->cog = part->cog;
-    }
-    into->valid |= v;
 }
 
 /* ------------------------------------------------------------------------- */

@@ -3,9 +3,8 @@
  * See hipnuc_board.h.
  *
  * DMA mode: USART2 RX is written by DMA1 channel 6 into a circular buffer.
- * The main loop consumes from its own read index up to the DMA write index;
- * the transfer-complete interrupt counts wraps so an overrun (consumer more
- * than one buffer behind) is detected instead of silently corrupting data.
+ * Transfer-complete events and CNDTR give an accumulated byte count. The
+ * main loop owns the consumed count; hardware wraps do not reset it.
  *
  * Interrupt mode: the RXNE handler appends to a ring buffer; the main loop
  * drains it. The interrupt does nothing else.
@@ -24,16 +23,36 @@
 #include "misc.h"
 
 #define RX_SIZE HIPNUC_BOARD_RX_BUFFER_SIZE
+#if RX_SIZE < 2 || RX_SIZE > 32768 || (RX_SIZE & (RX_SIZE - 1)) != 0
+#error "The receive buffer must be a power of two between 2 and 32768 bytes"
+#endif
 
-static uint8_t rx_buf[RX_SIZE];
+static volatile uint8_t rx_buf[RX_SIZE];
+#if HIPNUC_BOARD_USE_DMA
 static volatile uint32_t rx_wraps;           /* DMA: transfer-complete count */
+static uint32_t rx_consumed;                 /* DMA: accumulated bytes consumed */
+#else
 static volatile uint16_t rx_head;            /* IRQ mode: next write index */
-static uint16_t rx_tail;                     /* consumer read index */
-static uint32_t rx_consumed_wraps;
+static volatile uint16_t rx_tail;            /* IRQ mode: only the main loop writes */
+static volatile uint32_t rx_bytes, rx_dropped;
+static uint32_t rx_dropped_seen;
+#endif
 static volatile uint32_t tick_ms;
+static volatile uint32_t rx_hardware_errors;
+static uint32_t rx_hardware_errors_seen;
 
 static hipnuc_raw_t decoder;
 static hipnuc_board_stats_t stats;
+
+static void reset_decoder(void)
+{
+    /* A receive gap invalidates a partial frame, but not lifetime counters. */
+    uint32_t crc = decoder.crc_error_count;
+    uint32_t invalid = decoder.invalid_count;
+    memset(&decoder, 0, sizeof(decoder));
+    decoder.crc_error_count = crc;
+    decoder.invalid_count = invalid;
+}
 
 void SysTick_Handler(void)
 {
@@ -43,6 +62,31 @@ void SysTick_Handler(void)
 uint32_t hipnuc_board_millis(void)
 {
     return tick_ms;
+}
+
+/* SR followed by DR clears UART errors. Capture them before that sequence,
+ * including when polling TXE while sending a command. Do not let a CPU DR
+ * read silently compete with DMA: pause requests and mark a receive gap. */
+static uint32_t uart_status(void)
+{
+    uint32_t mask = __get_PRIMASK();
+    uint32_t status;
+    __disable_irq();
+    status = USART2->SR;
+    if (status & (USART_SR_ORE | USART_SR_FE | USART_SR_NE)) {
+#if HIPNUC_BOARD_USE_DMA
+        USART_DMACmd(USART2, USART_DMAReq_Rx, DISABLE);
+#else
+        if (status & USART_SR_RXNE) rx_bytes++;
+#endif
+        (void)USART_ReceiveData(USART2);
+        rx_hardware_errors++;
+#if HIPNUC_BOARD_USE_DMA
+        USART_DMACmd(USART2, USART_DMAReq_Rx, ENABLE);
+#endif
+    }
+    __set_PRIMASK(mask);
+    return status;
 }
 
 static void usart2_init(uint32_t baudrate)
@@ -71,6 +115,25 @@ static void usart2_init(uint32_t baudrate)
     USART_Cmd(USART2, ENABLE);
 }
 
+static void console_init(void)
+{
+    GPIO_InitTypeDef gpio;
+    USART_InitTypeDef usart;
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1 | RCC_APB2Periph_GPIOA, ENABLE);
+    gpio.GPIO_Pin = GPIO_Pin_9;
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    gpio.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_Init(GPIOA, &gpio);
+    usart.USART_BaudRate = 115200;
+    usart.USART_WordLength = USART_WordLength_8b;
+    usart.USART_StopBits = USART_StopBits_1;
+    usart.USART_Parity = USART_Parity_No;
+    usart.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+    usart.USART_Mode = USART_Mode_Tx;
+    USART_Init(USART1, &usart);
+    USART_Cmd(USART1, ENABLE);
+}
+
 #if HIPNUC_BOARD_USE_DMA
 
 static void dma_init(void)
@@ -80,8 +143,8 @@ static void dma_init(void)
 
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
     DMA_DeInit(DMA1_Channel6);
-    dma.DMA_PeripheralBaseAddr = (uint32_t)&USART2->DR;
-    dma.DMA_MemoryBaseAddr = (uint32_t)rx_buf;
+    dma.DMA_PeripheralBaseAddr = (uint32_t)(uintptr_t)&USART2->DR;
+    dma.DMA_MemoryBaseAddr = (uint32_t)(uintptr_t)rx_buf;
     dma.DMA_DIR = DMA_DIR_PeripheralSRC;
     dma.DMA_BufferSize = RX_SIZE;
     dma.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
@@ -112,35 +175,82 @@ void DMA1_Channel6_IRQHandler(void)
     }
 }
 
-/* Bytes available and, if the DMA lapped the consumer, resynchronize. */
+static uint32_t dma_produced(void)
+{
+    uint32_t mask = __get_PRIMASK();
+    uint32_t produced;
+    uint16_t remaining;
+
+    /* DMA keeps running. Count a pending TC ourselves while the ISR cannot
+     * race us, and retry if hardware wraps during the CNDTR snapshot. A TC
+     * flag holds only one event: interrupts must run within one buffer time. */
+    __disable_irq();
+    do {
+        if (DMA_GetFlagStatus(DMA1_FLAG_TC6) != RESET) {
+            DMA_ClearFlag(DMA1_FLAG_TC6);
+            rx_wraps++;
+        }
+        remaining = DMA_GetCurrDataCounter(DMA1_Channel6);
+    } while (remaining == 0 || DMA_GetFlagStatus(DMA1_FLAG_TC6) != RESET);
+    produced = rx_wraps * RX_SIZE + (RX_SIZE - remaining);
+    __DMB();
+    __set_PRIMASK(mask);
+    return produced;
+}
+
+/* Drop the entire affected span when the oldest unread byte is overwritten. */
 static uint16_t rx_available(void)
 {
-    uint16_t head = (uint16_t)(RX_SIZE - DMA_GetCurrDataCounter(DMA1_Channel6));
-    uint32_t wraps = rx_wraps;
-    uint32_t behind = wraps - rx_consumed_wraps;
-
-    if (behind > 1U || (behind == 1U && head >= rx_tail)) {
-        /* More than one buffer of data arrived since the last poll: the
-         * oldest bytes are gone. Drop everything and restart from head. */
-        stats.overruns++;
-        rx_tail = head;
-        rx_consumed_wraps = wraps;
-        memset(&decoder, 0, sizeof(decoder));
+    uint32_t hardware_errors = rx_hardware_errors;
+    uint32_t produced = dma_produced();
+    uint32_t available = produced - rx_consumed;
+    stats.bytes = produced;
+    if (hardware_errors != rx_hardware_errors_seen) {
+        rx_hardware_errors_seen = hardware_errors;
+        rx_consumed = produced;
+        reset_decoder();
         return 0;
     }
-    if (head >= rx_tail) {
-        if (behind == 1U) rx_consumed_wraps = wraps;
-        return (uint16_t)(head - rx_tail);
+    if (available > RX_SIZE) {
+        stats.overruns++;
+        rx_consumed = produced;
+        reset_decoder();
+        return 0;
     }
-    return (uint16_t)(RX_SIZE - rx_tail + head);
+    return (uint16_t)available;
 }
 
 #else /* interrupt per byte */
 
-static void irq_init(void)
+static uint16_t rx_available(void)
+{
+    uint16_t head;
+    stats.bytes = rx_bytes;
+    if (rx_dropped != rx_dropped_seen || rx_hardware_errors != rx_hardware_errors_seen) {
+        uint32_t mask = __get_PRIMASK();
+        __disable_irq();
+        rx_tail = rx_head;
+        rx_dropped_seen = rx_dropped;
+        rx_hardware_errors_seen = rx_hardware_errors;
+        __set_PRIMASK(mask);
+        stats.overruns = rx_dropped_seen;
+        reset_decoder();
+        return 0;
+    }
+    head = rx_head;
+    __DMB();
+    return (uint16_t)((head - rx_tail) & (RX_SIZE - 1U));
+}
+
+#endif
+
+static void uart_irq_init(void)
 {
     NVIC_InitTypeDef nvic;
+    USART_ITConfig(USART2, USART_IT_ERR, ENABLE);
+#if !HIPNUC_BOARD_USE_DMA
     USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+#endif
     nvic.NVIC_IRQChannel = USART2_IRQn;
     nvic.NVIC_IRQChannelPreemptionPriority = 1;
     nvic.NVIC_IRQChannelSubPriority = 0;
@@ -150,61 +260,81 @@ static void irq_init(void)
 
 void USART2_IRQHandler(void)
 {
-    if (USART_GetITStatus(USART2, USART_IT_RXNE) != RESET) {
+#if HIPNUC_BOARD_USE_DMA
+    (void)uart_status();
+#else
+    uint32_t mask = __get_PRIMASK();
+    uint32_t status;
+    uint8_t ch = 0;
+    int received;
+    /* Keep SR+DR together: a preempting ISR must not let a new ORE be
+     * silently cleared by the DR read following an older clean SR. */
+    __disable_irq();
+    status = uart_status();
+    received = (status & (USART_SR_RXNE | USART_SR_ORE | USART_SR_FE | USART_SR_NE))
+               == USART_SR_RXNE;
+    if (received) ch = (uint8_t)USART_ReceiveData(USART2);
+    __set_PRIMASK(mask);
+    if (received) {
         uint16_t next = (uint16_t)((rx_head + 1U) % RX_SIZE);
-        uint8_t ch = (uint8_t)USART_ReceiveData(USART2);
+        rx_bytes++;
         if (next == rx_tail) {
-            stats.overruns++;               /* consumer too slow: byte dropped */
+            rx_dropped++;                  /* keep unread bytes; drop this byte */
         } else {
             rx_buf[rx_head] = ch;
+            __DMB();                       /* publish only after storing the byte */
             rx_head = next;
         }
     }
-}
-
-static uint16_t rx_available(void)
-{
-    uint16_t head = rx_head;
-    if (head >= rx_tail) return (uint16_t)(head - rx_tail);
-    return (uint16_t)(RX_SIZE - rx_tail + head);
-}
-
 #endif
+}
 
 void hipnuc_board_init(uint32_t baudrate)
 {
     memset(&decoder, 0, sizeof(decoder));
     memset(&stats, 0, sizeof(stats));
+#if HIPNUC_BOARD_USE_DMA
+    rx_wraps = 0;
+    rx_consumed = 0;
+#else
     rx_tail = 0;
     rx_head = 0;
-    rx_wraps = 0;
-    rx_consumed_wraps = 0;
+    rx_bytes = rx_dropped = rx_dropped_seen = 0;
+#endif
+    tick_ms = 0;
+    rx_hardware_errors = rx_hardware_errors_seen = 0;
 
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
     SysTick_Config(SystemCoreClock / 1000U);
+    console_init();
     usart2_init(baudrate);
 #if HIPNUC_BOARD_USE_DMA
     dma_init();
-#else
-    irq_init();
 #endif
+    uart_irq_init();
 }
 
 int hipnuc_board_poll(hipnuc_sample_t *sample)
 {
-    uint16_t avail = rx_available();
-
-    while (avail--) {
-        uint8_t ch = rx_buf[rx_tail];
+    while (rx_available()) {
         int ret;
+#if HIPNUC_BOARD_USE_DMA
+        uint8_t ch = rx_buf[rx_consumed & (RX_SIZE - 1U)];
+        /* DMA could overtake us during the byte copy or a preempting ISR. */
+        if (!rx_available()) return 0;
+        rx_consumed++;
+#else
+        uint8_t ch = rx_buf[rx_tail];
+        if (!rx_available()) return 0;
+        __DMB();                           /* finish copying before freeing the slot */
         rx_tail = (uint16_t)((rx_tail + 1U) % RX_SIZE);
-        stats.bytes++;
+#endif
         ret = hipnuc_input(&decoder, ch);
+        stats.crc_errors = decoder.crc_error_count;
+        stats.invalid_frames = decoder.invalid_count;
         if (ret > 0) {
             stats.frames++;
             if (hipnuc_sample_from_raw(&decoder, sample)) return 1;
-        } else if (ret < 0) {
-            if (decoder.crc_error_count > stats.crc_errors) stats.crc_errors = decoder.crc_error_count;
-            if (decoder.invalid_count > stats.invalid_frames) stats.invalid_frames = decoder.invalid_count;
         }
     }
     return 0;
@@ -212,6 +342,7 @@ int hipnuc_board_poll(hipnuc_sample_t *sample)
 
 const hipnuc_board_stats_t *hipnuc_board_stats(void)
 {
+    stats.hardware_errors = rx_hardware_errors;
     return &stats;
 }
 
@@ -219,11 +350,11 @@ void hipnuc_board_send_command(const char *command)
 {
     const char *p;
     for (p = command; *p; ++p) {
-        while (USART_GetFlagStatus(USART2, USART_FLAG_TXE) == RESET) {}
+        while (!(uart_status() & USART_SR_TXE)) {}
         USART_SendData(USART2, (uint16_t)*p);
     }
     for (p = "\r\n"; *p; ++p) {
-        while (USART_GetFlagStatus(USART2, USART_FLAG_TXE) == RESET) {}
+        while (!(uart_status() & USART_SR_TXE)) {}
         USART_SendData(USART2, (uint16_t)*p);
     }
 }

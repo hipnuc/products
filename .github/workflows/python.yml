@@ -13,8 +13,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-22.04, macos-latest]
-        python: ['3.10', '3.14']
+        os: [windows-latest, ubuntu-24.04]
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        include:
+          - os: macos-latest
+            python: '3.10'
+          - os: macos-latest
+            python: '3.14'
+          - os: ubuntu-26.04
+            python: '3.14'
+          - os: ubuntu-24.04-arm
+            python: '3.12'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +37,7 @@ jobs:
           python -m pytest python/tests -q
           python python/tools/check_install.py
       - name: Lint
-        if: matrix.os == 'ubuntu-22.04' && matrix.python == '3.14'
+        if: matrix.os == 'ubuntu-24.04' && matrix.python == '3.14'
         run: |
           python -m ruff check python
           python -m ruff format --check --quiet python
@@ -46,3 +55,18 @@ jobs:
           "$RUNNER_TEMP/hipnuc-system-python/bin/python" -m pip install ./python "pytest>=8,<10"
           "$RUNNER_TEMP/hipnuc-system-python/bin/python" -m pytest python/tests -q
           "$RUNNER_TEMP/hipnuc-system-python/bin/python" python/tools/check_install.py
+
+  armv7:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+      - name: ARMv7 Linux source install and tests (emulated)
+        run: |
+          docker run --rm --platform linux/arm/v7 -v "$PWD:/sdk:ro" arm32v7/python:3.11-slim-bookworm sh -c '
+            cp -R /sdk/python /tmp/hipnuc &&
+            python -m pip install /tmp/hipnuc "pytest>=8,<10" &&
+            python -m pytest /sdk/python/tests -q -p no:cacheprovider &&
+            python /sdk/python/tools/check_install.py'

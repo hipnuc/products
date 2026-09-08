@@ -11,8 +11,9 @@
  *   -> flash erase region -> write memory + data packets -> reset.
  *
  * Every command reply is checked for framing, CRC, response tag, parameter
- * count, status code and echoed command tag. Any failure stops the update;
- * nothing is retried automatically.
+ * count, status code and echoed command tag. Flash commands are never
+ * retried. Only the initial ping retries a missing or malformed response;
+ * transport failures stop immediately.
  */
 
 #ifndef HIPNUC_KBOOT_H
@@ -35,7 +36,8 @@ typedef enum {
     HIPNUC_KBOOT_ERR_ABORT    = -6,   /* device answered AckAbort */
     HIPNUC_KBOOT_ERR_RESPONSE = -7,   /* response tag, parameter count or command echo mismatch */
     HIPNUC_KBOOT_ERR_STATUS   = -8,   /* device reported a nonzero status code (see ctx->last_status) */
-    HIPNUC_KBOOT_ERR_SIZE     = -9    /* image or packet too large for the device */
+    HIPNUC_KBOOT_ERR_SIZE     = -9,   /* image or packet too large for the device */
+    HIPNUC_KBOOT_ERR_READ     = -10   /* serial receive failed */
 } hipnuc_kboot_status_t;
 
 /* Serial port callbacks supplied by the application. */

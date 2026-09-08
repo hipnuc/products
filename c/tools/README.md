@@ -1,70 +1,81 @@
-# HiPNUC Linux tools
-
 [English](README.md) | [中文](README_zh.md)
 
-Two command line tools built on the C core in `c/hipnuc`:
+# Firmware update and CAN tools
 
-- `hihost` — serial: find the device, show and record the data stream, send
-  ASCII commands, update the firmware.
-- `canhost` — SocketCAN: J1939 and CANFD83 decoding, register access, trigger
-  frames, firmware update over CAN.
-
-Both are Linux only (termios, SocketCAN). `common/` holds the helpers they
-share (logger, Intel HEX loader, INI reader).
+For serial discovery, configuration and recording, use the [Python SDK](../../python/README.md).
+These tools provide serial firmware update on Windows/Linux and SocketCAN access on Linux.
 
 ## Build
 
-```sh
-cmake -S c/tools -B build/tools -DCMAKE_BUILD_TYPE=Release
-cmake --build build/tools -j
-build/tools/hihost/hihost --help
-build/tools/canhost/canhost --help
-```
-
-Each tool also builds on its own: `cmake -S c/tools/hihost -B build/hihost`.
-Requires CMake 3.10 and a C99 compiler.
-
-## hihost
+From this directory, with a C compiler and CMake installed:
 
 ```sh
-hihost list                                # serial ports
-hihost probe --save                        # find port/baud, write ./hihost.ini
-hihost read                                # live JSON display
-hihost -r raw.bin -j data.jsonl read       # record raw bytes and JSON lines
-hihost write "LOG VERSION"                 # one ASCII command
-hihost write hihost/device_setup.ini       # commands from a file
-hihost update firmware.hex                 # serial firmware update
+cmake -S . -B build
+cmake --build build --config Release
 ```
 
-Port and baud come from `-p`/`-b`, otherwise from the first of `$HIHOST_CONF`,
-`./hihost.ini`, `~/.hihost.ini` (keys `port=` and `baud=`). Nothing is written
-unless you pass `probe --save`. Serial access usually needs membership in the
-`dialout` group.
+On Linux the executables are `build/serial_update/hipnuc-update` and
+`build/canhost/canhost`. Visual Studio places the Windows updater at
+`build\serial_update\Release\hipnuc-update.exe`.
 
-`read` prints one JSON object per frame (SI units, the same keys as the
-Python SDK). `update` works on a running device or on one already in the
-bootloader.
+## Serial firmware update
 
-## canhost
+Use the Intel HEX image for the exact device model. Specify its current
+connection speed and port:
+
+```powershell
+.\build\serial_update\Release\hipnuc-update.exe firmware.hex -p COM3 -b 115200
+```
+
+On Linux:
 
 ```sh
-sudo ip link set can0 type can bitrate 500000 && sudo ip link set can0 up
-
-canhost device list
-canhost device probe                       # J1939 address claim scan
-canhost stream read                        # JSON line per decoded frame
-canhost stream record -o run.jsonl         # same, to a file with rx_time_us
-canhost trigger sync --count 1             # trigger the PGNs from canhost.ini
-canhost config reg read 0x70
-canhost config reg write 0x06 1
-canhost action run version                 # reset / save need --yes
-canhost firmware update -f app.hex         # CAN firmware update, all target nodes
-canhost -n 8,9 stream read                 # override the node list
+./build/serial_update/hipnuc-update firmware.hex -p /dev/ttyUSB0 -b 115200
 ```
 
-Configuration is read from the first of `$CANHOST_CONF`, `./canhost.ini`,
-`~/.canhost.ini`, `/etc/canhost.ini`; `canhost/canhost.ini` documents every
-key (interface, node list, host source address, CAN FD, `sync.<pgn>` periods).
-Only frames whose J1939 source address is in the node list are decoded.
-Register replies are matched against the addressed node, so several devices
-can share one bus.
+A failure stops the operation without an automatic reset. A successful transfer
+and reset acknowledgement do not verify the new application's startup.
+
+## CAN (Linux)
+
+First bring up your interface at the device's bitrate, for example:
+
+```sh
+sudo ip link set can0 type can bitrate 500000
+sudo ip link set can0 up
+```
+
+From this directory:
+
+```sh
+./build/canhost/canhost list
+./build/canhost/canhost scan -i can0 --duration 2
+./build/canhost/canhost read -i can0 -n 8 --duration 10
+./build/canhost/canhost read -i can0 -n 8 --record samples.jsonl
+```
+
+`scan` observes valid measurement traffic; it cannot discover a silent device.
+`read` outputs JSONL to stdout or to `--record`, with diagnostics on stderr.
+Omit `-n` to receive all source addresses. Ctrl-C stops after the current batch;
+`--count` and `--duration` also finish the current batch. Existing recording
+files are protected unless `--overwrite` is given.
+
+Register addresses, values and applicable models are defined in the product
+manual. Pass raw numeric values (decimal or `0x` hexadecimal):
+
+```text
+./build/canhost/canhost reg read ADDRESS -i can0 -n 8
+./build/canhost/canhost reg write ADDRESS VALUE -i can0 -n 8
+./build/canhost/canhost sync PGN -i can0 -n 8 --interval 0.01 --count 10
+./build/canhost/canhost update firmware.hex -i can0 -n 8
+```
+
+Use only addresses and trigger PGNs supported by your product. Save and reboot
+are explicit register writes; ordinary writes do not automatically save.
+Register requests use host address `0x55`, as required by the device reply
+protocol. CAN update accepts device IDs 1–127 and uses CANopen SDO only for the
+bootloader. `--bin` selects a raw binary update image.
+
+Run the final command with `--help` for its parameters. Commands never read an
+INI file or change the interface bitrate. Exit codes: 0 success, 1 runtime
+failure, 2 invalid arguments, 130 Ctrl-C.

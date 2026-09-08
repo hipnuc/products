@@ -8,6 +8,7 @@
 
 #include "nmea_dec.h"
 
+#include <float.h>
 #include <string.h>
 
 #define NMEA_MAX_FIELDS 24
@@ -24,6 +25,7 @@ static int parse_number(const char *s, double *out)
     if (*s == '-') { negative = 1; s++; }
     else if (*s == '+') { s++; }
     while (*s >= '0' && *s <= '9') {
+        if (value > (DBL_MAX - 9.0) / 10.0) return 0;
         value = value * 10.0 + (*s - '0');
         s++;
         digits++;
@@ -42,11 +44,27 @@ static int parse_number(const char *s, double *out)
     return 1;
 }
 
-static int parse_int(const char *s, int *out)
+/* Unsigned decimal integer, checked before conversion (no floating cast). */
+static int parse_uint(const char *s, uint32_t maximum, uint32_t *out)
 {
-    double v;
-    if (!parse_number(s, &v)) return 0;
-    *out = (int)v;
+    uint32_t value = 0;
+    if (*s == '\0') return 0;
+    while (*s) {
+        uint32_t digit;
+        if (*s < '0' || *s > '9') return 0;
+        digit = (unsigned)(*s++ - '0');
+        if (value > maximum / 10 || (value == maximum / 10 && digit > maximum % 10)) return 0;
+        value = value * 10 + digit;
+    }
+    *out = value;
+    return 1;
+}
+
+static int parse_float(const char *s, float *out)
+{
+    double value;
+    if (!parse_number(s, &value) || value > FLT_MAX || value < -FLT_MAX) return 0;
+    *out = (float)value;
     return 1;
 }
 
@@ -55,8 +73,9 @@ static int parse_coordinate(const char *value, const char *hemi, char positive, 
 {
     double dmm, minutes;
     int degrees;
-    if (!parse_number(value, &dmm) || dmm < 0.0) return 0;
-    if (hemi[0] != positive && hemi[0] != negative) return 0;
+    int maximum = positive == 'N' ? 90 : 180;
+    if (!parse_number(value, &dmm) || dmm < 0.0 || dmm > maximum * 100.0) return 0;
+    if ((hemi[0] != positive && hemi[0] != negative) || hemi[1] != '\0') return 0;
     degrees = (int)(dmm / 100.0);
     minutes = dmm - degrees * 100.0;
     if (minutes >= 60.0) return 0;
@@ -66,63 +85,73 @@ static int parse_coordinate(const char *value, const char *hemi, char positive, 
 }
 
 /* hhmmss[.sss] */
-static int parse_time(const char *s, uint8_t *hour, uint8_t *minute, float *second)
+static int parse_time(const char *s, uint8_t *hour, uint8_t *minute, double *second)
 {
     double t;
-    int whole;
-    if (strlen(s) < 6 || !parse_number(s, &t)) return 0;
-    whole = (int)t;
+    uint32_t whole;
+    int i;
+    if (strlen(s) < 6 || (s[6] != '\0' && s[6] != '.')) return 0;
+    for (i = 0; i < 6; i++) if (s[i] < '0' || s[i] > '9') return 0;
+    if (!parse_number(s, &t) || t < 0 || t >= 240000) return 0;
+    whole = (uint32_t)t;
     *hour = (uint8_t)(whole / 10000);
     *minute = (uint8_t)((whole / 100) % 100);
-    *second = (float)(t - (whole / 100) * 100);
-    return *hour < 24 && *minute < 60;
+    *second = t - (whole / 100) * 100;
+    return *hour < 24 && *minute < 60 && *second < 61 &&
+           (*second < 60 || (*hour == 23 && *minute == 59));
 }
 
 /* ddmmyy */
 static int parse_date(const char *s, uint16_t *year, uint8_t *month, uint8_t *day)
 {
-    int v;
-    if (strlen(s) != 6 || !parse_int(s, &v)) return 0;
+    uint32_t v;
+    hipnuc_utc_t utc = {0};
+    if (strlen(s) != 6 || !parse_uint(s, 999999, &v)) return 0;
     *day = (uint8_t)(v / 10000);
     *month = (uint8_t)((v / 100) % 100);
     *year = (uint16_t)(v % 100);
     *year = (uint16_t)(*year + (*year >= 80 ? 1900 : 2000));
-    return *month >= 1 && *month <= 12 && *day >= 1 && *day <= 31;
+    utc.year = *year; utc.month = *month; utc.day = *day;
+    return hipnuc_utc_is_valid(&utc);
 }
 
 static void dec_gga(nmea_gga_t *g, char **f, int n)
 {
-    double v;
-    int i;
+    uint32_t i;
     memset(g, 0, sizeof(*g));
     if (n < 14) return;
     g->has_time = (uint8_t)parse_time(f[1], &g->hour, &g->minute, &g->second);
     g->has_position = (uint8_t)(parse_coordinate(f[2], f[3], 'N', 'S', &g->lat) &&
                                 parse_coordinate(f[4], f[5], 'E', 'W', &g->lon));
-    if (parse_int(f[6], &i)) g->quality = (uint8_t)i;
-    if (parse_int(f[7], &i)) g->satellites = (uint8_t)i;
-    if (parse_number(f[8], &v)) g->hdop = (float)v;
-    if (parse_number(f[9], &v)) { g->altitude_msl = v; g->has_altitude = 1; }
-    if (parse_number(f[11], &v)) { g->undulation = (float)v; g->has_undulation = 1; }
-    if (parse_number(f[13], &v)) { g->diff_age = (float)v; g->has_diff_age = 1; }
-    if (n > 14 && parse_int(f[14], &i)) g->station_id = (uint16_t)i;
+    if (parse_uint(f[6], UINT8_MAX, &i)) { g->quality = (uint8_t)i; g->has_quality = 1; }
+    if (parse_uint(f[7], UINT8_MAX, &i)) { g->satellites = (uint8_t)i; g->has_satellites = 1; }
+    g->has_hdop = (uint8_t)(parse_float(f[8], &g->hdop) && g->hdop >= 0);
+    g->has_altitude = (uint8_t)(strcmp(f[10], "M") == 0 && parse_number(f[9], &g->altitude_msl));
+    g->has_undulation = (uint8_t)(strcmp(f[12], "M") == 0 && parse_float(f[11], &g->undulation));
+    g->has_diff_age = (uint8_t)(parse_float(f[13], &g->diff_age) && g->diff_age >= 0);
+    if (n > 14 && parse_uint(f[14], UINT16_MAX, &i)) g->station_id = (uint16_t)i;
 }
 
 static void dec_rmc(nmea_rmc_t *r, char **f, int n)
 {
-    double v;
     memset(r, 0, sizeof(*r));
     r->status = 'V';
     r->mode = 'N';
     if (n < 10) return;
     r->has_time = (uint8_t)parse_time(f[1], &r->hour, &r->minute, &r->second);
-    if (f[2][0] == 'A' || f[2][0] == 'V') r->status = f[2][0];
+    if ((f[2][0] == 'A' || f[2][0] == 'V') && f[2][1] == '\0') {
+        r->status = f[2][0];
+        r->has_status = 1;
+    }
     r->has_position = (uint8_t)(parse_coordinate(f[3], f[4], 'N', 'S', &r->lat) &&
                                 parse_coordinate(f[5], f[6], 'E', 'W', &r->lon));
-    if (parse_number(f[7], &v)) { r->sog = (float)v; r->has_sog = 1; }
-    if (parse_number(f[8], &v)) { r->cog = (float)v; r->has_cog = 1; }
+    r->has_sog = (uint8_t)(parse_float(f[7], &r->sog) && r->sog >= 0);
+    r->has_cog = (uint8_t)(parse_float(f[8], &r->cog) && r->cog >= 0 && r->cog <= 360);
     r->has_date = (uint8_t)parse_date(f[9], &r->year, &r->month, &r->day);
-    if (n > 12 && f[12][0] != '\0') r->mode = f[12][0];
+    if (n > 12 && f[12][0] >= 'A' && f[12][0] <= 'Z' && f[12][1] == '\0') {
+        r->mode = f[12][0];
+        r->has_mode = 1;
+    }
 }
 
 static int hex_value(char c)
@@ -145,7 +174,7 @@ static int parse_sentence(nmea_raw_t *raw)
     uint8_t sum = 0;
 
     star = strchr(s, '*');
-    if (!star || star - s < 6) return -1;
+    if (!star || star - s < 6 || strlen(star) != 3) return -1;
     h1 = hex_value(star[1]);
     h2 = hex_value(star[2]);
     if (h1 < 0 || h2 < 0) return -1;
@@ -172,9 +201,11 @@ static int parse_sentence(nmea_raw_t *raw)
     raw->talker[2] = '\0';
 
     if (memcmp(fields[0] + 2, "GGA", 3) == 0) {
+        if (n < 14) return -1;
         raw->msg_type = NMEA_MSG_GGA;
         dec_gga(&raw->gga, fields, n);
     } else if (memcmp(fields[0] + 2, "RMC", 3) == 0) {
+        if (n < 10) return -1;
         raw->msg_type = NMEA_MSG_RMC;
         dec_rmc(&raw->rmc, fields, n);
     } else {
@@ -217,5 +248,73 @@ int nmea_input(nmea_raw_t *raw, uint8_t data)
     }
 
     raw->buf[raw->nbyte++] = data;
+    return 0;
+}
+
+/* NMEA fields to SI sample conversion. */
+static void set_time_of_day(hipnuc_sample_t *s, uint8_t hour, uint8_t minute, double second)
+{
+    unsigned ms = (unsigned)(second * 1000.0);
+    s->utc.hour = hour;
+    s->utc.minute = minute;
+    s->utc.second = (uint8_t)(ms / 1000);
+    s->utc.millisecond = (uint16_t)(ms % 1000);
+    s->valid |= HIPNUC_VALID_UTC_TIME_OF_DAY;
+}
+
+void hipnuc_sample_from_gga(const nmea_gga_t *g, hipnuc_sample_t *s)
+{
+    hipnuc_sample_clear(s);
+    s->source = HIPNUC_SOURCE_NMEA_GGA;
+    if (g->has_quality) { s->position_quality = g->quality; s->valid |= HIPNUC_VALID_POSITION_QUALITY; }
+    if (g->has_satellites) { s->position_satellites = g->satellites; s->valid |= HIPNUC_VALID_POSITION_SATELLITES; }
+    if (g->has_hdop) { s->hdop = g->hdop; s->valid |= HIPNUC_VALID_HDOP; }
+    if (g->has_position) {
+        s->gnss_longitude = g->lon;
+        s->gnss_latitude = g->lat;
+        s->valid |= HIPNUC_VALID_GNSS_POSITION;
+    }
+    if (g->has_altitude) { s->gnss_altitude_msl = g->altitude_msl; s->valid |= HIPNUC_VALID_GNSS_ALTITUDE; }
+    if (g->has_undulation) { s->undulation = g->undulation; s->valid |= HIPNUC_VALID_UNDULATION; }
+    if (g->has_diff_age) { s->diff_age = g->diff_age; s->valid |= HIPNUC_VALID_DIFF_AGE; }
+    if (g->has_time) {
+        /* Time of day only: the date is unknown, so UTC stays invalid. */
+        set_time_of_day(s, g->hour, g->minute, g->second);
+    }
+}
+
+void hipnuc_sample_from_rmc(const nmea_rmc_t *r, hipnuc_sample_t *s)
+{
+    hipnuc_sample_clear(s);
+    s->source = HIPNUC_SOURCE_NMEA_RMC;
+    if (r->has_status) { s->nmea_status = r->status; s->valid |= HIPNUC_VALID_NMEA_STATUS; }
+    if (r->has_mode) { s->nmea_mode = r->mode; s->valid |= HIPNUC_VALID_NMEA_MODE; }
+    if (r->has_position) {
+        s->gnss_longitude = r->lon;
+        s->gnss_latitude = r->lat;
+        s->valid |= HIPNUC_VALID_GNSS_POSITION;
+    }
+    if (r->has_sog) {
+        s->sog = r->sog * HIPNUC_KNOT2MPS;
+        s->valid |= HIPNUC_VALID_SOG;
+    }
+    if (r->has_cog) {
+        s->cog = r->cog * HIPNUC_DEG2RAD;
+        s->valid |= HIPNUC_VALID_COG;
+    }
+    if (r->has_time) set_time_of_day(s, r->hour, r->minute, r->second);
+    if (r->has_date && r->has_time) {
+        s->utc.year = r->year;
+        s->utc.month = r->month;
+        s->utc.day = r->day;
+        s->valid |= HIPNUC_VALID_UTC;
+    }
+}
+
+int hipnuc_sample_from_nmea(const nmea_raw_t *raw, hipnuc_sample_t *s)
+{
+    hipnuc_sample_clear(s);
+    if (raw->msg_type == NMEA_MSG_GGA) { hipnuc_sample_from_gga(&raw->gga, s); return 1; }
+    if (raw->msg_type == NMEA_MSG_RMC) { hipnuc_sample_from_rmc(&raw->rmc, s); return 1; }
     return 0;
 }

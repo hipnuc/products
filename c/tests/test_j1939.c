@@ -93,6 +93,8 @@ static void test_id_helpers(void)
     CHECK(hipnuc_j1939_source_address(0x0CFF3488U) == 0x88);
     /* the priority bits are not part of the PGN */
     CHECK(hipnuc_j1939_pgn(0x18FF3408U) == 0xFF34U);
+    CHECK(hipnuc_j1939_pgn(0x0DFF3408U) == 0x1FF34U); /* another data page */
+    CHECK(hipnuc_j1939_pgn(0x0CEF5508U) == 0xEF00U);  /* PDU1: PS is destination */
 }
 
 static void test_acc(void)
@@ -157,7 +159,7 @@ static void test_roll_pitch(void)
     put_i32(f.data, 0, 45000);   /* 45.000 deg  -> 0.78539816 rad */
     put_i32(f.data, 4, -30000);  /* -30.000 deg -> -0.52359878 rad */
     CHECK(hipnuc_j1939_parse(&f, &s, NULL) == HIPNUC_J1939_MSG_ROLL_PITCH);
-    CHECK(s.valid & HIPNUC_VALID_EULER);
+    CHECK(s.valid == (HIPNUC_VALID_NODE_ID | HIPNUC_VALID_ROLL_PITCH));
     CHECK(!(s.valid & HIPNUC_VALID_HEADING));
     CHECK(near(s.roll, 0.78539816, ATOL));
     CHECK(near(s.pitch, -0.52359878, ATOL));
@@ -175,7 +177,8 @@ static void test_yaw(void)
     put_i32(f.data, 4, -90000);  /* yaw -90.000 deg        -> -1.57079633 rad */
     CHECK(hipnuc_j1939_parse(&f, &s, NULL) == HIPNUC_J1939_MSG_YAW);
     CHECK(s.valid & HIPNUC_VALID_HEADING);
-    CHECK(!(s.valid & HIPNUC_VALID_EULER));
+    CHECK(!(s.valid & HIPNUC_VALID_ROLL_PITCH));
+    CHECK(s.valid & HIPNUC_VALID_YAW);
     CHECK(near(s.heading, 4.71238898, ATOL));
     CHECK(near(s.yaw, -1.57079633, ATOL));
 
@@ -184,6 +187,7 @@ static void test_yaw(void)
     CHECK(hipnuc_j1939_parse(&f, &s, NULL) == HIPNUC_J1939_MSG_YAW);
     CHECK(near(s.heading, 4.71238898, ATOL));
     CHECK(s.yaw == 0.0f);
+    CHECK(!(s.valid & HIPNUC_VALID_YAW));
     f.len = 3;
     CHECK(hipnuc_j1939_parse(&f, &s, NULL) == -1);
 }
@@ -282,6 +286,7 @@ static void test_position(void)
     put_i32(f.data, 4, -1213000000);  /* lon -121.3000000 deg */
     CHECK(hipnuc_j1939_parse(&f, &s, NULL) == HIPNUC_J1939_MSG_POSITION);
     CHECK(s.valid & HIPNUC_VALID_POSITION);
+    CHECK(!(s.valid & HIPNUC_VALID_ALTITUDE));
     CHECK(near(s.latitude, 31.6, 1e-9));
     CHECK(near(s.longitude, -121.3, 1e-9));
     CHECK(s.altitude_msl == 0.0);
@@ -299,6 +304,7 @@ static void test_altitude(void)
     CHECK(s.valid & HIPNUC_VALID_UNDULATION);
     CHECK(s.valid & HIPNUC_VALID_DIFF_AGE);
     CHECK(!(s.valid & HIPNUC_VALID_POSITION));
+    CHECK(s.valid & HIPNUC_VALID_ALTITUDE);
     CHECK(near(s.altitude_msl, 1234.56, 1e-9));
     CHECK(near(s.undulation, -3.5, FTOL));
     CHECK(near(s.diff_age, 1.5, FTOL));
@@ -315,7 +321,7 @@ static void test_gnss_status(void)
     f.data[3] = 26;              /* nv heading */
     f.data[4] = HIPNUC_INS_NAVIGATING;
     CHECK(hipnuc_j1939_parse(&f, &s, NULL) == HIPNUC_J1939_MSG_GNSS_STATUS);
-    CHECK(s.valid & HIPNUC_VALID_GNSS_QUALITY);
+    CHECK(s.valid & (HIPNUC_VALID_POSITION_QUALITY | HIPNUC_VALID_HEADING_QUALITY | HIPNUC_VALID_POSITION_SATELLITES | HIPNUC_VALID_HEADING_SATELLITES));
     CHECK(s.valid & HIPNUC_VALID_INS_STATUS);
     CHECK(s.position_quality == 4);
     CHECK(s.heading_quality == 5);
@@ -339,7 +345,7 @@ static void test_velocity(void)
     put_i16(f.data, 6, 292);     /* ground speed 2.92 m/s, ignored */
     CHECK(hipnuc_j1939_parse(&f, &s, NULL) == HIPNUC_J1939_MSG_VELOCITY);
     CHECK(s.valid & HIPNUC_VALID_VELOCITY_ENU);
-    CHECK(!(s.valid & HIPNUC_VALID_SOG_COG));
+    CHECK(!(s.valid & (HIPNUC_VALID_SOG | HIPNUC_VALID_COG)));
     CHECK(near(s.vel_enu[0], 1.5, FTOL));
     CHECK(near(s.vel_enu[1], -2.5, FTOL));
     CHECK(near(s.vel_enu[2], 0.1, FTOL));
@@ -396,6 +402,9 @@ static void test_source_addresses(void)
     CHECK(a.node_id != b.node_id);
     CHECK(near(a.acc[2], 9.8, FTOL));
     CHECK(near(b.acc[2], -9.8, FTOL));
+    f.id |= UINT32_C(1) << 24; /* same low PGN bytes on a foreign data page */
+    CHECK(hipnuc_j1939_parse(&f, &b, NULL) == HIPNUC_J1939_MSG_NONE);
+    CHECK(b.valid == 0);
 }
 
 static void test_config_frames(void)
@@ -527,7 +536,7 @@ static void test_canfd83_default(void)
     CHECK(near(s.gyr[1], -0.02, FTOL));
     CHECK(near(s.gyr[2], 0.03, FTOL));
     CHECK(!(s.valid & HIPNUC_VALID_MAG));
-    CHECK(s.valid & HIPNUC_VALID_EULER);
+    CHECK(s.valid & (HIPNUC_VALID_ROLL_PITCH | HIPNUC_VALID_YAW));
     CHECK(near(s.roll, 0.17453293, ATOL));
     CHECK(near(s.pitch, -0.34906585, ATOL));
     CHECK(near(s.yaw, 6.10865238, ATOL));
@@ -562,7 +571,7 @@ static void test_canfd83_minimal(void)
     put_f32(f.data, 16, -3.0f);
     CHECK(hipnuc_j1939_parse(&f, &s, &seq) == HIPNUC_J1939_MSG_CANFD83);
     CHECK(seq == 7);
-    CHECK((s.valid & (HIPNUC_VALID_ACC | HIPNUC_VALID_GYR | HIPNUC_VALID_EULER | HIPNUC_VALID_TEMPERATURE)) == HIPNUC_VALID_ACC);
+    CHECK((s.valid & (HIPNUC_VALID_ACC | HIPNUC_VALID_GYR | (HIPNUC_VALID_ROLL_PITCH | HIPNUC_VALID_YAW) | HIPNUC_VALID_TEMPERATURE)) == HIPNUC_VALID_ACC);
     CHECK(near(s.acc[0], 1.0, FTOL));
     CHECK(near(s.acc[1], 2.0, FTOL));
     CHECK(near(s.acc[2], -3.0, FTOL));
@@ -594,7 +603,7 @@ static void test_canfd83_combinations(void)
     CHECK(hipnuc_j1939_parse(&f, &s, NULL) == HIPNUC_J1939_MSG_CANFD83);
     CHECK(s.valid & HIPNUC_VALID_ACC);
     CHECK(s.valid & HIPNUC_VALID_GYR);
-    CHECK(s.valid & HIPNUC_VALID_EULER);
+    CHECK(s.valid & (HIPNUC_VALID_ROLL_PITCH | HIPNUC_VALID_YAW));
     CHECK(s.valid & HIPNUC_VALID_QUAT);
     CHECK(!(s.valid & HIPNUC_VALID_MAG));
     CHECK(!(s.valid & HIPNUC_VALID_DEVICE_TIME));
@@ -692,126 +701,6 @@ static void test_canfd83_utc(void)
     CHECK(hipnuc_j1939_parse(&f, &s, NULL) == -1);
 }
 
-static void test_merge(void)
-{
-    hipnuc_can_frame_t f;
-    hipnuc_sample_t merged, part;
-
-    hipnuc_sample_clear(&merged);
-    CHECK(merged.source == HIPNUC_SOURCE_NONE);
-
-    make_frame(&f, HIPNUC_J1939_PGN_ACC, 0x08, 8);
-    put_i16(f.data, 4, 2048);                        /* acc z 9.8 */
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-    CHECK(merged.source == HIPNUC_SOURCE_J1939);
-    CHECK(merged.node_id == 0x08);
-
-    make_frame(&f, HIPNUC_J1939_PGN_GYR, 0x08, 8);
-    put_i16(f.data, 0, 16384);                       /* gyr x 1000 deg/s */
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-
-    /* YAW first, then ROLL_PITCH: the yaw must survive the roll/pitch merge */
-    make_frame(&f, HIPNUC_J1939_PGN_YAW, 0x08, 8);
-    put_i32(f.data, 0, 90000);                       /* heading 90 deg */
-    put_i32(f.data, 4, -90000);                      /* yaw -90 deg */
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-
-    make_frame(&f, HIPNUC_J1939_PGN_ROLL_PITCH, 0x08, 8);
-    put_i32(f.data, 0, 45000);                       /* roll 45 deg */
-    put_i32(f.data, 4, -30000);                      /* pitch -30 deg */
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-
-    CHECK(merged.valid == (HIPNUC_VALID_NODE_ID | HIPNUC_VALID_ACC | HIPNUC_VALID_GYR |
-                           HIPNUC_VALID_HEADING | HIPNUC_VALID_EULER));
-    CHECK(near(merged.acc[2], 9.8, FTOL));
-    CHECK(near(merged.acc[0], 0.0, FTOL));
-    CHECK(near(merged.gyr[0], RAD(1000.0), 1e-4));
-    CHECK(near(merged.roll, RAD(45.0), ATOL));
-    CHECK(near(merged.pitch, RAD(-30.0), ATOL));
-    CHECK(near(merged.heading, RAD(90.0), ATOL));
-    CHECK(near(merged.yaw, RAD(-90.0), ATOL));
-
-    /* ROLL_PITCH before YAW also ends with the yaw from the YAW frame */
-    hipnuc_sample_clear(&merged);
-    make_frame(&f, HIPNUC_J1939_PGN_ROLL_PITCH, 0x08, 8);
-    put_i32(f.data, 0, 45000);
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-    CHECK(merged.yaw == 0.0f);
-    make_frame(&f, HIPNUC_J1939_PGN_YAW, 0x08, 8);
-    put_i32(f.data, 0, 90000);
-    put_i32(f.data, 4, -90000);
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-    CHECK(near(merged.roll, RAD(45.0), ATOL));
-    CHECK(near(merged.yaw, RAD(-90.0), ATOL));
-
-    /* POSITION + ALTITUDE in either order give a full position */
-    hipnuc_sample_clear(&merged);
-    make_frame(&f, HIPNUC_J1939_PGN_ALTITUDE, 0x08, 8);
-    put_i32(f.data, 0, 123456);                      /* 1234.56 m */
-    put_i16(f.data, 4, -350);
-    put_i16(f.data, 6, 150);
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-    make_frame(&f, HIPNUC_J1939_PGN_POSITION, 0x08, 8);
-    put_i32(f.data, 0, 316000000);
-    put_i32(f.data, 4, -1213000000);
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-    CHECK(merged.valid & HIPNUC_VALID_POSITION);
-    CHECK(merged.valid & HIPNUC_VALID_UNDULATION);
-    CHECK(merged.valid & HIPNUC_VALID_DIFF_AGE);
-    CHECK(near(merged.latitude, 31.6, 1e-9));
-    CHECK(near(merged.longitude, -121.3, 1e-9));
-    CHECK(near(merged.altitude_msl, 1234.56, 1e-9));
-    CHECK(near(merged.undulation, -3.5, FTOL));
-    CHECK(near(merged.diff_age, 1.5, FTOL));
-
-    /* status, ins status, temperature and UTC from other frames */
-    make_frame(&f, HIPNUC_J1939_PGN_GNSS_STATUS, 0x08, 8);
-    f.data[0] = 4;
-    f.data[4] = HIPNUC_INS_NAVIGATING;
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-    make_frame(&f, HIPNUC_J1939_PGN_TEMP, 0x08, 8);
-    put_i16(f.data, 0, 2534);
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-    make_frame(&f, HIPNUC_J1939_PGN_TIME, 0x08, 8);
-    f.data[0] = 26;
-    f.data[1] = 9;
-    f.data[2] = 7;
-    put_u16(f.data, 6, 5);
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-    CHECK(merged.valid & HIPNUC_VALID_GNSS_QUALITY);
-    CHECK(merged.valid & HIPNUC_VALID_INS_STATUS);
-    CHECK(merged.valid & HIPNUC_VALID_TEMPERATURE);
-    CHECK(merged.valid & HIPNUC_VALID_UTC);
-    CHECK(merged.position_quality == 4);
-    CHECK(merged.ins_status == HIPNUC_INS_NAVIGATING);
-    CHECK(near(merged.temperature, 25.34, FTOL));
-    CHECK(merged.utc.year == 2026 && merged.utc.millisecond == 5);
-
-    /* a CANFD83 part contributes its status flags */
-    make_frame(&f, HIPNUC_J1939_PGN_CANFD83, 0x08, 20);
-    put_u32(f.data, 0, CANFD83_MAP_ACC_B);
-    put_u16(f.data, 4, HIPNUC_STATUS_WB_CONV);
-    put_f32(f.data, 16, -9.8f);
-    CHECK(hipnuc_j1939_parse(&f, &part, NULL) > 0);
-    hipnuc_j1939_merge(&merged, &part);
-    CHECK(merged.valid & HIPNUC_VALID_STATUS);
-    CHECK(merged.main_status == HIPNUC_STATUS_WB_CONV);
-    CHECK(merged.gyro_bias_converged == 0);
-    CHECK(near(merged.acc[2], -9.8, FTOL));
-    CHECK(merged.source == HIPNUC_SOURCE_J1939);   /* first source wins */
-}
-
 int main(void)
 {
     test_id_helpers();
@@ -835,7 +724,6 @@ int main(void)
     test_canfd83_minimal();
     test_canfd83_combinations();
     test_canfd83_utc();
-    test_merge();
 
     printf("test_j1939: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;

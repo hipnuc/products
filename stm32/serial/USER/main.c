@@ -1,89 +1,79 @@
-/*
- * HiPNUC serial example for STM32F103 (Keil MDK, StdPeriph).
- *
- * Wiring:  IMU TX  -> PA3 (USART2 RX)      IMU RX <- PA2 (USART2 TX)
- *          IMU GND -> GND                   console: PA9 (USART1 TX), 115200 8N1
- *
- * Change the two settings below, build, download, open a terminal on
- * USART1. Put your own code where "your application" is marked.
- */
-
+/* STM32F103 / StdPeriph. Device TX -> PA3, RX <- PA2, GND -> GND.
+ * Console: USART1 PA9, 115200 8N1. Edit settings and the application block. */
 #include <stdio.h>
-
 #include "hipnuc_board.h"
-#include "stm32f10x.h"
-#include "sys.h"
 
-/* ---- settings ---------------------------------------------------------- */
-#define IMU_BAUDRATE      115200U   /* device serial speed (factory default 115200) */
-#define PRINT_PERIOD_MS   200U      /* how often to print; 0 = never */
+#define IMU_BAUDRATE       115200U
+#define PRINT_PERIOD_MS   200U       /* sample display; 0 disables it */
+#define REPORT_PERIOD_MS  2000U      /* receive health, including no data */
 
-/* ---- console on USART1 (PA9/PA10), 115200 ------------------------------- */
-static void console_init(void)
+/* Display only fields carried by this sample, without collecting old values. */
+static void print_sample(const hipnuc_sample_t *sample)
 {
-    GPIO_InitTypeDef gpio;
-    USART_InitTypeDef usart;
-
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1 | RCC_APB2Periph_GPIOA, ENABLE);
-    gpio.GPIO_Pin = GPIO_Pin_9;
-    gpio.GPIO_Speed = GPIO_Speed_50MHz;
-    gpio.GPIO_Mode = GPIO_Mode_AF_PP;
-    GPIO_Init(GPIOA, &gpio);
-    gpio.GPIO_Pin = GPIO_Pin_10;
-    gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIOA, &gpio);
-
-    usart.USART_BaudRate = 115200;
-    usart.USART_WordLength = USART_WordLength_8b;
-    usart.USART_StopBits = USART_StopBits_1;
-    usart.USART_Parity = USART_Parity_No;
-    usart.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-    usart.USART_Mode = USART_Mode_Tx;
-    USART_Init(USART1, &usart);
-    USART_Cmd(USART1, ENABLE);
+    if (sample->valid & HIPNUC_VALID_ROLL_PITCH) {
+        printf("roll %.1f pitch %.1f deg", sample->roll * 57.29578f,
+               sample->pitch * 57.29578f);
+        if (sample->valid & HIPNUC_VALID_YAW)
+            printf(" yaw %.1f deg", sample->yaw * 57.29578f);
+    } else if (sample->valid & HIPNUC_VALID_ACC) {
+        printf("acc %.2f %.2f %.2f m/s2", sample->acc[0], sample->acc[1], sample->acc[2]);
+    } else if (sample->valid & HIPNUC_VALID_GYR) {
+        printf("gyr %.2f %.2f %.2f rad/s", sample->gyr[0], sample->gyr[1], sample->gyr[2]);
+    } else {
+        printf("sample source %u", (unsigned)sample->source);
+    }
+    printf("\r\n");
 }
 
 int main(void)
 {
     hipnuc_sample_t sample;
-    uint32_t last_print = 0;
-    uint32_t last_frames = 0;
+    hipnuc_board_stats_t previous = {0};
+    uint32_t last_print = 0, last_report = 0;
+    int was_receiving = -1;
 
-    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
-    console_init();
     hipnuc_board_init(IMU_BAUDRATE);
-    printf("HiPNUC serial example, waiting for data at %u baud\r\n", (unsigned)IMU_BAUDRATE);
-
+    printf("HiPNUC serial: %u baud, waiting for data\r\n", (unsigned)IMU_BAUDRATE);
     while (1) {
+        uint32_t now;
         if (hipnuc_board_poll(&sample)) {
-            /* ---- your application: a new sample is available ------------ */
-            /* sample.roll / pitch / yaw are in rad, sample.acc in m/s^2,
-             * sample.gyr in rad/s. Check the matching HIPNUC_VALID_* bit
-             * before using a field (see hipnuc_sample.h). */
-            /* ------------------------------------------------------------- */
-
-            if (PRINT_PERIOD_MS && hipnuc_board_millis() - last_print >= PRINT_PERIOD_MS) {
-                const hipnuc_board_stats_t *st = hipnuc_board_stats();
-                uint32_t now = hipnuc_board_millis();
-                uint32_t rate = (st->frames - last_frames) * 1000U / (now - last_print);
+            /* ---- your application: this is one NEW sample ---------------
+             * Check HIPNUC_VALID_* before reading a field. For example:
+             * if (sample.valid & HIPNUC_VALID_ACC) use sample.acc[0] (m/s2).
+             * Euler angles are rad; angular velocity is rad/s.
+             * ------------------------------------------------------------- */
+            now = hipnuc_board_millis();
+            if (PRINT_PERIOD_MS && now - last_print >= PRINT_PERIOD_MS) {
                 last_print = now;
-                last_frames = st->frames;
-                if (sample.valid & HIPNUC_VALID_EULER) {
-                    printf("roll %7.2f  pitch %7.2f  yaw %7.2f deg",
-                           sample.roll * 57.29578f, sample.pitch * 57.29578f, sample.yaw * 57.29578f);
-                }
-                if (sample.valid & HIPNUC_VALID_ACC) {
-                    printf("  acc %6.2f %6.2f %6.2f m/s2", sample.acc[0], sample.acc[1], sample.acc[2]);
-                }
-                printf("  %lu Hz%s%s%s\r\n", (unsigned long)rate,
-                       sample.attitude_converged ? "" : "  [attitude not converged, keep still]",
-                       sample.magnetic_disturbance ? "  [magnetic disturbance]" : "",
-                       st->overruns ? "  [RX overrun]" : "");
+                print_sample(&sample);
             }
-        } else if (hipnuc_board_millis() - last_print >= 2000U && last_print != 0 &&
-                   hipnuc_board_stats()->bytes == 0) {
-            last_print = hipnuc_board_millis();
-            printf("no data: check wiring (IMU TX -> PA3), baudrate and that output is enabled\r\n");
+        }
+
+        now = hipnuc_board_millis();
+        if (now - last_report >= REPORT_PERIOD_MS) {
+            hipnuc_board_stats_t current = *hipnuc_board_stats();
+            uint32_t bytes = current.bytes - previous.bytes;
+            uint32_t frames = current.frames - previous.frames;
+            if (!bytes) {
+                printf("no bytes: check TX->PA3, GND, baudrate and device output\r\n");
+            } else if (!frames) {
+                printf("bytes received, no valid frames: check baudrate and output format\r\n");
+            } else {
+                printf("%s: %lu samples/s\r\n", was_receiving == 0 ? "recovered" : "receiving",
+                       (unsigned long)(frames * 1000U / (now - last_report)));
+            }
+            if (current.overruns != previous.overruns)
+                printf("RX overrun: poll faster or reduce printing/output rate\r\n");
+            if (current.hardware_errors != previous.hardware_errors)
+                printf("UART errors: %lu; check baudrate, wiring and interrupt load\r\n",
+                       (unsigned long)(current.hardware_errors - previous.hardware_errors));
+            if (current.crc_errors != previous.crc_errors || current.invalid_frames != previous.invalid_frames)
+                printf("bad frames: CRC %lu, format %lu in this window\r\n",
+                       (unsigned long)(current.crc_errors - previous.crc_errors),
+                       (unsigned long)(current.invalid_frames - previous.invalid_frames));
+            was_receiving = frames != 0;
+            previous = current;
+            last_report = now;
         }
     }
 }
