@@ -2,44 +2,114 @@
 
 # C 与 C++
 
-解码 HiPNUC 串口二进制、NMEA、J1939/CANFD83 数据，也可以直接在 Windows/Linux
-应用中读取设备。C++ 使用同一套 C API。
+小型 C99 解码库，支持 HiPNUC 二进制、NMEA、J1939/CANFD83 数据。
+核心不依赖堆内存、操作系统或全局可变状态。Windows/Linux 应用还可使用
+同步串口接口；C++ 直接调用同一套 C API。
 
-## 读取设备
+## MCU 或已有接收代码
 
-修改 [read.c](examples/read.c) 或 [read.cpp](examples/read.cpp) 顶部的
-`PORT`、`BAUDRATE`，在本目录构建：
+从 [hipnuc/](hipnuc) 复制所需文件。每行相互独立，已列全依赖；
+将对应 `.c` 文件及头文件目录加入工程。
 
-```sh
-cmake -S examples -B build/examples
-cmake --build build/examples --config Release
-```
+| 输入或输出 | 文件 |
+| --- | --- |
+| 串口二进制 HI91/HI81/HI83 | `hipnuc_dec.c/.h`、`hipnuc_sample.c/.h` |
+| NMEA GGA/RMC | `nmea_dec.c/.h`、`hipnuc_sample.c/.h` |
+| CAN J1939/CANFD83 | `hipnuc_j1939.c/.h`、`hipnuc_can_frame.h`、`hipnuc_sample.c/.h` |
+| 可选 JSON 格式化 | `hipnuc_json.c/.h`、`hipnuc_sample.c/.h` |
 
-Linux 运行 `./build/examples/read_c` 或 `./build/examples/read_cpp`；Windows 使用 Visual Studio
-构建时运行 `.\build\examples\Release\read_c.exe` 或 `.\build\examples\Release\read_cpp.exe`。
-Ctrl-C 停止并关闭连接。Ubuntu 需要串口权限：执行
-`sudo usermod -aG dialout "$USER"`，然后注销并重新登录。
-
-## 集成到自己的工程
-
-- **MCU 或已有收发代码：** 按[核心库说明](hipnuc/README_zh.md)复制所需文件。
-  C99 核心不依赖堆内存或操作系统。
-- **CMake：** 使用 `add_subdirectory(path/to/c/hipnuc hipnuc)`；二进制/NMEA
-  链接 `hipnuc_core`，CAN 链接 `hipnuc_j1939`。JSON 格式化按需链接。
-- **桌面串口：** 改为引入 `path/to/c/serial` 并链接 `hipnuc_serial`。
-  每个连接使用一个零初始化的 `hipnuc_serial_t`；返回值和资源归属见
-  [公共头文件](serial/hipnuc_serial.h)。
+把串口收到的字节送入解码器：
 
 ```c
-hipnuc_sample_t sample;
-int result = hipnuc_serial_read_sample(&device, &sample, 200);
-if (result == 1 && (sample.valid & HIPNUC_VALID_ACC)) {
-    /* sample.acc[] is specific force in m/s^2, with gravity not removed. */
+#include "hipnuc_dec.h"
+
+static hipnuc_raw_t decoder; /* zero-initialized; one per input stream */
+
+void on_byte(uint8_t byte)
+{
+    hipnuc_sample_t sample;
+    if (hipnuc_input(&decoder, byte) > 0) {
+        hipnuc_sample_from_raw(&decoder, &sample);
+        if (sample.valid & HIPNUC_VALID_ACC) {
+            /* Use sample.acc[0..2], in m/s^2, in your application. */
+        }
+    }
 }
 ```
 
-每个样本对应一份新收到的报文。仅在有效位存在时读取字段；缺失不代表零。
-保留设备坐标配置，INS 与原始 GNSS 数据分别存放。
+`hipnuc_input()` 返回 `1` 表示收到完整支持帧，`0` 表示继续等待，`-1` 表示无效帧。
+错误后继续送入后续字节即可。中断中只接收并缓存字节，主循环中调用解码器；
+[STM32 例程](../stm32/README_zh.md) 提供接线说明及完整 Keil 工程。
 
-设备发现、配置和串口录制使用 [Python SDK](../python/README_zh.md)；
-固件升级及 SocketCAN 使用[专用工具](tools/README_zh.md)。
+NMEA 使用 `nmea_input()` 和 `hipnuc_sample_from_nmea()`。
+CAN 将驱动收到的帧填入 `hipnuc_can_frame_t`，调用 `hipnuc_j1939_parse()`；
+返回正数表示新样本。多设备总线须检查 `node_id`。
+
+## Windows 或 Linux 读取设备
+
+修改所选例程顶部的参数：
+
+| 示例 | 用途 |
+| --- | --- |
+| [read.c](examples/read.c) | C 串口读取 |
+| [read.cpp](examples/read.cpp) | C++ 调用同一套 C 串口 API |
+| [read_can.c](examples/read_can.c) | Linux SocketCAN，支持 Classic CAN 和 CAN FD |
+
+从仓库根目录构建：
+
+```sh
+cmake -S c -B build/c
+cmake --build build/c --config Release
+```
+
+Linux 运行 `./build/c/examples/read_c`、`read_cpp` 或 `read_can`。
+Windows 使用 Visual Studio 时运行 `.\build\c\examples\Release\read_c.exe`
+或 `read_cpp.exe`。检测到 C++ 编译器时才构建 C++ 例程。
+Ctrl-C 停止并关闭连接。这些示例用于集成；逐条打印不适合高速数据录制。
+
+Ubuntu 串口权限通常通过 `sudo usermod -aG dialout "$USER"` 设置，然后注销并重新登录。
+设置正确的端口和波特率；设备输出较慢时增加 `TIMEOUT_MS`。
+SocketCAN 先按设备波特率启动适配器，例如 Classic CAN 500 kbit/s：
+
+```sh
+sudo ip link set can0 type can bitrate 500000
+sudo ip link set can0 up
+```
+
+CAN FD 还需要支持它的适配器及匹配的数据段波特率。
+
+## CMake 集成
+
+```cmake
+add_subdirectory(path/to/c hipnuc)
+target_link_libraries(my_app PRIVATE hipnuc_core)
+```
+
+二进制/NMEA 选 `hipnuc_core`，CAN 选 `hipnuc_j1939`，可选 JSON 格式化选
+`hipnuc_json`；它们共用独立的 `hipnuc_sample` target。作为子项目时只构建
+调用方链接的库，默认不构建例程和测试；C 应用无需 C++ 编译器。
+
+Windows/Linux 串口应用在 `add_subdirectory()` 前将 `HIPNUC_BUILD_SERIAL`
+设为 `ON`，然后链接 `hipnuc_serial`。从清零的 `hipnuc_serial_t` 开始，
+按指定端口和波特率打开、读取，最后关闭。`hipnuc_serial_read_sample()` 返回
+`1` 表示新样本、`0` 表示超时、负数表示失败。资源归属及超时约定见
+[hipnuc_serial.h](serial/hipnuc_serial.h)。已有工程也可直接包含 `c/hipnuc` 或 `c/serial`。
+
+## 数据约定
+
+只有对应 `HIPNUC_VALID_*` 位存在时才读取字段。这些位表示**有此字段**，
+不代表定位有效或姿态收敛。每个样本只代表当前报文，CAN 不混入旧 PGN 数据。
+Roll/pitch、yaw、heading 相互独立；INS 与原始 GNSS 位置分别保留。
+
+样本使用 SI 单位：加速度 m/s²（未去除重力）、角速度 rad/s、角度 rad、磁场 T、
+气压 Pa；经纬度用度，温度用 °C。保留设备坐标配置，不隐式转换。
+单位、状态及质量字段见 [hipnuc_sample.h](hipnuc/hipnuc_sample.h)。
+收敛判断使用转换后的字段：设备 `ATT_CONV`/`WB_CONV` 位为 1 表示警告。
+
+支持当前产品平台固件 1.6.9 及以后版本。核心要求 8 位字节和 IEEE 754 浮点数；
+位置字段要求 8 字节 `double`。不支持的二进制布局和 HI83 bitmap 字段会被拒绝。
+仅可选 JSON 格式化模块使用 `stdio`。
+
+桌面配置和固件升级使用[官方下载](https://download.hipnuc.com)中的 CHCenter。
+自动发现、命令、录制、CAN 操作及无界面固件升级使用
+[Python SDK](../python/README_zh.md)。

@@ -50,18 +50,6 @@ uint64_t hipnuc_serial_monotonic_ms(void)
 #endif
 }
 
-void hipnuc_serial_sleep_ms(unsigned milliseconds)
-{
-#ifdef _WIN32
-    Sleep(milliseconds);
-#else
-    struct timespec duration;
-    duration.tv_sec = milliseconds / 1000;
-    duration.tv_nsec = (long)(milliseconds % 1000) * 1000000L;
-    while (nanosleep(&duration, &duration) < 0 && errno == EINTR) {}
-#endif
-}
-
 void hipnuc_serial_close(hipnuc_serial_t *device)
 {
     if (!device || !device->is_open) return;
@@ -229,63 +217,4 @@ int hipnuc_serial_read_bytes(hipnuc_serial_t *device, uint8_t *data, size_t size
 #endif
     device->bytes_received += (unsigned)count;
     return count;
-}
-
-int hipnuc_serial_write_bytes(hipnuc_serial_t *device, const uint8_t *data,
-                              size_t size, int timeout_ms)
-{
-    size_t written = 0;
-    uint64_t deadline;
-    if (!device) return -1;
-    if (!device->is_open || !data || size > INT_MAX || timeout_ms < 0) {
-        snprintf(device->error, sizeof(device->error), "Invalid serial write arguments");
-        return -1;
-    }
-    deadline = hipnuc_serial_monotonic_ms() + (unsigned)timeout_ms;
-    while (written < size) {
-        uint64_t now = hipnuc_serial_monotonic_ms();
-        int remaining = now < deadline ? (int)(deadline - now) : 0;
-#ifdef _WIN32
-        DWORD count = 0;
-        COMMTIMEOUTS timeouts = {0};
-        timeouts.ReadIntervalTimeout = MAXDWORD;
-        timeouts.WriteTotalTimeoutConstant = remaining > 0 ? (DWORD)remaining : 1;
-        if (!SetCommTimeouts((HANDLE)device->handle, &timeouts) ||
-            !WriteFile((HANDLE)device->handle, data + written,
-                       (DWORD)(size - written), &count, NULL))
-            return io_error(device, "Serial write failed");
-#else
-        ssize_t count;
-        int ready = wait_port(device, POLLOUT, remaining);
-        if (ready < 0) return -1;
-        if (ready == 0) break;
-        count = write((int)device->handle, data + written, size - written);
-        if (count < 0 && (errno == EAGAIN || errno == EINTR)) break;
-        if (count < 0) return io_error(device, "Serial write failed");
-#endif
-        written += (size_t)count;
-        if (count == 0 || hipnuc_serial_monotonic_ms() >= deadline) break;
-    }
-    if (written != size) {
-        snprintf(device->error, sizeof(device->error), "Serial write timed out (%lu/%lu bytes)",
-                 (unsigned long)written, (unsigned long)size);
-        return -1;
-    }
-    return (int)written;
-}
-
-int hipnuc_serial_flush_input(hipnuc_serial_t *device)
-{
-    if (!device || !device->is_open) return -1;
-#ifdef _WIN32
-    if (!PurgeComm((HANDLE)device->handle, PURGE_RXCLEAR))
-#else
-    if (ioctl((int)device->handle, TCFLSH, TCIFLUSH) < 0)
-#endif
-        return io_error(device, "Cannot flush serial input");
-    device->received_size = device->received_offset = 0;
-    device->binary.nbyte = 0;
-    device->binary.buf[1] = 0;
-    device->nmea.nbyte = 0;
-    return 0;
 }

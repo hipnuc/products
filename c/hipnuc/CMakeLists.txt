@@ -1,5 +1,5 @@
 # HiPNUC C core. Consume with add_subdirectory(<path>/c/hipnuc hipnuc) and
-# link the target you need; or simply copy the files listed in README.md.
+# link the target you need; or simply copy the files listed in ../README.md.
 # Options are set per target, never globally, so a parent project's flags are
 # left alone. No install() rules: this is a source library.
 
@@ -16,21 +16,21 @@ function(hipnuc_configure target)
     endif()
 endfunction()
 
-# Serial decoding: binary frames, NMEA, SI samples. No stdio, no libm.
-add_library(hipnuc_core STATIC hipnuc_dec.c nmea_dec.c hipnuc_sample.c)
+# Common SI sample helpers. CAN and JSON need no serial decoder.
+add_library(hipnuc_sample STATIC hipnuc_sample.c)
+hipnuc_configure(hipnuc_sample)
+
+# Serial decoding: binary frames and NMEA. No stdio, no libm.
+add_library(hipnuc_core STATIC hipnuc_dec.c nmea_dec.c)
 hipnuc_configure(hipnuc_core)
+target_link_libraries(hipnuc_core PUBLIC hipnuc_sample)
 
 # JSON formatting of samples (stdio).
 add_library(hipnuc_json STATIC hipnuc_json.c)
 hipnuc_configure(hipnuc_json)
-target_link_libraries(hipnuc_json PUBLIC hipnuc_core)
+target_link_libraries(hipnuc_json PUBLIC hipnuc_sample)
 
 # CAN: J1939 measurement PGNs and CANFD83.
 add_library(hipnuc_j1939 STATIC hipnuc_j1939.c)
 hipnuc_configure(hipnuc_j1939)
-target_link_libraries(hipnuc_j1939 PUBLIC hipnuc_core)
-
-# Firmware update clients (serial kboot, CAN SDO).
-add_library(hipnuc_update STATIC hipnuc_kboot.c hipnuc_can_update.c)
-hipnuc_configure(hipnuc_update)
-target_link_libraries(hipnuc_update PUBLIC hipnuc_core)
+target_link_libraries(hipnuc_j1939 PUBLIC hipnuc_sample)

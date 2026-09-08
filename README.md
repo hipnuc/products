@@ -11,8 +11,8 @@ HiPNUC IMU/AHRS/MRU and INS devices (firmware 1.6.9 or later).
 
 | Directory | What it is |
 | --- | --- |
-| [python/](python/README.md) | Python SDK and `hipnuc` command line: find the device, read, record, send commands, Modbus RTU |
-| [c/](c/README.md) | C/C++ integration, Windows/Linux serial API, protocol core and specialized tools |
+| [python/](python/README.md) | Python SDK and CLI: serial, Modbus RTU, CAN, recording and firmware update |
+| [c/](c/README.md) | Copyable C protocol library, Windows/Linux serial API and C/C++ examples |
 | [ros/](ros/README.md) | ROS 2 Humble/Jazzy/Lyrical and ROS 1 Noetic drivers |
 | [stm32/](stm32/README.md) | STM32F103 Keil examples for UART and J1939 reception |
 

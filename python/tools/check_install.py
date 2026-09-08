@@ -20,6 +20,7 @@ def main():
             assert 'site-packages' in Path(hipnuc.__file__).parts, hipnuc.__file__
             assert hipnuc.Decoder().feed(b'') == []
             assert hipnuc.ModbusBus
+            assert hipnuc.update_serial and hipnuc.update_can
             assert hipnuc.SerialDevice().port is None
             assert not any(
                 {'tests', 'examples'} & set(path.parts) for path in files('hipnuc-sdk')
@@ -50,6 +51,11 @@ def main():
             ["modbus", "baudrate", "--help"],
             ["modbus", "set-id", "--help"],
             ["modbus", "write-register", "--help"],
+            ["can", "read", "--help"],
+            ["can", "reg", "read", "--help"],
+            ["can", "reg", "write", "--help"],
+            ["can", "update", "--help"],
+            ["update", "--help"],
         ):
             subprocess.run(
                 [sys.executable, "-I", "-m", "hipnuc", *args],

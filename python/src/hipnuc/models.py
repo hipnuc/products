@@ -1,4 +1,4 @@
-"""Public data models shared by serial, file, and Modbus clients."""
+"""Public data models shared by serial, CAN, file, and Modbus clients."""
 
 from __future__ import annotations
 
@@ -42,7 +42,8 @@ class Sample:
     quality. Check status fields and ``issues`` before using measurements.
     ``received_time_ns`` is supplied by the transport; a Decoder never invents
     host time. ``raw`` preserves a serial frame/sentence including its checksum,
-    or the measurement register block for Modbus (not an RTU frame).
+    the CAN data payload (identifier and flags are in ``metadata``), or the
+    measurement register block for Modbus (not an RTU frame).
     Measurement properties read ``values`` directly and return ``None`` for
     unavailable fields or non-finite components; no measurements are cached.
     """

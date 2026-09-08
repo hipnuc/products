@@ -10,8 +10,8 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| [python/](python/README_zh.md) | Python SDK 与 `hipnuc` 命令行：自动找设备、读取、录制、发指令、Modbus RTU |
-| [c/](c/README_zh.md) | C/C++ 集成、Windows/Linux 串口 API、协议核心与专用工具 |
+| [python/](python/README_zh.md) | Python SDK 与命令行：串口、Modbus RTU、CAN、录制和固件升级 |
+| [c/](c/README_zh.md) | 可复制的 C 协议库、Windows/Linux 串口 API 和 C/C++ 例程 |
 | [ros/](ros/README_zh.md) | ROS 2 Humble/Jazzy/Lyrical 与 ROS 1 Noetic 驱动 |
 | [stm32/](stm32/README_zh.md) | STM32F103 Keil 工程：UART 和 J1939 接收 |
 

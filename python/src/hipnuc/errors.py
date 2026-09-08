@@ -1,4 +1,4 @@
-"""Exceptions shared by the serial and Modbus APIs."""
+"""Exceptions shared by the device and firmware-update APIs."""
 
 
 class HipnucError(Exception):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
+from dataclasses import asdict
 from functools import partial, wraps
 import json
 import logging
@@ -18,7 +19,7 @@ import click
 from serial.tools import list_ports
 
 from ._connection import discovery_error_summary, is_usb_port
-from .errors import HipnucError, ResponseTimeout
+from .errors import HipnucError, ResponseTimeout, TransportError
 from .models import Sample
 from .modbus import ModbusBus, ModbusDevice
 from .recording import Recorder
@@ -267,6 +268,8 @@ def _human_sample(sample: Sample) -> str:
     parts = [sample.type]
     if "device_id" in sample.metadata:
         parts.append(f"id={sample.metadata['device_id']}")
+    elif "node_id" in sample.values:
+        parts.append(f"id={sample.values['node_id']}")
     flags = sample.values.get("status_flags")
     if flags:
         parts.append("[" + " ".join(flags) + "]")
@@ -320,18 +323,19 @@ def _sample_consumer(
     display_rate: float,
 ) -> Callable[[Sample], None]:
     """Record every sample; independently limit how often it is displayed."""
-    last_display: dict[str, float] = {}
+    last_display: dict[tuple[str, int | None], float] = {}
 
     def consume(sample: Sample) -> None:
         if recording is not None:
             recording.write(sample)
         now = time.monotonic()
-        if quiet or stopped.is_set():
+        if quiet or (stopped.is_set() and not jsonl):
             return
-        if jsonl or now - last_display.get(sample.type, float("-inf")) >= 1 / display_rate:
+        key = (sample.type, sample.metadata.get("device_id", sample.values.get("node_id")))
+        if jsonl or now - last_display.get(key, float("-inf")) >= 1 / display_rate:
             try:
                 click.echo(_json(sample) if jsonl else _human_sample(sample))
-                last_display[sample.type] = now
+                last_display[key] = now
             except KeyboardInterrupt:
                 stopped.set()
 
@@ -841,3 +845,230 @@ def modbus_baudrate(device, new_baud, reboot, save, as_json):
 def modbus_reboot(device, save, as_json):
     """Reboot and verify the addressed device."""
     _show(device.reboot(save=save), as_json)
+
+
+@contextmanager
+def _can_connection(interface: str, *, fd: bool = False) -> Iterator:
+    """Own a SocketCAN bus; never load python-can configuration files."""
+    try:
+        import can
+    except ModuleNotFoundError as exc:
+        if exc.name != "can":
+            raise
+        raise TransportError('CAN support requires: python -m pip install ".[can]"') from exc
+    if not sys.platform.startswith("linux"):
+        raise TransportError("The CAN CLI uses Linux SocketCAN. Use CHCenter for desktop CAN.")
+    hint = (
+        "Check the SocketCAN interface, link state and bitrate "
+        f"with 'ip -details link show {interface}'."
+    )
+    try:
+        bus = can.Bus(interface="socketcan", channel=interface, fd=fd, ignore_config=True)
+    except (can.CanError, OSError) as exc:
+        raise TransportError(f"Cannot open {interface}: {exc}. {hint}") from exc
+    try:
+        with bus:
+            click.echo(f"Connected to SocketCAN {interface}.", err=True)
+            yield bus
+    except can.CanError as exc:
+        raise TransportError(f"{interface}: {exc}. {hint}") from exc
+
+
+def _can_options(func=None, *, require_node=False, update=False):
+    if func is None:
+        return partial(_can_options, require_node=require_node, update=update)
+    func = click.option(
+        "--id",
+        "node_id",
+        type=click.IntRange(1, 127) if update else click.IntRange(0, 255),
+        required=require_node,
+        help="Target node ID; read all sources when omitted.",
+    )(func)
+    return click.option("-i", "--interface", required=True, help="Linux CAN interface, e.g. can0.")(
+        func
+    )
+
+
+@main.group("can", invoke_without_command=True)
+@click.pass_context
+def can_group(ctx):
+    """Linux SocketCAN: read, record, access registers and update firmware."""
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@can_group.command("read")
+@_can_options
+@_timeout_option
+@_record_options
+@click.option("--count", type=click.IntRange(min=1), help="Stop after this many decoded samples.")
+@click.option(
+    "--fd", is_flag=True, help="Also receive CAN FD frames; configure the interface first."
+)
+@_errors
+def can_read(
+    interface, node_id, timeout, record, duration, display_rate, quiet, jsonl, overwrite, count, fd
+):
+    """Read current-frame measurements continuously; Ctrl-C stops."""
+    from .can import decode_message
+
+    samples = frames = invalid = 0
+    with ExitStack() as stack:
+        bus = stack.enter_context(_can_connection(interface, fd=fd))
+        recording = stack.enter_context(Recorder(record, overwrite=overwrite)) if record else None
+        stopped = stack.enter_context(_stop_on_interrupt())
+        consume = _sample_consumer(
+            recording, stopped, jsonl=jsonl, quiet=quiet, display_rate=display_rate
+        )
+        now = time.monotonic()
+        deadline = now + duration if duration is not None else float("inf")
+        idle_deadline = now + timeout
+        try:
+            while not stopped.is_set():
+                now = time.monotonic()
+                if now >= deadline:
+                    break
+                if now >= idle_deadline:
+                    reason = "No CAN frames received" if not frames else "No valid HiPNUC samples"
+                    raise ResponseTimeout(
+                        f"{reason} on {interface} within {timeout:g}s. Check the target ID, "
+                        "device output, bitrate and wiring; use --timeout for slow output."
+                    )
+                message = bus.recv(min(0.1, deadline - now, idle_deadline - now))
+                if message is None:
+                    continue
+                frames += 1
+                if node_id is not None and message.arbitration_id & 0xFF != node_id:
+                    continue
+                try:
+                    sample = decode_message(message)
+                except ValueError:
+                    invalid += 1
+                    continue
+                if sample is None:
+                    continue
+                # A CAN receive call yields one complete frame. Finish writing it
+                # even when SIGINT arrives during reception or decoding.
+                consume(sample)
+                samples += 1
+                idle_deadline = time.monotonic() + timeout
+                if count is not None and samples >= count:
+                    break
+        except KeyboardInterrupt:
+            stopped.set()
+        finally:
+            click.echo(
+                f"Stopped: {samples} samples, {frames} CAN frames, {invalid} invalid frames."
+                + (f" Recorded: {recording.samples_written} samples." if recording else ""),
+                err=True,
+            )
+    if stopped.is_set():
+        raise click.exceptions.Exit(130)
+    if not samples:
+        raise click.ClickException("No HiPNUC CAN samples collected.")
+
+
+@can_group.group("reg", invoke_without_command=True)
+@click.pass_context
+def can_reg_group(ctx):
+    """Raw J1939 registers; use the model's command and programming manual."""
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+def _check_can_register(node_id: int, address: int, value: int = 0) -> None:
+    if node_id > 253 or node_id == 0x55:
+        raise ValueError("Register target ID must be 0–253, excluding host address 0x55.")
+    if not 0 <= address <= 0xFFFF or not 0 <= value <= 0xFFFFFFFF:
+        raise ValueError("Register address must be uint16 and value must be uint32.")
+
+
+@can_reg_group.command("read")
+@click.argument("address", type=_integer)
+@_can_options(require_node=True)
+@_timeout_option
+@click.option("--json", "as_json", is_flag=True)
+@_errors
+def can_reg_read(address, interface, node_id, timeout, as_json):
+    """Read one raw 32-bit register value."""
+    from .can import read_register
+
+    _check_can_register(node_id, address)
+    with _can_connection(interface) as bus:
+        value = read_register(bus, node_id, address, timeout=timeout)
+    _show({"node_id": node_id, "address": address, "value": value}, as_json)
+
+
+@can_reg_group.command("write")
+@click.argument("address", type=_integer)
+@click.argument("value", type=_integer)
+@_can_options(require_node=True)
+@_timeout_option
+@click.option("--json", "as_json", is_flag=True)
+@_errors
+def can_reg_write(address, value, interface, node_id, timeout, as_json):
+    """Write one raw register and check its reply; does not save or reboot."""
+    from .can import write_register
+
+    _check_can_register(node_id, address, value)
+    with _can_connection(interface) as bus:
+        write_register(bus, node_id, address, value, timeout=timeout)
+    _show({"node_id": node_id, "address": address, "value": value, "acknowledged": True}, as_json)
+
+
+def _update_progress() -> Callable[[int, int], None]:
+    last_percent = -1
+
+    def report(written: int, total: int) -> None:
+        nonlocal last_percent
+        percent = written * 100 // total if total else 0
+        if (percent in (0, 100) and percent != last_percent) or percent >= last_percent + 10:
+            click.echo(f"Writing: {percent}%", err=True)
+            last_percent = percent
+
+    return report
+
+
+def _show_update(result, as_json: bool) -> None:
+    if as_json:
+        click.echo(_json(asdict(result)))
+    else:
+        click.echo(
+            f"Transfer acknowledged: {result.bytes_written} bytes. Application start requested."
+        )
+        if not result.start_acknowledged:
+            click.echo("No start acknowledgement; the bootloader may already have reset.", err=True)
+        if not result.application_verified:
+            click.echo("Running application was not verified.", err=True)
+
+
+@main.command("update")
+@click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("-p", "--port", required=True, help="Target serial port; no automatic discovery.")
+@click.option("-b", "--baudrate", type=click.IntRange(min=1), required=True)
+@click.option("--json", "as_json", is_flag=True)
+@_errors
+def serial_update(image, port, baudrate, as_json):
+    """Update one device using its model-specific Intel HEX application image."""
+    from .update import update_serial
+
+    click.echo(f"Updating {port} at {baudrate} baud from {image}.", err=True)
+    _show_update(
+        update_serial(image, port=port, baudrate=baudrate, progress=_update_progress()), as_json
+    )
+
+
+@can_group.command("update")
+@click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@_can_options(require_node=True, update=True)
+@click.option("--bin", "raw_binary", is_flag=True, help="Use a raw binary instead of Intel HEX.")
+@click.option("--json", "as_json", is_flag=True)
+@_errors
+def can_update(image, interface, node_id, raw_binary, as_json):
+    """Update one node using its model-specific application image (CAN SDO)."""
+    from .update import update_can
+
+    with _can_connection(interface) as bus:
+        click.echo(f"Updating node {node_id} from {image}.", err=True)
+        result = update_can(bus, node_id, image, raw_binary=raw_binary, progress=_update_progress())
+    _show_update(result, as_json)

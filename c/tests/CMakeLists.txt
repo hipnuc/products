@@ -18,8 +18,12 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 set(HIPNUC_CORE_DIR "${REPO_ROOT}/c/hipnuc")
 
 # Parent-project consumption: the core is pulled in with add_subdirectory.
-add_subdirectory(${HIPNUC_CORE_DIR} hipnuc)
-add_subdirectory(${REPO_ROOT}/c/serial serial)
+if(NOT TARGET hipnuc_core)
+    add_subdirectory(${HIPNUC_CORE_DIR} hipnuc)
+endif()
+if(NOT TARGET hipnuc_serial)
+    add_subdirectory(${REPO_ROOT}/c/serial serial)
+endif()
 
 function(hipnuc_test name)
     add_executable(${name} ${ARGN})
@@ -31,14 +35,10 @@ function(hipnuc_test name)
 endfunction()
 
 hipnuc_test(test_decoder test_decoder.c)
-target_link_libraries(test_decoder PRIVATE hipnuc_json)
+target_link_libraries(test_decoder PRIVATE hipnuc_core hipnuc_json)
 
 hipnuc_test(test_j1939 test_j1939.c)
 target_link_libraries(test_j1939 PRIVATE hipnuc_j1939)
-
-# Windows treats executables named *update* as installers; keep the name plain.
-hipnuc_test(test_fwload test_update.c)
-target_link_libraries(test_fwload PRIVATE hipnuc_update)
 
 # Copy-file consumption: only the files from the README copy list, compiled as
 # a standalone program with no CMake target and no other include paths.
@@ -47,6 +47,11 @@ file(MAKE_DIRECTORY ${COPY_DIR})
 foreach(f hipnuc_dec.c hipnuc_dec.h nmea_dec.c nmea_dec.h hipnuc_sample.c hipnuc_sample.h)
     configure_file(${HIPNUC_CORE_DIR}/${f} ${COPY_DIR}/${f} COPYONLY)
 endforeach()
+
+add_test(NAME cmake_c_only_consumer COMMAND ${CMAKE_COMMAND}
+    -DSDK=${REPO_ROOT}/c -DWORK=${CMAKE_CURRENT_BINARY_DIR}/cmake_customer
+    "-DGENERATOR=${CMAKE_GENERATOR}" "-DPLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+    "-DCOMPILER=${CMAKE_C_COMPILER}" -P ${CMAKE_CURRENT_SOURCE_DIR}/check_cmake.cmake)
 add_executable(consume_copy_c consume_copy.c
     ${COPY_DIR}/hipnuc_dec.c ${COPY_DIR}/nmea_dec.c ${COPY_DIR}/hipnuc_sample.c)
 target_include_directories(consume_copy_c PRIVATE ${COPY_DIR})
@@ -58,7 +63,7 @@ add_test(NAME consume_copy_c COMMAND consume_copy_c)
 
 # C++ consumption: every public header included from a C++ translation unit.
 add_executable(consume_cpp consume_cpp.cpp)
-target_link_libraries(consume_cpp PRIVATE hipnuc_json hipnuc_j1939 hipnuc_update)
+target_link_libraries(consume_cpp PRIVATE hipnuc_core hipnuc_json hipnuc_j1939)
 set_target_properties(consume_cpp PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(consume_cpp PRIVATE -Wall -Wextra -Werror)
@@ -94,6 +99,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(test_serial_port PRIVATE util)
 endif()
 
-# Exercise the actual updater entry point with deterministic I/O failures.
-hipnuc_test(test_serial_cli test_serial_update_cli.c)
-target_include_directories(test_serial_cli PRIVATE ../hipnuc ../serial ../tools/common)
+# Exercise the actual short examples with silence, attitude-only output,
+# recovery, transport errors and Ctrl-C, without opening a physical port.
+foreach(language c cpp)
+    add_executable(example_${language}_fake ../examples/read.${language} fake_example_serial.c)
+    target_include_directories(example_${language}_fake PRIVATE ../hipnuc ../serial)
+    set_target_properties(example_${language}_fake PROPERTIES C_STANDARD 99 CXX_STANDARD 11)
+    add_test(NAME example_${language}_behavior COMMAND ${CMAKE_COMMAND}
+        -DBINARY=$<TARGET_FILE:example_${language}_fake>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/check_read_example.cmake)
+endforeach()

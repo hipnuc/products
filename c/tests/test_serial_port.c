@@ -74,8 +74,6 @@ int main(void)
         assert(write(master, "abc", 3) == 3);
         assert(hipnuc_serial_read_bytes(&device, bytes, sizeof(bytes), 100) == 3);
         assert(memcmp(bytes, "abc", 3) == 0);
-        assert(hipnuc_serial_write_bytes(&device, (const uint8_t *)"xyz", 3, 100) == 3);
-        assert(read(master, bytes, sizeof(bytes)) == 3 && memcmp(bytes, "xyz", 3) == 0);
         start = hipnuc_serial_monotonic_ms();
         assert(hipnuc_serial_read_sample(&device, &sample, 30) == 0);
         assert(hipnuc_serial_monotonic_ms() - start >= 25);

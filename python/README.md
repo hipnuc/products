@@ -7,6 +7,9 @@ or your Python application. Supports HI91/HI81/HI83, NMEA GGA/RMC and Modbus RTU
 with **Python 3.10–3.14** on Windows, Linux (including Ubuntu and Raspberry Pi OS),
 and macOS.
 
+Optional CAN support uses Linux SocketCAN (J1939/CANFD83). Firmware update is
+available over serial on Windows/Linux and over CAN on Linux.
+
 Supported devices: firmware 1.6.9 or later (HI01–HI06, HI12–HI18, HI32,
 HI70/HI71, CH0X0). Legacy HI2xx/CH1xx products use the archived C examples.
 
@@ -195,6 +198,74 @@ all registers in a measurement block come from the same firmware cycle.
 JSONL records keep `metadata.device_id`; Modbus raw-bus recording is not provided.
 For Python recording, open the bus before `Recorder` and write each returned sample.
 See [modbus_multinode.py](examples/modbus_multinode.py) for multi-device polling.
+
+## CAN on Linux
+
+Install the optional dependency from this directory and configure your interface
+at the device's bitrate:
+
+```sh
+python -m pip install ".[can]"
+sudo ip link set can0 type can bitrate 500000
+sudo ip link set can0 up
+python -m hipnuc can read -i can0
+python -m hipnuc can read -i can0 --id 8 --record samples.jsonl
+```
+
+For CAN FD, configure the arbitration/data bitrates in Linux first, then add
+`--fd` to `can read`. `--id` filters one source; omitting it receives all sources.
+Recording uses the same JSONL format and file protection as serial. Each record
+keeps `node_id`, CAN identifier and host receive time; separate PGNs are never merged.
+Use system tools such as `ip` and `candump` for interface status and raw captures.
+
+Raw register access requires a target: `can reg read ADDRESS -i can0 --id 8`
+or `can reg write ADDRESS VALUE -i can0 --id 8`. Addresses and values accept
+decimal or `0x` notation. A write checks the reply; it does not automatically
+save, reboot or prove that a setting took effect. Unsupported requests may time out.
+
+For direct integration, use the standard `python-can` bus with SDK functions:
+
+```python
+import can
+from hipnuc.can import decode_message
+
+with can.Bus(interface="socketcan", channel="can0", ignore_config=True) as bus:
+    for message in bus:
+        sample = decode_message(message)
+        if sample is not None:
+            print(sample.values)
+```
+
+`decode_message()` returns `None` for unrelated traffic and raises `ValueError`
+for a malformed supported frame. `read_register(bus, node_id, address)` returns
+the raw integer; `write_register(bus, node_id, address, value)` checks its echo.
+Both use a two-second default timeout. Use one receive consumer per bus;
+register transactions consume intervening traffic and must not run alongside a reader.
+`make_trigger(node_id, pgn)` creates a message for `bus.send()` or
+`bus.send_periodic()`; it does not wait for an acknowledgement.
+
+## Firmware update
+
+CHCenter is the desktop option. For a terminal or headless Linux, use the
+application firmware for the **exact device model** and specify the target:
+
+```sh
+python -m hipnuc update firmware.hex -p /dev/ttyUSB0 -b 115200
+python -m hipnuc can update firmware.hex -i can0 --id 8
+```
+
+Use `COM3` or the actual port on Windows. CAN update requires the optional CAN
+dependency and a node ID from 1 to 127; `--bin` explicitly selects a raw binary.
+Close other readers and stop periodic transmitters before updating. The bootloader
+cannot verify the firmware's model. A successful transfer/start request does not
+prove that the new application runs; reconnect with `info` or read measurements.
+Failures and Ctrl-C stop without an automatic restart.
+
+For integration, `update_serial(path, port=..., baudrate=...)` owns and closes its
+connection; `update_can(bus, node_id, path)` uses a caller-owned bus. Both return
+`UpdateResult` with transfer/start acknowledgement flags and `application_verified`.
+An optional `progress(written, total)` callback runs synchronously; raising from
+it cancels the operation. No CAN dependency is needed for serial updates.
 
 ## Common issues
 

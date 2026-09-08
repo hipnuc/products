@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * Minimal CAN frame shared by the J1939 decoder and the CAN firmware update
- * client. Independent of any operating system driver: convert your driver's
+ * Minimal CAN frame for the J1939/CANFD83 decoder. Independent of any
+ * operating system driver: convert your driver's
  * frame into this structure before calling the SDK.
  */
 

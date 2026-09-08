@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * Wire packet -> SI sample conversion. See hipnuc_sample.h.
+ * Shared sample initialization and status/date helpers. See hipnuc_sample.h.
  */
 
 #include "hipnuc_sample.h"

@@ -6,6 +6,9 @@
 支持 HI91/HI81/HI83、NMEA GGA/RMC 和 Modbus RTU，适用于 **Python 3.10–3.14**、
 Windows、Linux（含 Ubuntu 和树莓派系统）及 macOS。
 
+可选 CAN 支持使用 Linux SocketCAN（J1939/CANFD83）。固件升级支持 Windows/Linux
+串口及 Linux CAN。
+
 支持设备：固件 1.6.9 及以上（HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0）。
 HI2xx/CH1xx 等老产品请使用归档的 C 例程。
 
@@ -181,6 +184,67 @@ FC06 写单个 16 位寄存器；宽数值为大端、高字在前。写入不�
 JSONL 保留 `metadata.device_id`，不提供 Modbus 总线原始帧录制。
 Python 录制时先打开总线，再打开 `Recorder`，写入每次返回的样本。
 多站轮询见 [modbus_multinode.py](examples/modbus_multinode.py)。
+
+## Linux CAN
+
+在本目录安装可选依赖，并按设备波特率配置接口：
+
+```sh
+python -m pip install ".[can]"
+sudo ip link set can0 type can bitrate 500000
+sudo ip link set can0 up
+python -m hipnuc can read -i can0
+python -m hipnuc can read -i can0 --id 8 --record samples.jsonl
+```
+
+使用 CAN FD 时，先在 Linux 配置仲裁段／数据段波特率，再给 `can read` 加上
+`--fd`。`--id` 筛选一个来源，省略则接收所有来源。录制沿用串口的 JSONL 格式和
+文件保护；每条记录保留 `node_id`、CAN 标识符和主机接收时间，不合并不同 PGN。
+接口状态和原始抓包使用 `ip`、`candump` 等系统工具。
+
+原始寄存器操作必须指定目标：`can reg read ADDRESS -i can0 --id 8`
+或 `can reg write ADDRESS VALUE -i can0 --id 8`。地址和值支持十进制或 `0x`。
+写入只检查回复，不自动保存、重启，也不证明配置已经生效。不支持的请求可能超时。
+
+集成时直接使用标准 `python-can` 总线和 SDK 函数：
+
+```python
+import can
+from hipnuc.can import decode_message
+
+with can.Bus(interface="socketcan", channel="can0", ignore_config=True) as bus:
+    for message in bus:
+        sample = decode_message(message)
+        if sample is not None:
+            print(sample.values)
+```
+
+`decode_message()` 对无关报文返回 `None`，对格式错误的已支持报文抛出 `ValueError`。
+`read_register(bus, node_id, address)` 返回原始整数；
+`write_register(bus, node_id, address, value)` 检查写入回显，默认超时均为 2 秒。
+每条总线只由一个接收者使用；寄存器事务会消费期间收到的其他报文，不能与读取并行。
+`make_trigger(node_id, pgn)` 生成报文，交给 `bus.send()` 或 `bus.send_periodic()`
+发送，不等待确认回复。
+
+## 固件升级
+
+桌面操作可使用 CHCenter。终端或无桌面 Linux 使用**对应设备型号**的应用固件，
+并明确指定目标：
+
+```sh
+python -m hipnuc update firmware.hex -p /dev/ttyUSB0 -b 115200
+python -m hipnuc can update firmware.hex -i can0 --id 8
+```
+
+Windows 将端口换成 `COM3` 或实际端口。CAN 升级需要可选 CAN 依赖，节点 ID
+为 1–127；`--bin` 显式选择原始二进制文件。升级前关闭其他读取程序并停止周期发送。
+bootloader 无法验证固件型号。传输和启动请求成功不代表新应用已经运行；
+完成后用 `info` 重新查询或读取测量。失败或 Ctrl-C 后不自动重启设备。
+
+程序集成可用 `update_serial(path, port=..., baudrate=...)`，由函数打开和关闭连接；
+`update_can(bus, node_id, path)` 使用调用方持有的总线。二者返回 `UpdateResult`，
+区分传输／启动确认及 `application_verified`。可选的 `progress(written, total)`
+回调同步运行，抛出异常即取消升级。串口升级不需要 CAN 依赖。
 
 ## 常见问题
 
