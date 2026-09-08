@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import binascii
+import errno
 import math
 import struct
 import threading
@@ -16,6 +17,51 @@ from pymodbus.pdu.register_message import ReadHoldingRegistersResponse, WriteSin
 
 from hipnuc import Decoder, modbus
 from hipnuc.errors import DeviceError, ResponseTimeout, TransportError, VerificationError
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, AttributeError, KeyboardInterrupt])
+def test_modbus_unexpected_connect_failure_closes_client_and_propagates(
+    rig, monkeypatch, error_type
+):
+    server, bus, _ = rig
+    error = error_type("Unexpected client failure")
+
+    def fail():
+        # Model an error after the client has already acquired a port.
+        server.clients[0].socket = object()
+        raise error
+
+    monkeypatch.setattr(bus._client, "connect", fail)
+    with pytest.raises(error_type) as failure:
+        bus.open()
+    assert failure.value is error
+    assert server.clients[0].closed
+    assert server.clients[0].socket is None
+
+
+def test_modbus_false_connect_does_not_guess_the_cause(rig):
+    server, bus, _ = rig
+    server.connect_ok = False
+    with pytest.raises(TransportError) as failure:
+        bus.open()
+    assert "access permissions" in str(failure.value)
+    assert "Permission denied" not in str(failure.value)
+    assert "port is in use" not in str(failure.value)
+    assert server.clients[0].closed
+
+
+def test_modbus_raised_permission_error_keeps_original_cause(rig, monkeypatch):
+    server, bus, _ = rig
+
+    def denied():
+        raise PermissionError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(bus._client, "connect", denied)
+    with pytest.raises(TransportError) as failure:
+        bus.open()
+    assert "Permission denied" in str(failure.value)
+    assert isinstance(failure.value.__cause__, PermissionError)
+    assert server.clients[0].closed
 
 
 def identity_words(name="HI226", version=172, serial="1122334455667788"):

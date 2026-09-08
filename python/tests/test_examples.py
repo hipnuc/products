@@ -45,13 +45,7 @@ def use_serial(example, port, monkeypatch):
     monkeypatch.setattr(serial_device.serial, "Serial", lambda *args, **kwargs: port)
     monkeypatch.setattr(example, "PORT", "FAKE")
     monkeypatch.setattr(example, "BAUDRATE", 115200)
-    device_class = example.SerialDevice
-
-    def connect(*args, **kwargs):
-        kwargs["timeout"] = 0.02
-        return device_class(*args, **kwargs)
-
-    monkeypatch.setattr(example, "SerialDevice", connect)
+    monkeypatch.setattr(example, "TIMEOUT", 0.02)
 
 
 def json_records(path):
@@ -80,6 +74,7 @@ def test_import_defines_editable_constants_without_device_or_file_effects(
     monkeypatch.chdir(tmp_path)
     example = load_example(name)
     assert callable(example.main)
+    assert example.TIMEOUT == 2.0
     if name == "modbus_multinode":
         assert example.PORT == "COM3"
         assert example.BAUDRATE == 115200
@@ -108,6 +103,54 @@ def test_direct_execution_maps_keyboard_interrupt_to_130(name, monkeypatch, tmp_
     with pytest.raises(SystemExit) as caught:
         runpy.run_path(str(EXAMPLES / f"{name}.py"), run_name="__main__")
     assert caught.value.code == 130
+
+
+@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("error", [TransportError, DeviceError, OSError])
+def test_direct_execution_reports_expected_errors_without_traceback(
+    name, error, monkeypatch, tmp_path, capsys
+):
+    def fail(*args, **kwargs):
+        raise error("Example failure")
+
+    monkeypatch.setattr(hipnuc, "SerialDevice", fail)
+    monkeypatch.setattr(hipnuc, "ModbusBus", fail)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as caught:
+        runpy.run_path(str(EXAMPLES / f"{name}.py"), run_name="__main__")
+    assert caught.value.code == 1
+    output = capsys.readouterr()
+    assert output.err == "Error: Example failure\n"
+    assert "Traceback" not in output.out + output.err
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_direct_execution_does_not_hide_programming_errors(name, monkeypatch, tmp_path):
+    def fail(*args, **kwargs):
+        raise RuntimeError("Unexpected programming error")
+
+    monkeypatch.setattr(hipnuc, "SerialDevice", fail)
+    monkeypatch.setattr(hipnuc, "ModbusBus", fail)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="Unexpected programming error"):
+        runpy.run_path(str(EXAMPLES / f"{name}.py"), run_name="__main__")
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_timeout_constant_is_passed_to_connection(name, monkeypatch, tmp_path):
+    example = load_example(name)
+    monkeypatch.setattr(example, "TIMEOUT", 7.5)
+    monkeypatch.chdir(tmp_path)
+
+    def connect(*args, **kwargs):
+        assert kwargs["timeout"] == 7.5
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        example, "ModbusBus" if name == "modbus_multinode" else "SerialDevice", connect
+    )
+    with pytest.raises(KeyboardInterrupt):
+        example.main()
 
 
 def test_read_example_prints_typed_si_values(monkeypatch, capsys):
@@ -204,7 +247,7 @@ def test_record_example_preserves_original_chunks_and_closes_on_exit(ending, mon
         example.main()
     assert raw.read_bytes() == b"".join(chunks)
     assert [sample["type"] for sample in json_records(parsed)] == ["HI91", "HI91", "GGA"]
-    assert events[-2:] == ["serial closed", "recorder closed"]
+    assert events[-2:] == ["recorder closed", "serial closed"]
     assert not port.is_open
 
 
@@ -320,7 +363,75 @@ def test_record_discovery_keeps_original_interrupt_handler(monkeypatch, tmp_path
     with pytest.raises(KeyboardInterrupt):
         example.main()
     assert signal.getsignal(signal.SIGINT) is original_handler
-    assert parsed.read_bytes() == b""
+    assert not parsed.exists()
+
+
+def test_record_connection_failure_leaves_paths_free_for_retry(monkeypatch, tmp_path):
+    example = load_example("record_samples")
+    parsed, raw = tmp_path / "samples.jsonl", tmp_path / "serial.bin"
+    monkeypatch.setattr(example, "PORT", "FAKE")
+    monkeypatch.setattr(example, "BAUDRATE", 115200)
+    monkeypatch.setattr(example, "JSONL_PATH", parsed)
+    monkeypatch.setattr(example, "RAW_PATH", raw)
+
+    def fail(*args, **kwargs):
+        raise serial_device.serial.SerialException("Port unavailable")
+
+    monkeypatch.setattr(serial_device.serial, "Serial", fail)
+    with pytest.raises(TransportError, match="Port unavailable"):
+        example.main()
+    assert not parsed.exists()
+    assert not raw.exists()
+
+    class InterruptedSerial(FakeSerial):
+        @property
+        def in_waiting(self):
+            if not self.pending:
+                raise KeyboardInterrupt
+            return super().in_waiting
+
+    port = InterruptedSerial()
+    port.pending.append(frame())
+    use_serial(example, port, monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        example.main()
+    assert len(json_records(parsed)) == 1
+    assert raw.read_bytes() == frame()
+    assert not port.is_open
+
+
+def test_record_existing_file_closes_open_connection_before_reading(monkeypatch, tmp_path):
+    example = load_example("record_samples")
+    parsed, raw = tmp_path / "samples.jsonl", tmp_path / "serial.bin"
+    parsed.write_text("Existing recording\n", encoding="utf-8")
+    monkeypatch.setattr(example, "JSONL_PATH", parsed)
+    monkeypatch.setattr(example, "RAW_PATH", raw)
+    events = []
+
+    class UnreadSerial(FakeSerial):
+        @property
+        def in_waiting(self):
+            pytest.fail("An existing file must be rejected before acquisition starts")
+
+        def close(self):
+            events.append("closed")
+            super().close()
+
+    port = UnreadSerial()
+    monkeypatch.setattr(example, "PORT", "FAKE")
+    monkeypatch.setattr(example, "BAUDRATE", 115200)
+
+    def connect(*args, **kwargs):
+        events.append("opened")
+        return port
+
+    monkeypatch.setattr(serial_device.serial, "Serial", connect)
+    with pytest.raises(FileExistsError):
+        example.main()
+    assert events == ["opened", "closed"]
+    assert parsed.read_text(encoding="utf-8") == "Existing recording\n"
+    assert not raw.exists()
+    assert not port.is_open
 
 
 @pytest.mark.parametrize("name", ["read_samples", "record_samples", "send_commands"])

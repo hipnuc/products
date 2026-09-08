@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
       - name: Install from source
         run: python -m pip install ./python "pytest>=8,<10" "ruff>=0.11,<1"
       - name: Test installed SDK
@@ -43,18 +45,29 @@ jobs:
           python -m ruff format --check --quiet python
 
   ubuntu-system-python:
-    # The same interpreter/venv path as the customer quick start on Ubuntu 22.04.
+    # Exercise the customer quick start with Ubuntu 22.04's system Python.
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - name: Install with Ubuntu 22.04 system Python
+        working-directory: python
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-venv
-          /usr/bin/python3 -m venv "$RUNNER_TEMP/hipnuc-system-python"
-          "$RUNNER_TEMP/hipnuc-system-python/bin/python" -m pip install ./python "pytest>=8,<10"
-          "$RUNNER_TEMP/hipnuc-system-python/bin/python" -m pytest python/tests -q
-          "$RUNNER_TEMP/hipnuc-system-python/bin/python" python/tools/check_install.py
+          sudo apt-get update && sudo apt-get install -y python3-venv
+          /usr/bin/python3 --version
+          /usr/bin/python3 -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python -m hipnuc --version
+          python -m hipnuc --help
+      - name: Verify in a fresh shell
+        working-directory: python
+        run: |
+          source .venv/bin/activate
+          python -m pip check
+          python -m pip install "pytest>=8,<10"
+          python -m pytest tests -q
+          python tools/check_install.py
 
   armv7:
     runs-on: ubuntu-24.04
@@ -67,6 +80,7 @@ jobs:
         run: |
           docker run --rm --platform linux/arm/v7 -v "$PWD:/sdk:ro" arm32v7/python:3.11-slim-bookworm sh -c '
             cp -R /sdk/python /tmp/hipnuc &&
+            python -m pip install --upgrade pip &&
             python -m pip install /tmp/hipnuc "pytest>=8,<10" &&
             python -m pytest /sdk/python/tests -q -p no:cacheprovider &&
             python /sdk/python/tools/check_install.py'

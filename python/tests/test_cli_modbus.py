@@ -44,6 +44,40 @@ def records(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def test_modbus_failed_connection_does_not_create_recording(server, monkeypatch, tmp_path):
+    path = tmp_path / "samples.jsonl"
+    factory = server.factory
+
+    def unavailable(*args, **kwargs):
+        client = factory(*args, **kwargs)
+        client.connect = lambda: False
+        return client
+
+    monkeypatch.setattr(modbus, "ModbusSerialClient", unavailable)
+    args = ["read", *CONNECTION, "--count", "1", "--record", str(path)]
+    result = invoke(args)
+    assert result.exit_code == 1
+    assert not path.exists()
+    assert all(client.closed for client in server.clients)
+
+    monkeypatch.setattr(modbus, "ModbusSerialClient", factory)
+    result = invoke(args)
+    assert result.exit_code == 0, result.output
+    assert len(records(path)) == 1
+    assert all(client.closed for client in server.clients)
+
+
+def test_modbus_existing_recording_closes_connection_without_polling(server, tmp_path):
+    path = tmp_path / "samples.jsonl"
+    path.write_text("keep", encoding="utf-8")
+    result = invoke(["read", *CONNECTION, "--count", "1", "--record", str(path)])
+    assert result.exit_code == 1
+    assert "already exists" in result.stderr
+    assert path.read_text(encoding="utf-8") == "keep"
+    assert not server.calls
+    assert all(client.closed for client in server.clients)
+
+
 def test_modbus_info_accepts_connection_options_after_leaf(server):
     result = invoke(["info", *CONNECTION, "--json"])
     assert result.exit_code == 0, result.output
@@ -287,6 +321,35 @@ def test_modbus_ctrl_c_records_sample_and_returns_130(server, monkeypatch, tmp_p
     result = invoke(["read", *CONNECTION, "--duration", "0.1", "--jsonl", "--record", str(path)])
     assert interrupted
     assert result.exit_code == 130, result.exception
+    assert len(records(path)) == 1
+    assert all(client.closed for client in server.clients)
+
+
+@pytest.mark.parametrize("write_failure", [False, True])
+def test_modbus_ctrl_c_reports_close_failure_and_preserves_prior_write_failure(
+    server, monkeypatch, tmp_path, write_failure
+):
+    original_write = cli.Recorder.write
+    original_close = cli.Recorder.close
+
+    def interrupt_on_write(recording, sample):
+        original_write(recording, sample)
+        signal.raise_signal(signal.SIGINT)
+        if write_failure:
+            raise OSError("Sample write failed")
+
+    def fail_on_close(recording):
+        original_close(recording)
+        raise OSError("Final flush failed")
+
+    monkeypatch.setattr(cli.Recorder, "write", interrupt_on_write)
+    monkeypatch.setattr(cli.Recorder, "close", fail_on_close)
+    path = tmp_path / "stopped.jsonl"
+    result = invoke(["read", *CONNECTION, "--record", str(path)])
+    assert result.exit_code == 1, result.stderr
+    assert ("Sample write failed" if write_failure else "Final flush failed") in result.stderr
+    if write_failure:
+        assert "Final flush failed" not in result.stderr
     assert len(records(path)) == 1
     assert all(client.closed for client in server.clients)
 

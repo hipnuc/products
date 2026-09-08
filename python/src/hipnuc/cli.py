@@ -17,6 +17,7 @@ import time
 import click
 from serial.tools import list_ports
 
+from ._connection import discovery_error_summary, is_usb_port
 from .errors import HipnucError, ResponseTimeout
 from .models import Sample
 from .modbus import ModbusBus, ModbusDevice
@@ -105,7 +106,7 @@ def _serial_options(func=None, *, require_port=False):
         help=(
             "Target serial port, e.g. COM3 or /dev/ttyUSB0. Use 'hipnuc scan' to find it."
             if require_port
-            else "COM3, /dev/ttyUSB0, etc.; auto-select if omitted."
+            else "COM3, /dev/ttyUSB0, etc.; auto-select a USB serial port if omitted."
         ),
     )(func)
 
@@ -177,14 +178,13 @@ def _serial_connection(
     baudrate: int | None,
     timeout: float,
     scan_timeout: float,
-    *,
-    raw_sink: Callable[[bytes], None] | None = None,
-    sample_sink: Callable[[Sample], None] | None = None,
 ) -> Iterator[SerialDevice]:
     """Own one CLI connection and route diagnostics to stderr."""
     if port is None or baudrate is None:
         message = (
-            f"Detecting baudrate on {port}" if port is not None else "Searching for HiPNUC devices"
+            f"Detecting baudrate on {port}"
+            if port is not None
+            else "Searching USB serial ports for HiPNUC devices"
         )
         click.echo(f"{message} (Ctrl-C to cancel)...", err=True)
     with (
@@ -194,8 +194,6 @@ def _serial_connection(
             baudrate,
             timeout,
             scan_timeout=scan_timeout,
-            raw_sink=raw_sink,
-            sample_sink=sample_sink,
         ) as device,
     ):
         identity = ""
@@ -373,28 +371,48 @@ def help_command(ctx, commands):
 
 
 @main.command("list")
+@click.option(
+    "--all", "show_all", is_flag=True, help="Also show native and other non-USB serial ports."
+)
 @click.option("--json", "as_json", is_flag=True)
 @_errors
-def list_command(as_json):
-    """List system serial ports without opening them."""
-    ports = [
-        {
-            "port": p.device,
-            "description": p.description,
-            "manufacturer": p.manufacturer,
-            "serial_number": p.serial_number,
-            "vid": p.vid,
-            "pid": p.pid,
-        }
-        for p in list_ports.comports()
-    ]
+def list_command(show_all, as_json):
+    """List USB serial ports; --all or --json includes all system ports. Opens none."""
+    ports = list(list_ports.comports())
     if as_json:
-        click.echo(_json(ports))
-    elif not ports:
-        click.echo("No serial ports found. Connect the device and check its USB driver.", err=True)
-    else:
-        for port in ports:
-            click.echo(f"{port['port']}  {port['description'] or ''}")
+        click.echo(
+            _json(
+                [
+                    {
+                        "port": p.device,
+                        "description": p.description,
+                        "manufacturer": p.manufacturer,
+                        "serial_number": p.serial_number,
+                        "vid": p.vid,
+                        "pid": p.pid,
+                    }
+                    for p in ports
+                ]
+            )
+        )
+        return
+    usb = [p for p in ports if is_usb_port(p)]
+    other = [p for p in ports if not is_usb_port(p)]
+    for port in usb + other if show_all else usb:
+        click.echo(f"{port.device}  {port.description or ''}")
+    if not ports or (not usb and not show_all):
+        message = "No serial ports found." if not ports else "No USB serial ports found."
+        click.echo(
+            message + " Check the USB connection and driver. In a virtual machine, "
+            "connect the USB device to the guest system.",
+            err=True,
+        )
+    if other and not show_all:
+        click.echo(
+            f"{len(other)} other serial ports hidden; use list --all to show them "
+            "and -p PORT to use a native UART or mapped serial port.",
+            err=True,
+        )
 
 
 @main.command("scan")
@@ -402,8 +420,9 @@ def list_command(as_json):
 @click.option("--json", "as_json", is_flag=True)
 @_errors
 def scan_command(port, baudrate, timeout, scan_timeout, as_json):
-    """Find HiPNUC devices, using data and LOG VERSION at candidate baudrates."""
-    click.echo("Searching for HiPNUC devices (Ctrl-C to cancel)...", err=True)
+    """Find HiPNUC devices on USB serial ports, or on the port selected with -p."""
+    scope = port if port is not None else "USB serial ports"
+    click.echo(f"Searching {scope} for HiPNUC devices (Ctrl-C to cancel)...", err=True)
     with _discovery_progress():
         result = discover(
             [port] if port is not None else None,
@@ -426,15 +445,16 @@ def scan_command(port, baudrate, timeout, scan_timeout, as_json):
                 click.echo(
                     f"{device.port}: identity unavailable: {device.identity_error}", err=True
                 )
-    for name, error in result.errors.items():
-        click.echo(f"{name}: {error}", err=True)
     if not result.complete:
         raise click.ClickException(
             "Search incomplete; increase --scan-timeout or specify -p and -b."
         )
     if not result.devices:
-        raise click.ClickException(
-            "No HiPNUC device found. Check connection, baudrate and device output."
+        raise click.ClickException(discovery_error_summary(result.errors))
+    if result.errors:
+        click.echo(
+            f"{len(result.errors)} port(s) could not be matched; see the search results above.",
+            err=True,
         )
 
 
@@ -476,22 +496,15 @@ def read_command(
 ):
     """Read continuously; Ctrl-C stops. Recordings include every decoded sample."""
     with ExitStack() as stack:
+        # A failed connection must not leave empty recording files behind.
+        device = stack.enter_context(_serial_connection(port, baudrate, timeout, scan_timeout))
         recording = (
             stack.enter_context(Recorder(record, raw_path=record_raw, overwrite=overwrite))
             if record or record_raw
             else None
         )
-        # Cancel discovery immediately; only acquisition defers Ctrl-C until the
-        # current receive batch has been recorded.
-        device = stack.enter_context(
-            _serial_connection(
-                port,
-                baudrate,
-                timeout,
-                scan_timeout,
-                raw_sink=recording.write_raw if recording else None,
-            )
-        )
+        device.raw_sink = recording.write_raw if recording else None
+        # Recording callbacks are ready before the first acquisition read.
         stopped = stack.enter_context(_stop_on_interrupt())
         device.sample_sink = _sample_consumer(
             recording, stopped, jsonl=jsonl, quiet=quiet, display_rate=display_rate
@@ -522,18 +535,19 @@ def read_command(
                 ),
                 err=True,
             )
-        if stopped.is_set():
-            raise click.exceptions.Exit(130)
-        if not device.decoder.statistics["samples"]:
-            reason = (
-                "No bytes received."
-                if not device.decoder.statistics["bytes_received"]
-                else "Received bytes but no valid measurement frames."
-            )
-            raise click.ClickException(
-                f"No samples collected. {reason} Check baudrate and device output; "
-                "use command to enable a supported output message."
-            )
+    # Flush and close normally before turning a requested stop into an exit status.
+    if stopped.is_set():
+        raise click.exceptions.Exit(130)
+    if not device.decoder.statistics["samples"]:
+        reason = (
+            "No bytes received."
+            if not device.decoder.statistics["bytes_received"]
+            else "Received bytes but no valid measurement frames."
+        )
+        raise click.ClickException(
+            f"No samples collected. {reason} Check the connection, host baudrate "
+            "and supported output messages. For slow output, allow a longer --duration."
+        )
 
 
 @main.command("command")
@@ -698,8 +712,8 @@ def modbus_read(
 ):
     """Poll continuously and optionally record SI JSONL with the station ID."""
     with ExitStack() as stack:
-        recording = stack.enter_context(Recorder(record, overwrite=overwrite)) if record else None
         device = stack.enter_context(_modbus_connection(port, baudrate, timeout, device_id))
+        recording = stack.enter_context(Recorder(record, overwrite=overwrite)) if record else None
         stopped = stack.enter_context(_stop_on_interrupt())
         consume = _sample_consumer(
             recording, stopped, jsonl=jsonl, quiet=quiet, display_rate=display_rate
@@ -724,10 +738,10 @@ def modbus_read(
                 + (f" Recorded: {recording.samples_written} samples." if recording else ""),
                 err=True,
             )
-        if stopped.is_set():
-            raise click.exceptions.Exit(130)
-        if not samples:
-            raise click.ClickException("No samples collected from the Modbus device.")
+    if stopped.is_set():
+        raise click.exceptions.Exit(130)
+    if not samples:
+        raise click.ClickException("No samples collected from the Modbus device.")
 
 
 @modbus_group.command("registers")

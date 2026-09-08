@@ -8,7 +8,6 @@ from dataclasses import dataclass, replace
 import logging
 import math
 import re
-import sys
 import threading
 import time
 from types import TracebackType
@@ -16,6 +15,13 @@ from types import TracebackType
 import serial
 from serial.tools import list_ports
 
+from ._connection import (
+    SERIAL_OPEN_ERRORS,
+    discovery_error_summary,
+    is_baudrate_error,
+    is_usb_port,
+    open_error,
+)
 from .decoder import Decoder
 from .errors import DeviceError, ResponseTimeout, TransportError, VerificationError
 from .models import CommandResult, DeviceInfo, Sample
@@ -45,27 +51,6 @@ def _version(value: str | None) -> str | None:
     if value and re.fullmatch(r"\d{3}", value):
         return ".".join(value)
     return value
-
-
-def _open_error(port: str, exc: Exception) -> TransportError:
-    """Turn a pySerial open failure into an actionable message."""
-    text = str(exc)
-    lowered = text.lower()
-    if "access is denied" in lowered or "permissionerror" in lowered or "errno 13" in lowered:
-        if sys.platform.startswith("linux"):
-            hint = (
-                "Permission denied. Add your user to the serial group, e.g. "
-                "`sudo usermod -aG dialout $USER`, then log in again."
-            )
-        else:
-            hint = "The port is in use. Close CHCenter or any other program using it."
-    elif "busy" in lowered or "errno 16" in lowered:
-        hint = "The port is in use. Close CHCenter or any other program using it."
-    elif "no such file" in lowered or "filenotfounderror" in lowered or "errno 2" in lowered:
-        hint = "The port does not exist. Run `hipnuc list` to see available ports."
-    else:
-        hint = ""
-    return TransportError(f"Cannot open {port}: {text}" + (f" {hint}" if hint else ""))
 
 
 @dataclass(frozen=True)
@@ -166,14 +151,8 @@ class SerialDevice:
                             f"and baudrate. Candidates: {candidates or 'none'}"
                         )
                     if not result.devices:
-                        details = "; ".join(f"{p}: {e}" for p, e in result.errors.items())
                         raise TransportError(
-                            "No HiPNUC device found. "
-                            + (
-                                details
-                                or "No serial ports found. Check the USB cable and the "
-                                "USB-to-serial driver (CP210x)."
-                            )
+                            "No HiPNUC device found. " + discovery_error_summary(result.errors)
                         )
                     if len(result.devices) > 1:
                         raise TransportError(
@@ -185,8 +164,8 @@ class SerialDevice:
                     self._serial = serial.Serial(
                         self.port, self.baudrate, timeout=0, write_timeout=self.timeout
                     )
-                except (serial.SerialException, OSError) as exc:
-                    raise _open_error(self.port, exc) from exc
+                except SERIAL_OPEN_ERRORS as exc:
+                    raise open_error(self.port, exc) from exc
                 self.decoder.reset()
                 self._samples.clear()
                 self._command_prepared = False
@@ -265,13 +244,15 @@ class SerialDevice:
                     count = self.decoder.statistics["bytes_received"] - received
                     if not count:
                         state = (
-                            "No bytes received. Check the TX/RX wiring and power, or enable "
-                            'output with the command "LOG ENABLE"'
+                            "No bytes received. Check power, TX/RX wiring and whether output "
+                            "is enabled. For slow output, increase timeout (--timeout in the "
+                            "CLI) beyond the output interval."
                         )
                     else:
                         state = (
                             f"Received {count} bytes but no valid measurement frames. "
-                            "The baudrate is probably wrong; run `hipnuc scan`"
+                            "Check the baudrate and that a supported output message is enabled; "
+                            "allow a longer timeout for slow or fragmented output."
                         )
                     raise ResponseTimeout(
                         f"{state} ({self.port} at {self.baudrate} baud, {duration:g}s)"
@@ -488,8 +469,9 @@ def discover(
     timeout: float = 2.0,
     scan_timeout: float = 30.0,
 ) -> DiscoveryResult:
-    """Find usable serial devices without changing their configuration.
+    """Find usable USB serial devices without changing their configuration.
 
+    An explicit ``ports`` list also permits native UARTs and other serial devices.
     Observe incoming data, then request identity with LOG VERSION. Valid HiPNUC
     binary data is usable even without an identity response; NMEA alone never
     identifies a brand. A binary candidate's timed-out identity query is retried
@@ -500,7 +482,9 @@ def discover(
     deadline = time.monotonic() + _positive_timeout(scan_timeout)
     if not baudrates or any(baud <= 0 for baud in baudrates):
         raise ValueError("baudrates must contain positive integers")
-    names = ports if ports is not None else [p.device for p in list_ports.comports()]
+    names = (
+        ports if ports is not None else [p.device for p in list_ports.comports() if is_usb_port(p)]
+    )
     result = DiscoveryResult([], {}, True)
     for name in dict.fromkeys(names):
         fallback = None
@@ -520,6 +504,10 @@ def discover(
             try:
                 device.open()
             except TransportError as exc:
+                if is_baudrate_error(exc):
+                    best_error = str(exc)
+                    _logger.info("%s at %s baud: %s; trying the next baudrate.", name, baud, exc)
+                    continue
                 # An occupied/missing port cannot be fixed by changing its baudrate.
                 result.errors[name] = str(exc)
                 _logger.info("%s: %s; skipping this port.", name, exc)

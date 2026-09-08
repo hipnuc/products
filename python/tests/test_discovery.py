@@ -1,6 +1,7 @@
 """Discovery uses real framing and fake serial peers, never local hardware."""
 
 from collections import deque
+import errno
 import logging
 from types import SimpleNamespace
 
@@ -81,8 +82,8 @@ def test_automatic_open_fills_only_missing_arguments(monkeypatch, port, baudrate
 @pytest.mark.parametrize(
     "result,reason",
     [
-        (DiscoveryResult([], {}, True), "No serial ports found"),
-        (DiscoveryResult([], {"COM3": "Access denied"}, True), "Access denied"),
+        (DiscoveryResult([], {}, True), "No USB serial ports found"),
+        (DiscoveryResult([], {"COM3": "Access denied"}, True), "permission denied"),
         (
             DiscoveryResult(
                 [DiscoveredDevice("COM3", 9600), DiscoveredDevice("COM4", 115200)], {}, True
@@ -352,11 +353,11 @@ def test_discovery_ctrl_c_closes_the_port(monkeypatch, clock):
     assert not port.is_open
 
 
-def test_all_enumerated_ports_are_checked_before_auto_selection(monkeypatch, clock):
+def test_all_usb_ports_are_checked_before_auto_selection(monkeypatch, clock):
     monkeypatch.setattr(
         implementation.list_ports,
         "comports",
-        lambda: [SimpleNamespace(device=p) for p in ("A", "B")],
+        lambda: [SimpleNamespace(device=p, vid=0x10C4) for p in ("A", "B")],
     )
     monkeypatch.setattr(
         implementation.serial,
@@ -365,6 +366,105 @@ def test_all_enumerated_ports_are_checked_before_auto_selection(monkeypatch, clo
     )
     result = discover(baudrates=(115200,))
     assert result.complete and [device.port for device in result.devices] == ["A", "B"]
+
+
+def test_automatic_discovery_skips_native_ports_before_usb(monkeypatch, clock):
+    ports = [SimpleNamespace(device=f"/dev/ttyS{i}") for i in range(32)]
+    ports.append(SimpleNamespace(device="/dev/ttyUSB0"))
+    monkeypatch.setattr(implementation.list_ports, "comports", lambda: ports)
+    opened = []
+
+    def factory(name, baud, **kwargs):
+        opened.append(name)
+        response = IDENTITY if name == "/dev/ttyUSB0" and baud == 9600 else b""
+        return FakeSerial(name, baud, responses={"LOG VERSION": response}, **kwargs)
+
+    monkeypatch.setattr(implementation.serial, "Serial", factory)
+    result = discover()
+    assert result.complete and set(opened) == {"/dev/ttyUSB0"}
+    assert result.devices[0].port == "/dev/ttyUSB0"
+    assert clock.now < 25
+
+
+@pytest.mark.parametrize("name", ["/dev/ttyS0", "/dev/serial0", "COM1"])
+def test_explicit_ports_bypass_usb_filter(monkeypatch, clock, name):
+    monkeypatch.setattr(
+        implementation.serial,
+        "Serial",
+        lambda *a, **k: FakeSerial(*a, responses={"LOG VERSION": IDENTITY}, **k),
+    )
+    assert discover([name], baudrates=(9600,)).devices[0].port == name
+
+
+@pytest.mark.parametrize(
+    "port,expected",
+    [
+        (SimpleNamespace(device="COM3", vid=0x10C4), True),
+        (SimpleNamespace(device="COM4", hwid="USB VID:PID=0403:6001"), True),
+        (SimpleNamespace(device="/dev/ttyUSB0"), True),
+        (SimpleNamespace(device="/dev/ttyACM10"), True),
+        (SimpleNamespace(device="/dev/cu.usbserial-123"), True),
+        (SimpleNamespace(device="/dev/tty.usbmodem123"), True),
+        (SimpleNamespace(device="COM1", hwid="ACPI\\PNP0501"), False),
+        (SimpleNamespace(device="/dev/ttyS0"), False),
+        (SimpleNamespace(device="/dev/serial0"), False),
+        (SimpleNamespace(device="/dev/rfcomm0"), False),
+    ],
+)
+def test_usb_candidates_use_metadata_and_usb_device_names(port, expected):
+    from hipnuc._connection import is_usb_port
+
+    assert is_usb_port(port) is expected
+
+
+@pytest.mark.parametrize("backend", ["pyserial", "termios"])
+def test_unsupported_baudrate_continues_without_claiming_missing_port(monkeypatch, clock, backend):
+    error_type = (
+        implementation.serial.SerialException
+        if backend == "pyserial"
+        else pytest.importorskip("termios").error
+    )
+    attempts = []
+
+    def factory(name, baud, **kwargs):
+        attempts.append(baud)
+        if baud == 115200:
+            # termios.error exposes args, but is not an OSError on POSIX.
+            raise error_type(errno.EINVAL, "Invalid argument")
+        return FakeSerial(name, baud, responses={"LOG VERSION": IDENTITY}, **kwargs)
+
+    monkeypatch.setattr(implementation.serial, "Serial", factory)
+    result = discover(["COM3"], baudrates=(115200, 9600))
+    assert attempts == [115200, 9600]
+    assert result.complete and not result.errors
+    assert result.devices[0].baudrate == 9600
+
+
+def test_sdk_permission_summary_does_not_repeat_every_port(monkeypatch, clock):
+    monkeypatch.setattr(
+        implementation.list_ports,
+        "comports",
+        lambda: [SimpleNamespace(device=f"/dev/ttyUSB{i}") for i in range(12)],
+    )
+
+    def denied(*args, **kwargs):
+        raise PermissionError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(implementation.serial, "Serial", denied)
+    device = SerialDevice()
+    with pytest.raises(TransportError) as failure:
+        device.open()
+    assert "12" in str(failure.value) and "permission" in str(failure.value).lower()
+    assert len(str(failure.value)) < 500
+    assert len(device.discovery_result.errors) == 12
+
+
+def test_single_permission_error_summary_omits_repeated_raw_error():
+    from hipnuc._connection import discovery_error_summary
+
+    summary = discovery_error_summary({"COM3": "Cannot open COM3: [Errno 13] Permission denied"})
+    assert "[Errno 13]" not in summary
+    assert "permission denied" in summary and "protocol" in summary.lower()
 
 
 def test_iter_samples_reports_idle_and_distinguishes_bytes_without_frames(monkeypatch, clock):

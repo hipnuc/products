@@ -1,6 +1,7 @@
 """Serial transaction tests use real framing over a deterministic fake port."""
 
 import binascii
+import errno
 from collections import deque
 import struct
 import time
@@ -10,6 +11,68 @@ import pytest
 from hipnuc import SerialDevice, discover
 from hipnuc.errors import DeviceError, ResponseTimeout, TransportError, VerificationError
 import hipnuc.serial_device as implementation
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, AttributeError, KeyboardInterrupt])
+def test_serial_open_preserves_unexpected_failures(monkeypatch, error_type):
+    error = error_type("Unexpected backend failure")
+
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(implementation.serial, "Serial", fail)
+    device = SerialDevice("FAKE", 115200)
+    with pytest.raises(error_type) as failure:
+        device.open()
+    assert failure.value is error
+    assert not device.is_open
+
+
+@pytest.mark.parametrize("code", [errno.EINVAL, 20, 200])
+def test_open_errors_do_not_match_errno_prefixes(monkeypatch, code):
+    def fail(*args, **kwargs):
+        raise implementation.serial.SerialException(code, "Configuration failed")
+
+    monkeypatch.setattr(implementation.serial, "Serial", fail)
+    with pytest.raises(TransportError) as failure:
+        SerialDevice("FAKE", 115200).open()
+    assert "does not exist" not in str(failure.value)
+    assert str(code) in str(failure.value)
+    assert failure.value.__cause__.errno == code
+
+
+def test_error_classification_follows_cause_and_termios_args():
+    from hipnuc._connection import is_baudrate_error, open_error
+
+    wrapped = TransportError("Outer transport failure")
+    wrapped.__cause__ = OSError(errno.EINVAL, "Invalid argument")
+    assert is_baudrate_error(wrapped)
+    assert is_baudrate_error(Exception(errno.EINVAL, "Invalid argument"))
+    assert not is_baudrate_error(OSError(errno.ENOENT, "No such file"))
+    assert "baudrate" in str(open_error("FAKE", wrapped))
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        implementation.serial.SerialException(
+            "Cannot configure port: [WinError 87] Invalid parameter"
+        ),
+        NotImplementedError("non-standard baudrates are not supported on this platform"),
+    ],
+)
+def test_backend_specific_unsupported_baudrate_errors(error):
+    from hipnuc._connection import is_baudrate_error
+
+    assert is_baudrate_error(error)
+
+
+def test_idle_timeout_explains_low_rate_without_changing_device(fake):
+    with SerialDevice("FAKE", 9600, timeout=0.001) as device:
+        with pytest.raises(ResponseTimeout, match="No bytes received") as failure:
+            device.read()
+    assert "timeout" in str(failure.value) and "output interval" in str(failure.value)
+    assert fake.writes == []
 
 
 def frame(tag=0x91):

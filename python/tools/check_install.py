@@ -16,6 +16,7 @@ def main():
             from pathlib import Path
             import hipnuc
 
+            assert version('hipnuc-sdk') == hipnuc.__version__
             assert 'site-packages' in Path(hipnuc.__file__).parts, hipnuc.__file__
             assert hipnuc.Decoder().feed(b'') == []
             assert hipnuc.ModbusBus
@@ -34,13 +35,13 @@ def main():
             assert recorder.samples_written == 1
             assert json.loads(path.read_text(encoding='utf-8')) == sample.to_dict()
             print(version('hipnuc-sdk'))
-            print(hipnuc.__file__)
             """
         )
         subprocess.run([sys.executable, "-I", "-c", code], cwd=directory, check=True)
         for args in (
             ["--help"],
             ["help"],
+            ["list", "--help"],
             ["read", "--help"],
             ["scan", "--help"],
             ["command", "--help"],

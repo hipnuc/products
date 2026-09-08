@@ -17,6 +17,7 @@ from typing import Any
 from pymodbus.client import ModbusSerialClient
 from pymodbus.exceptions import ModbusException, ModbusIOException
 
+from ._connection import SERIAL_OPEN_ERRORS, open_error
 from .decoder import GRAVITY, status_flags
 from .errors import DeviceError, ResponseTimeout, TransportError, VerificationError
 from .models import DeviceInfo, Sample
@@ -104,18 +105,16 @@ class ModbusBus:
         with self._lock:
             try:
                 if not self._client.connect():
-                    raise TransportError(
-                        f"Cannot open Modbus port {self.port}. Close CHCenter or other "
-                        "programs using it and check the port name."
-                    )
+                    # PyModbus can return False after logging the OS exception.
+                    raise open_error(self.port)
             except BaseException as exc:
                 # __exit__ is not called if __enter__/open fails partway through.
                 try:
                     self._client.close()
                 except OSError:
                     pass
-                if isinstance(exc, (OSError, ModbusException)):
-                    raise TransportError(f"Cannot open Modbus port {self.port}: {exc}") from exc
+                if isinstance(exc, SERIAL_OPEN_ERRORS + (ModbusException,)):
+                    raise open_error(self.port, exc) from exc
                 raise
         return self
 

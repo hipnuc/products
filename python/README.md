@@ -3,156 +3,222 @@
 [English](README.md) | [中文](README_zh.md)
 
 Read, configure and record HiPNUC IMU/AHRS/MRU and INS devices from a terminal
-or your Python application. Supports serial binary (HI91/HI81/HI83), NMEA
-GGA/RMC and Modbus RTU with Python 3.10–3.14 on Windows, Linux (including
-Ubuntu and Raspberry Pi OS), and macOS.
+or your Python application. Supports HI91/HI81/HI83, NMEA GGA/RMC and Modbus RTU
+with **Python 3.10–3.14** on Windows, Linux (including Ubuntu and Raspberry Pi OS),
+and macOS.
 
 Supported devices: firmware 1.6.9 or later (HI01–HI06, HI12–HI18, HI32,
 HI70/HI71, CH0X0). Legacy HI2xx/CH1xx products use the archived C examples.
 
 ## Install
 
-Download the repository and open a terminal in its `python/` directory
-(`cd python` from the repository root). If downloaded as a ZIP, extract it first.
-Connect the device, then create a virtual environment:
+Extract the repository and open a terminal in its `python/` directory.
 
 **Windows PowerShell:**
 
 ```powershell
+py -3 --version
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install .
-.\.venv\Scripts\python.exe -m hipnuc list
-.\.venv\Scripts\python.exe -m hipnuc read
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install .
+python -m hipnuc --help
 ```
 
 **Linux / Raspberry Pi / macOS:**
 
-On Ubuntu, Debian and Raspberry Pi OS, first install virtual environment support:
+On Ubuntu/Debian/Pi OS, install missing venv support with
+`sudo apt update && sudo apt install -y python3-venv`.
 
 ```sh
-sudo apt update
-sudo apt install -y python3-venv
+python3 --version
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install .
+python -m hipnuc --help
 ```
 
-Then create and activate the environment (start here on macOS):
+Activate the environment again in each new terminal. For an existing application,
+activate its environment and run `python -m pip install "/path/to/products/python"`;
+select that same environment in your IDE. Reinstall after updating SDK source.
+
+## Read, record and send commands
+
+Connect the device and close other programs using its port. In a VM, attach the
+USB adapter to the guest OS.
 
 ```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install .
 python -m hipnuc list
 python -m hipnuc read
-```
-
-`list` shows available serial ports. `read` finds the connected HiPNUC device and
-its baudrate, shows the selected connection, then displays measurements. Discovery
-can take up to 30 seconds and shows each port/baudrate attempt and its result.
-If several devices match, select one with `-p`. Press Ctrl-C to stop.
-Each displayed line shows the active device warnings after the message type:
-`[ATT_CONV]` or `[WB_CONV]` while the attitude or gyro bias has not converged yet
-(keep the device still for a few seconds), `[MAG_DIST]` under magnetic
-disturbance, `[UTC_UNSYNC]` while device time is not synchronized. No brackets
-means no warning.
-
-Windows commands use the environment's Python directly, so no activation or PATH
-change is needed. On Linux/macOS, activation provides `python` and pip from
-`.venv`; activate it again in each new terminal.
-
-## Read and record
-
-The following examples use `python`. In Windows PowerShell, replace it with
-`.\.venv\Scripts\python.exe` as above.
-
-```sh
-# Show device identity.
-python -m hipnuc info
-
-# Use a known connection. Replace COM3 with your port on Linux/macOS.
-python -m hipnuc read -p COM3 -b 115200
-
-# Record 60 seconds of decoded samples.
 python -m hipnuc read --duration 60 --record samples.jsonl
-
-# Also keep the original received bytes.
-python -m hipnuc read --record samples.jsonl --record-raw capture.bin
 ```
 
-The display shows up to five readings per second for each message type. Recording
-keeps every decoded sample, independently of the display rate. `--quiet` hides
-readings; `--jsonl` prints complete JSON measurements instead of the human display.
-Existing files are protected unless you add `--overwrite`.
-
-JSONL and the Python API use SI units: acceleration m/s², angular velocity rad/s,
-and attitude rad. The human display uses ° and °/s for easier reading. Missing
-measurements remain unavailable instead of becoming zeros.
-
-Append `--help` to a `hipnuc` command for options. See the [API and CLI reference](docs/api.md)
-for configuration and the [Modbus guide](docs/modbus.md) for addressed RTU devices.
-
-## Send commands
+Press Ctrl-C to stop a continuous read before trying the next command.
+`list` shows USB serial ports and an other-port count; `list --all` expands all
+ports and `list --json` always returns all ports. Automatic discovery searches
+USB serial ports, showing progress for up to 30 seconds. For multiple devices,
+built-in/GPIO UARTs or other ports, select `-p PORT`; add `-b BAUD` if known:
 
 ```sh
+python -m hipnuc read -p COM3 -b 115200
+python -m hipnuc info -p COM3 -b 115200
 python -m hipnuc command "LOG VERSION" -p COM3 -b 115200
 python -m hipnuc command --file commands.txt -p COM3 -b 115200 --save
 ```
 
-Put one product command per line in `commands.txt`; replies appear as each command
-finishes. `--save` saves once after all commands succeed. Add `--reboot` when the
-settings require a restart. Execution stops on the first failure.
+Replace `COM3` with your port, for example `/dev/ttyUSB0` on Linux.
+Connection options follow the **final command**, including `modbus read`.
+`-b` sets host connection speed only; `baudrate NEW_BAUD` changes the device.
+Use `scan -p PORT` for an unknown baudrate, `reboot` to restart, and append
+`--help` for options. Configuration commands require an explicit port.
 
-## Use in your application
+Command files contain one product command per line; `#` and `;` start comments.
+Execution stops on failure. `--save` saves once after all commands succeed;
+add `--reboot` only when the settings require it. Use the managed `baudrate`
+and `reboot` commands for connection changes. Command names and applicability
+come from the product's command and programming manual.
+
+Recording keeps all decoded samples independently of the display's five
+readings/second limit per message type. Add `--record-raw capture.bin` for
+received bytes, `--quiet` to hide readings or `--jsonl` for machine output.
+Files use the current directory; existing files are protected unless
+`--overwrite` is explicit. Finite reads finish the current receive batch.
+Diagnostics go to stderr. Exit codes: 0 success, 1 failure, 2 usage error, 130 Ctrl-C.
+
+## Python API and examples
+
+```python
+from hipnuc import SerialDevice
+
+with SerialDevice() as device:
+    for sample in device.iter_samples():
+        print(sample.acceleration_m_s2, sample.angular_velocity_rad_s)
+```
+
+Importing and constructing objects perform no I/O. Calls are synchronous;
+use `with` to open and close resources. `SerialDevice("COM3", baudrate=115200)`
+selects a known connection; omitted connection parameters use discovery.
+
+| Interface | Purpose |
+| --- | --- |
+| `SerialDevice(..., timeout=2.0)` | Serial connection; timeouts are in seconds |
+| `device.read(timeout=None)`, `device.iter_samples(idle_timeout=None)` | Read new samples; idle expiry raises `ResponseTimeout`, defaulting to device timeout |
+| `device.read_info()` | Product, firmware and serial number |
+| `device.command("LOG VERSION").text` | Send ASCII and receive the reply; an unsupported command may time out |
+| `device.save_config()`, `device.set_baudrate(...)`, `device.reboot()` | Explicit save and managed connection changes |
+| `Decoder().feed(data)` | Incremental byte decoding without a device; reuse one decoder, call `finish()` at end of input |
+| `sample.values`, `sample.to_dict()` | Protocol-specific fields and JSON-compatible output |
+
+Samples represent individual messages, not merged history. The API/JSON use
+m/s², rad/s, rad, tesla and Pa; latitude/longitude are degrees and temperature is
+°C. The human display uses degrees and degrees/s. Missing values remain `None`.
+`quaternion_wxyz` is WXYZ, body-to-navigation; `euler_rad` follows the device's
+configured convention. Heading is clockwise from north, distinct from Euler yaw.
+The SDK does not change the device's coordinate configuration.
+`received_time_ns` is host reception time; device time and UTC are separate fields.
+`complete`, `issues` and `metadata` retain parsing and source information.
+
+Communication errors derive from `HipnucError`: `TransportError`,
+`ResponseTimeout`, `DeviceError` and `VerificationError` (readback mismatch).
+Invalid arguments raise `ValueError`; recording I/O failures raise `OSError`.
+
+For recording, connect before creating files, then attach callbacks before reading:
 
 ```python
 from hipnuc import Recorder, SerialDevice
 
-with SerialDevice() as device, Recorder("samples.jsonl") as recording:
+with (
+    SerialDevice("COM3", baudrate=115200) as device,
+    Recorder("samples.jsonl", raw_path="capture.bin") as recording,
+):
+    device.sample_sink = recording.write
+    device.raw_sink = recording.write_raw
     for sample in device.iter_samples():
-        recording.write(sample)
-        print(sample.acceleration_m_s2)
+        pass
 ```
 
-Use `SerialDevice("COM3", baudrate=115200)` for an explicit connection.
-`sample.to_dict()` produces JSON-compatible data. For bytes you already have,
-use `Decoder.feed(data)` without opening a device.
+`Recorder` writes JSONL and optional exact received bytes; use `write_raw` on
+received chunks, not `sample.raw`. Callbacks run synchronously; keep them short
+and do not call device I/O from them. Files flush every second while writing
+and on close; `flush()`, `samples_written` and `raw_bytes_written` are available.
+Discovery traffic precedes recording. The recording example also finishes the
+current receive batch on Ctrl-C.
 
-The examples are short scripts to edit and run. Change the constants at the top
-of a script, then run it from the SDK's `python/` directory, for example
-`python examples/read_samples.py`. They do not take command-line arguments.
-On Windows, use `.\.venv\Scripts\python.exe` as above.
+Edit constants at the top of these scripts, then run `python examples/read_samples.py`
+(or the chosen filename). They do not take CLI arguments.
 
 | Example | Use |
 | --- | --- |
-| [read_samples.py](examples/read_samples.py) | Read IMU/INS measurements; `PORT = None` and `BAUDRATE = None` discover the connection |
-| [record_samples.py](examples/record_samples.py) | Record to `JSONL_PATH = "samples.jsonl"`; set `RAW_PATH` to also keep received bytes |
-| [send_commands.py](examples/send_commands.py) | Edit `COMMANDS`; the defaults query version and output configuration, without saving |
-| [modbus_multinode.py](examples/modbus_multinode.py) | Poll nodes 80 and 81; set `PORT`, `BAUDRATE`, `NODE_IDS` and `INTERVAL_S` for your bus |
+| [read_samples.py](examples/read_samples.py) | Read measurements; `PORT = None`, `BAUDRATE = None` discover a USB connection |
+| [record_samples.py](examples/record_samples.py) | JSONL recording; set `RAW_PATH` for original bytes |
+| [send_commands.py](examples/send_commands.py) | Edit `COMMANDS`; defaults query identity/configuration without saving |
+| [modbus_multinode.py](examples/modbus_multinode.py) | One bus, several node IDs, sequential polling |
 
-Reading, recording and Modbus polling continue until Ctrl-C. Recording protects
-existing files. Use a new output filename for another recording.
+## Modbus RTU
 
-## Troubleshooting
+Use an explicit port and node ID. Defaults are 115200 baud, 8N1 and ID 80;
+unicast IDs are 1–247. Prepare each device's RTU port, output mode, baudrate and
+unique ID before joining a bus. Never run ASCII `scan` or `command` on a multi-node
+Modbus bus. If streaming must be disabled, send `LOG DISABLE` in a single-device
+ASCII session first.
+`LOG DISABLE` is temporary; to keep RTU operation after reboot, disable the
+timed output messages and save that configuration explicitly.
 
-- **Command not found:** use the same Python for `-m pip install` and `-m hipnuc`.
-  The Windows commands above do not depend on the Scripts directory being on PATH.
-- **No serial ports:** check power, the USB data cable, and the USB-to-serial
-  driver. On Windows, check Device Manager for a COM port.
-- **Port is in use / access denied:** close CHCenter or other programs using the
-  port. If you know the port and baudrate, specify both with `-p` and `-b`.
-- **Port opens but no bytes arrive:** check the TX/RX wiring (crossed for a raw
-  UART), the common ground, and that output is enabled (next item).
-- **Output is disabled:** with a single device connected, use
-  `python -m hipnuc command "LOG ENABLE" -p COM3 -b 115200` at its actual baudrate.
-- **Gaps or checksum errors:** ensure the output rate fits the serial bandwidth;
-  reduce the rate or increase the device baudrate when needed. `-b` only sets the
-  host connection speed; `baudrate NEW_BAUD` changes the device speed.
-- **Unknown baudrate:** use `python -m hipnuc scan -p COM3`. Do not run ASCII
-  discovery on a multi-node Modbus bus; use the [Modbus guide](docs/modbus.md).
-- **Linux permission denied:** grant your user access to the serial device,
-  commonly through the `dialout` group, then log in again. Prefer
-  `/dev/serial/by-id/...` when available.
-- **Python/venv unavailable:** install Python 3.10 or later. Ubuntu 22.04's
-  default Python 3.10 is supported. Ubuntu, Debian and Raspberry Pi OS may need
-  `sudo apt install python3-venv`. Keep SDK installation inside the virtual
-  environment; do not use `sudo pip`.
-- **Pi GPIO UART:** enable UART and disable the serial login console in the OS
-  configuration. USB-to-serial adapters do not require this GPIO setting.
+```sh
+python -m hipnuc modbus info -p COM3 --id 80
+python -m hipnuc modbus read -p COM3 --id 80
+python -m hipnuc modbus read -p COM3 --id 80 --duration 60 --record samples.jsonl
+```
+
+`read` continues until Ctrl-C, `--duration` or `--count`; `--interval` controls
+the pause between polls. Register addresses, values and availability depend on
+the model's command and programming manual. Use `registers` / `write-register`
+for raw access, and `set-id`, `baudrate`, `reboot` for managed changes;
+append `--help` to the final command.
+
+```python
+from hipnuc import ModbusBus
+
+with ModbusBus("COM3") as bus:
+    device = bus.device(80)
+    print(device.read_info())
+    sample = device.read_sample()
+    print(sample.acceleration_m_s2)
+```
+
+One `ModbusBus` owns a physical port; nodes share its transaction lock.
+FC03 reads 1–125 registers; FC06 writes one 16-bit register. Wide values are
+big-endian, high word first. Writes are not retried and are read back by default;
+saving is explicit (`--save` or `save_config()`). The SDK does not promise that
+all registers in a measurement block come from the same firmware cycle.
+JSONL records keep `metadata.device_id`; Modbus raw-bus recording is not provided.
+For Python recording, open the bus before `Recorder` and write each returned sample.
+See [modbus_multinode.py](examples/modbus_multinode.py) for multi-device polling.
+
+## Common issues
+
+| Symptom | Next step |
+| --- | --- |
+| Missing Python / venv / pip | Use Python 3.10+. Ubuntu 22.04's default 3.10 works; 20.04's default 3.8 does not. On Ubuntu/Debian/Pi OS, install `python3-venv`. |
+| APT waits for a lock | Wait for the OS updater; do not delete its lock or kill the updater. |
+| `UNKNOWN-0.0.0` / `No module named hipnuc` | Activate the correct environment, upgrade pip, then reinstall from this `python/` directory. |
+| PowerShell blocks activation | Use `.\.venv\Scripts\python.exe` instead of `python`; no global execution-policy change is needed. |
+| No port / busy port | Check USB passthrough in a VM, cable/driver and other serial applications. Use `list --all` for non-USB ports. |
+| Port opens, no valid samples | Check actual baudrate, wiring, output mode and rate. Give slow output enough `--timeout`. |
+| Download / certificate error | Check network, clock and the required proxy/certificate settings. Do not disable TLS verification. |
+
+For HGFS or another shared folder that cannot create venv symlinks, keep the
+environment on local storage; the source may remain shared if complete and writable:
+
+```sh
+python3 -m venv "$HOME/.venvs/hipnuc"
+source "$HOME/.venvs/hipnuc/bin/activate"
+python -m pip install --upgrade pip
+python -m pip install .
+```
+
+Activate this external environment with the same `source` command in new terminals.
+For Linux serial permissions, check `ls -l /dev/ttyUSB0` and `id -nG`. If the
+device group is `dialout`, run `sudo usermod -a -G dialout "$(id -un)"`, then log
+out and back in or reboot. A virtual environment does not grant serial permissions.

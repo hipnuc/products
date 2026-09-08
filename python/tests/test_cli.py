@@ -110,6 +110,59 @@ def test_list_empty_explains_human_output_and_preserves_json():
     assert json.loads(result.stdout) == []
 
 
+def test_list_collapses_system_ports_but_all_and_json_keep_them(monkeypatch):
+    def port(name, vid=None):
+        return SimpleNamespace(
+            device=name,
+            description="test port",
+            manufacturer=None,
+            serial_number=None,
+            vid=vid,
+            pid=None,
+        )
+
+    ports = [port(f"/dev/ttyS{i}") for i in range(32)] + [port("/dev/ttyUSB0", 0x0403)]
+    monkeypatch.setattr(cli.list_ports, "comports", lambda: ports)
+    result = invoke(["list"])
+    assert result.exit_code == 0, result.output
+    assert "/dev/ttyUSB0" in result.stdout
+    assert "/dev/ttyS" not in result.stdout
+    assert "32" in result.stderr and "--all" in result.stderr
+
+    result = invoke(["list", "--all"])
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines()[0].startswith("/dev/ttyUSB0")
+    assert len(result.stdout.splitlines()) == 33
+
+    result = invoke(["list", "--json"])
+    assert result.exit_code == 0, result.output
+    assert len(json.loads(result.stdout)) == 33
+    assert result.stderr == ""
+
+
+def test_list_without_usb_explains_vm_and_explicit_uart(monkeypatch):
+    monkeypatch.setattr(
+        cli.list_ports,
+        "comports",
+        lambda: [
+            SimpleNamespace(
+                device="/dev/ttyS0",
+                description="n/a",
+                manufacturer=None,
+                serial_number=None,
+                vid=None,
+                pid=None,
+            )
+        ],
+    )
+    result = invoke(["list"])
+    assert result.exit_code == 0, result.output
+    assert "No USB serial ports" in result.stderr
+    assert "virtual machine" in result.stderr
+    assert "--all" in result.stderr and "-p" in result.stderr
+    assert result.stdout == ""
+
+
 @pytest.mark.parametrize("baud_args", [[], ["-b", "115200"]])
 @pytest.mark.parametrize(
     "args",
@@ -164,7 +217,9 @@ def test_target_connection_only_searches_selected_port(monkeypatch, args, baud_a
 
 @pytest.mark.parametrize("args", [["info"], ["read", "--duration", "0.01"]])
 def test_read_only_commands_still_discover_without_connection_parameters(monkeypatch, args):
-    monkeypatch.setattr(cli.list_ports, "comports", lambda: [SimpleNamespace(device="FAKE")])
+    monkeypatch.setattr(
+        cli.list_ports, "comports", lambda: [SimpleNamespace(device="FAKE", vid=0x0403)]
+    )
 
     def connect(name, baud, **kwargs):
         port = FakeSerial(
@@ -231,13 +286,59 @@ def test_scan_preserves_port_open_failure(monkeypatch):
     assert "Access is denied" in result.stdout + result.stderr
 
 
+def test_scan_permission_error_is_not_repeated_or_reported_as_wrong_baudrate(monkeypatch):
+    def denied(*args, **kwargs):
+        raise serial_device.serial.SerialException(13, "Permission denied")
+
+    monkeypatch.setattr(serial_device.serial, "Serial", denied)
+    result = invoke(["scan", *CONNECTION])
+    assert result.exit_code == 1
+    assert result.stderr.count("[Errno 13]") == 1
+    assert "protocol" in result.stderr.lower()
+    assert "Check connection, baudrate" not in result.stderr
+
+
+def test_failed_connection_does_not_create_recordings_and_retry_works(monkeypatch, tmp_path):
+    raw, parsed = tmp_path / "capture.bin", tmp_path / "samples.jsonl"
+    args = [
+        "read",
+        *CONNECTION,
+        "--duration",
+        "0.02",
+        "--record",
+        str(parsed),
+        "--record-raw",
+        str(raw),
+    ]
+
+    def denied(*args, **kwargs):
+        raise serial_device.serial.SerialException(13, "Permission denied")
+
+    monkeypatch.setattr(serial_device.serial, "Serial", denied)
+    result = invoke(args)
+    assert result.exit_code == 1
+    assert not raw.exists() and not parsed.exists()
+
+    port = FakeSerial()
+    payload = b"noise" + frame() * 3
+    port.pending.append(payload)
+    monkeypatch.setattr(serial_device.serial, "Serial", lambda *a, **kw: port)
+    result = invoke(args)
+    assert result.exit_code == 0, result.output
+    assert raw.read_bytes() == payload
+    assert len(records(parsed)) == 3
+    assert not port.is_open
+
+
 @pytest.mark.parametrize("command", ["scan", "info"])
 def test_discovery_progress_precedes_port_open_and_keeps_json_clean(monkeypatch, command):
     logger = logging.getLogger("hipnuc.serial_device")
     original = (logger.level, logger.propagate, list(logger.handlers))
     root = logging.getLogger()
     root_original = (root.level, list(root.handlers))
-    monkeypatch.setattr(cli.list_ports, "comports", lambda: [SimpleNamespace(device="FAKE")])
+    monkeypatch.setattr(
+        cli.list_ports, "comports", lambda: [SimpleNamespace(device="FAKE", vid=0x0403)]
+    )
 
     def connect(*args, **kwargs):
         assert "Checking FAKE at 115200 baud" in sys.stderr.buffer.getvalue().decode("utf-8")
@@ -559,13 +660,14 @@ def test_bounded_empty_read_fails_with_diagnostic_summary(fake, received, diagno
     assert not fake.is_open
 
 
-def test_existing_recording_is_not_silently_overwritten(tmp_path):
+def test_existing_recording_is_not_silently_overwritten(fake, tmp_path):
     path = tmp_path / "important.bin"
     path.write_bytes(b"original")
     result = invoke(["read", *CONNECTION, "--duration", "0.01", "--record-raw", str(path)])
     assert result.exit_code == 1
     assert "exist" in result.stderr.lower()
     assert path.read_bytes() == b"original"
+    assert not fake.is_open
 
 
 def test_explicit_overwrite_replaces_recording(fake, tmp_path):
@@ -624,6 +726,37 @@ def test_ctrl_c_finishes_received_batch_then_returns_130(fake, monkeypatch, tmp_
     assert result.exit_code == 130, result.exception
     assert len(records(parsed)) == 5
     assert raw.read_bytes() == frame() * 5
+    assert not fake.is_open
+
+
+@pytest.mark.parametrize("write_failure", [False, True])
+def test_ctrl_c_reports_close_failure_and_preserves_prior_write_failure(
+    fake, monkeypatch, tmp_path, write_failure
+):
+    fake.pending.append(frame() * 5)
+    original_write = cli.Recorder.write
+    original_close = cli.Recorder.close
+
+    def interrupt_on_write(recording, sample):
+        original_write(recording, sample)
+        if recording.samples_written == 1:
+            signal.raise_signal(signal.SIGINT)
+            if write_failure:
+                raise OSError("Sample write failed")
+
+    def fail_on_close(recording):
+        original_close(recording)
+        raise OSError("Final flush failed")
+
+    monkeypatch.setattr(cli.Recorder, "write", interrupt_on_write)
+    monkeypatch.setattr(cli.Recorder, "close", fail_on_close)
+    path = tmp_path / "stopped.jsonl"
+    result = invoke(["read", *CONNECTION, "--record", str(path)])
+    assert result.exit_code == 1, result.stderr
+    assert ("Sample write failed" if write_failure else "Final flush failed") in result.stderr
+    if write_failure:
+        assert "Final flush failed" not in result.stderr
+    assert len(records(path)) == (1 if write_failure else 5)
     assert not fake.is_open
 
 
