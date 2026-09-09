@@ -83,6 +83,7 @@ hihost command --file commands.txt -p COM3 -b 115200 --save
 连接变化使用 SDK 管理的 `baudrate` 和 `reboot` 命令。
 指令名称及适用范围以产品的指令与编程手册为准。
 
+MATLAB 可直接读取录制的 JSONL，见 [matlab/](../matlab/README_zh.md)。
 录制保留全部已解码样本，与屏幕每种报文每秒最多五次的显示限速独立。
 加 `--record-raw capture.bin` 保存原始接收字节，`--quiet` 隐藏读数，
 `--jsonl` 输出机器数据。文件默认位于当前目录，明确加 `--overwrite` 才覆盖已有文件。

@@ -1,13 +1,13 @@
 function summary = batch_analyze(folder)
-%BATCH_ANALYZE Analyze the HI91 CSV files directly inside a folder.
+%BATCH_ANALYZE Analyze the HI91 CSV and JSONL files directly inside a folder.
 % Example: summary = batch_analyze('recordings')
 % Write/replace <folder>/analysis_results/summary.csv. Failed files get an error row;
 % successful files get six axis rows. No per-file figures are opened.
 
-files = dir(fullfile(folder, '*.csv'));
+files = [dir(fullfile(folder, '*.csv')); dir(fullfile(folder, '*.jsonl'))];
 files = files(~[files.isdir]);
 if isempty(files)
-    error('hipnuc:NoFiles', 'No CSV files found in %s.', folder);
+    error('hipnuc:NoFiles', 'No CSV or JSONL files found in %s.', folder);
 end
 summary = table();
 succeeded = 0;

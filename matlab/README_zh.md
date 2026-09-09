@@ -2,7 +2,8 @@
 
 [English](README.md)
 
-使用 MATLAB R2016b 或更新版本，读取、绘图和分析 **CHCenter 录制的单设备 HI91 CSV**。
+使用 MATLAB R2016b 或更新版本，读取、绘图和分析**单设备 HI91 录制数据**：
+CHCenter 的 CSV，或 Python SDK 的 SI JSONL（`hihost read --record samples.jsonl`）。
 不需要额外工具箱。
 
 在 MATLAB 中打开本目录，先试用附带的小型合成数据：
@@ -19,9 +20,12 @@ result = analyze_imu('sample_hi91.csv');
 | 函数 | 用途 |
 | --- | --- |
 | `read_hi91_csv(filename)` | 返回普通 MATLAB table，供客户程序直接使用。 |
+| `read_hipnuc_jsonl(filename)` | 从 SDK 的 JSONL 录制返回同样的 table。 |
 | `plot_imu(filename)` | 绘制加速度、角速度、磁场和姿态。 |
 | `analyze_imu(filename)` | 绘制 Allan 偏差并返回数值汇总；第二个参数传 `false` 可关闭绘图。 |
-| `batch_analyze(folder)` | 分析目录中的 CSV，不逐文件开图；写入 `<folder>/analysis_results/summary.csv`。 |
+| `batch_analyze(folder)` | 分析目录中的 CSV 和 JSONL，不逐文件开图；写入 `<folder>/analysis_results/summary.csv`。 |
+
+`plot_imu`、`analyze_imu`、`batch_analyze` 按扩展名选择读取函数，两种录制来源行为一致。
 
 ```matlab
 data = read_hi91_csv('sample_hi91.csv');
@@ -33,7 +37,8 @@ summary = batch_analyze('recordings');
 ```
 
 CSV 字段保留 CHCenter 的单位：`sys_time` 为 ms，`acc_x/y/z` 为 G，`gyr_x/y/z`
-为 °/s，`mag_x/y/z` 为 μT，`roll/pitch/imu_yaw` 为 °。这些产品的加速度 G 值
+为 °/s，`mag_x/y/z` 为 μT，`roll/pitch/imu_yaw` 为 °。JSONL 读取函数把 SDK 的 SI
+字段换算为同样的列和单位。这些产品的加速度 G 值
 乘以 9.8 即为 m/s²。同一文件允许包含其他报文和重复 HI91 表头，但只能录制一台设备：
 此 CSV 格式没有设备标识。
 
@@ -53,5 +58,5 @@ CSV 字段保留 CHCenter 的单位：`sys_time` 为 ms，`acc_x/y/z` 为 G，`g
 - 陀螺仪分析使用 °/h，加速度分析使用 micro-G。附带 CSV 为合成演示数据，
   不是真实设备测量结果。
 
-四个 `.m` 文件都是普通函数，可以直接阅读和复制；不会清空工作区、关闭已有图窗，
+这些 `.m` 文件都是普通函数，可以直接阅读和复制；不会清空工作区、关闭已有图窗，
 也不需要先转换为 MAT 文件。

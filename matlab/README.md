@@ -2,8 +2,9 @@
 
 [中文](README_zh.md)
 
-Plot and analyze **single-device HI91 CSV recordings from CHCenter** using
-MATLAB R2016b or later. No additional toolboxes are required.
+Plot and analyze **single-device HI91 recordings** using MATLAB R2016b or
+later: CSV from CHCenter, or SI JSONL from the Python SDK
+(`hihost read --record samples.jsonl`). No additional toolboxes are required.
 
 Open this directory in MATLAB and try the small synthetic recording:
 
@@ -20,9 +21,13 @@ the code but cannot characterize long-term noise.
 | Function | Purpose |
 | --- | --- |
 | `read_hi91_csv(filename)` | Return measurements as a normal MATLAB table. |
+| `read_hipnuc_jsonl(filename)` | The same table from an SDK JSONL recording. |
 | `plot_imu(filename)` | Plot acceleration, angular velocity, magnetic field and attitude. |
 | `analyze_imu(filename)` | Plot Allan deviation and return a numerical summary. Pass `false` as the second argument to suppress figures. |
-| `batch_analyze(folder)` | Analyze the CSV files in a folder without opening figures; write `<folder>/analysis_results/summary.csv`. |
+| `batch_analyze(folder)` | Analyze the CSV and JSONL files in a folder without opening figures; write `<folder>/analysis_results/summary.csv`. |
+
+`plot_imu`, `analyze_imu` and `batch_analyze` select the reader from the file
+extension, so both recording sources behave identically.
 
 ```matlab
 data = read_hi91_csv('sample_hi91.csv');
@@ -35,6 +40,7 @@ summary = batch_analyze('recordings');
 
 CSV columns keep CHCenter's units: `sys_time` in ms, `acc_x/y/z` in G,
 `gyr_x/y/z` in deg/s, `mag_x/y/z` in uT, and `roll/pitch/imu_yaw` in degrees.
+The JSONL reader converts the SDK's SI fields to those same columns and units.
 For these products, acceleration in G converts to m/s² by multiplying by 9.8.
 Other message types and repeated HI91 headers may occur in the file. Each file
 must contain one device: this CSV format has no device identifier.
@@ -59,5 +65,5 @@ assessment:
 - Gyroscope analysis is expressed in deg/h; acceleration analysis in micro-G.
   The supplied CSV is synthetic demonstration data, not a device measurement.
 
-The four `.m` files are ordinary functions, ready to read and copy. They do not
+The `.m` files are ordinary functions, ready to read and copy. They do not
 clear your workspace, close existing figures, or require a MAT-file conversion.

@@ -87,6 +87,7 @@ add `--reboot` only when the settings require it. Use the managed `baudrate`
 and `reboot` commands for connection changes. Command names and applicability
 come from the product's command and programming manual.
 
+MATLAB reads the recorded JSONL directly; see [matlab/](../matlab/README.md).
 Recording keeps all decoded samples independently of the display's five
 readings/second limit per message type. Add `--record-raw capture.bin` for
 received bytes, `--quiet` to hide readings or `--jsonl` for machine output.

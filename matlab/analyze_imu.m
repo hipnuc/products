@@ -1,6 +1,6 @@
 function result = analyze_imu(filename, show_plots)
 %ANALYZE_IMU Illustrate Allan deviation and 10-second moving-mean statistics.
-% Example: result = analyze_imu('sample_hi91.csv')
+% Example: result = analyze_imu('sample_hi91.csv') or analyze_imu('samples.jsonl')
 % Pass false as the second argument to return results without opening figures.
 % Use static, regularly sampled data. No interpolation or resampling is done.
 % These statistics are examples, not a standards-compliance assessment.
@@ -9,7 +9,7 @@ if nargin < 2
     show_plots = true;
 end
 validateattributes(show_plots, {'logical'}, {'scalar'});
-data = read_hi91_csv(filename);
+data = read_hipnuc_recording(filename);
 samples = height(data);
 if samples < 3
     error('hipnuc:InsufficientData', 'Analysis needs at least three measurements.');

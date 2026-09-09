@@ -1,9 +1,9 @@
 function fig = plot_imu(filename)
 %PLOT_IMU Plot acceleration, angular velocity, magnetic field and attitude.
-% Example: plot_imu('sample_hi91.csv')
+% Example: plot_imu('sample_hi91.csv') or plot_imu('samples.jsonl')
 % Return the new figure handle; existing figures and workspace are untouched.
 
-data = read_hi91_csv(filename);
+data = read_hipnuc_recording(filename);
 required = {'mag_x', 'mag_y', 'mag_z', 'roll', 'pitch', 'imu_yaw'};
 if ~all(ismember(required, data.Properties.VariableNames))
     error('hipnuc:MissingColumns', 'Plotting requires magnetic field and roll/pitch/imu_yaw columns.');
