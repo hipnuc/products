@@ -11,6 +11,12 @@ find_package(hipnuc_msgs REQUIRED)
 # Build from a full SDK checkout placed in the workspace's src directory.
 set(HIPNUC_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../c/hipnuc" CACHE PATH "HiPNUC C core directory")
 set(HIPNUC_ROS_COMMON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../common" CACHE PATH "Shared ROS helpers")
+if(NOT EXISTS "${HIPNUC_CORE_DIR}/CMakeLists.txt")
+  message(FATAL_ERROR
+    "HiPNUC C core not found at ${HIPNUC_CORE_DIR}. Keep the complete SDK checkout "
+    "in your workspace, or configure with -DHIPNUC_CORE_DIR=<path>/c/hipnuc. "
+    "See ros/README.md.")
+endif()
 add_subdirectory("${HIPNUC_CORE_DIR}" hipnuc_core EXCLUDE_FROM_ALL)
 add_subdirectory("${HIPNUC_CORE_DIR}/../serial" hipnuc_serial EXCLUDE_FROM_ALL)
 

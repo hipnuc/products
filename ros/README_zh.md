@@ -56,6 +56,14 @@ roslaunch hipnuc_imu serial.launch port:=/dev/ttyUSB0 baudrate:=115200
 # 或：roslaunch hipnuc_imu can.launch interface:=can0 node_id:=8
 ```
 
+指定源目录是必需的：catkin 会跳过含 `COLCON_IGNORE` 标记的目录，因此直接执行
+`catkin_make` 找不到 `ros/ros1`，反而会把 ROS 2 的软件包报成非 catkin 工作空间。
+使用 catkin_tools 时同样先指定一次源目录：
+
+```sh
+catkin config --source-space src/products/ros/ros1/src && catkin build
+```
+
 ## 消息
 
 | 话题 | 消息类型 | 内容 |

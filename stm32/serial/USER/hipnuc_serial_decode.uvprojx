@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_HD,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\SYSTEM\sys;..\USER;..\STM32F10x_FWLib\inc;..\CORE;..\..\..\c\hipnuc</IncludePath>
+              <IncludePath>..\USER;..\STM32F10x_FWLib\inc;..\CORE;..\..\..\c\hipnuc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -403,16 +403,6 @@
               <FileName>system_stm32f10x.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\system_stm32f10x.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>SYSTEM</GroupName>
-          <Files>
-            <File>
-              <FileName>sys.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\SYSTEM\sys\sys.c</FilePath>
             </File>
           </Files>
         </Group>

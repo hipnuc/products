@@ -12,6 +12,7 @@
 
 #include "hipnuc_board.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "hipnuc_dec.h"
@@ -101,7 +102,7 @@ static void usart2_init(uint32_t baudrate)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
 
     gpio.GPIO_Pin = GPIO_Pin_3;                  /* RX */
-    gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    gpio.GPIO_Mode = GPIO_Mode_IPU;              /* idle high while unplugged */
     GPIO_Init(GPIOA, &gpio);
     gpio.GPIO_Pin = GPIO_Pin_2;                  /* TX */
     gpio.GPIO_Speed = GPIO_Speed_50MHz;
@@ -135,6 +136,19 @@ static void console_init(void)
     usart.USART_Mode = USART_Mode_Tx;
     USART_Init(USART1, &usart);
     USART_Cmd(USART1, ENABLE);
+}
+
+/* printf() retarget to the console UART. Blocking; no semihosting. */
+#pragma import(__use_no_semihosting)
+struct __FILE { int handle; };
+FILE __stdout;
+void _sys_exit(int status) { (void)status; for (;;) {} }
+int fputc(int ch, FILE *file)
+{
+    (void)file;
+    while (!(USART1->SR & USART_SR_TXE)) {}
+    USART1->DR = (uint16_t)(ch & 0xFF);
+    return ch;
 }
 
 #if HIPNUC_BOARD_USE_DMA

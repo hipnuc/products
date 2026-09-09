@@ -1,4 +1,5 @@
 #include "hipnuc_board.h"
+#include <stdio.h>
 #include <string.h>
 #include "hipnuc_j1939.h"
 #include "stm32f10x.h"
@@ -36,6 +37,19 @@ static void console_init(void)
     usart.USART_Mode = USART_Mode_Tx;
     USART_Init(USART1, &usart);
     USART_Cmd(USART1, ENABLE);
+}
+
+/* printf() retarget to the console UART. Blocking; no semihosting. */
+#pragma import(__use_no_semihosting)
+struct __FILE { int handle; };
+FILE __stdout;
+void _sys_exit(int status) { (void)status; for (;;) {} }
+int fputc(int ch, FILE *file)
+{
+    (void)file;
+    while (!(USART1->SR & USART_SR_TXE)) {}
+    USART1->DR = (uint16_t)(ch & 0xFF);
+    return ch;
 }
 
 static int can_init(uint16_t kbps)
@@ -161,8 +175,10 @@ int hipnuc_board_poll(hipnuc_sample_t *sample)
         frame.id = received.ExtId;
         frame.is_extended = 1;
         frame.is_remote = received.RTR == CAN_RTR_Remote;
+        /* len is a byte count, so never hand the decoder a DLC code. */
+        if (received.DLC > 8) { stats.invalid_frames++; continue; }
         frame.len = received.DLC;
-        if (frame.len <= 8) memcpy(frame.data, received.Data, frame.len);
+        memcpy(frame.data, received.Data, frame.len);
         result = hipnuc_j1939_parse(&frame, sample, NULL);
         if (result > 0) {
             stats.frames++;

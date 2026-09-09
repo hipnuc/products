@@ -58,6 +58,15 @@ roslaunch hipnuc_imu serial.launch port:=/dev/ttyUSB0 baudrate:=115200
 # Or: roslaunch hipnuc_imu can.launch interface:=can0 node_id:=8
 ```
 
+The explicit source directory is required, not a shortcut: catkin skips any
+directory holding a `COLCON_IGNORE` marker, so a plain `catkin_make` does not
+find `ros/ros1` and instead reports the ROS 2 packages as a non-catkin
+workspace. With catkin_tools, set the same directory once:
+
+```sh
+catkin config --source-space src/products/ros/ros1/src && catkin build
+```
+
 ## Messages
 
 | Topic | Message | Contents |
