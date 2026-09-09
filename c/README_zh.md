@@ -112,7 +112,8 @@ Roll/pitch、yaw、heading 相互独立；INS 与原始 GNSS 位置分别保留�
 单位、状态及质量字段见 [hipnuc_sample.h](hipnuc/hipnuc_sample.h)。
 收敛判断使用转换后的字段：设备 `ATT_CONV`/`WB_CONV` 位为 1 表示警告。
 
-支持当前产品平台固件 1.6.9 及以后版本。核心要求 8 位字节和 IEEE 754 浮点数；
+支持当前产品平台固件 1.6.9 及以后版本，不支持早期 1.7.1 中使用 4 字节时间戳的 HI83 布局。
+核心要求 8 位字节和 IEEE 754 浮点数；
 位置字段要求 8 字节 `double`。不支持的二进制布局和 HI83 bitmap 字段会被拒绝。
 仅可选 JSON 格式化模块使用 `stdio`。
 

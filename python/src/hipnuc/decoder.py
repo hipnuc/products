@@ -18,8 +18,8 @@ _SYNC = b"\x5a\xa5"
 _UTC_UNSYNC = 1 << 11
 
 # MAIN_STATUS bits shared by HI91/HI81/HI83 (IMU manual, "MAIN_STATUS").
-# The names follow the manual; a set bit is a warning, so WB_CONV and ATT_CONV
-# mean "NOT converged" while they are present in ``status_flags``.
+# The names follow the manual; WB_CONV and ATT_CONV mean "NOT converged"
+# when set. Other bits describe operating state rather than faults.
 MAIN_STATUS_FLAGS = {
     3: "WB_CONV",  # set: gyro bias NOT yet converged (keep still for a few seconds)
     4: "MAG_DIST",  # set: magnetic disturbance detected
@@ -94,7 +94,7 @@ def _crc16(data: bytes, crc: int = 0) -> int:
 
 
 def status_flags(main_status: int) -> list[str]:
-    """Names of the set MAIN_STATUS bits, in bit order. Every listed flag is a warning."""
+    """Names of the set MAIN_STATUS bits, in bit order; see each bit's meaning."""
     return [name for bit, name in MAIN_STATUS_FLAGS.items() if main_status & (1 << bit)]
 
 

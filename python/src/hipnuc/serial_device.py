@@ -28,7 +28,9 @@ from .models import CommandResult, DeviceInfo, Sample
 
 BAUDRATES = (115200, 921600, 460800, 230400, 256000, 57600, 38400, 19200, 9600, 4800)
 _logger = logging.getLogger(__name__)
-_ONCE_PATTERN = re.compile(r"LOG\s+(?:COM[1-4]\s+)?(HI91|HI81|HI83|GGA|RMC)\s+ONMARK\s+ONCE")
+_ONCE_PATTERN = re.compile(
+    r"LOG\s+(?:(?P<port>COM[1-4])\s+)?(?P<message>HI91|HI81|HI83|GGA|RMC)\s+ONMARK\s+ONCE"
+)
 
 
 def _positive_timeout(value: float) -> float:
@@ -297,7 +299,10 @@ class SerialDevice:
 
         ``response="auto"`` waits for a terminal ``OK`` (or for the requested
         data when the command is ``LOG <MSG> ONMARK ONCE``); ``"none"`` only
-        sends. The device prints nothing for an unknown command, so an unknown
+        sends. A matching sample does not prove that the command executed.
+        For ``LOG COMn <MSG> ONMARK ONCE``, use ``response="none"``: this
+        connection cannot identify data sent through another device port.
+        The device prints nothing for an unknown command, so an unknown
         command surfaces as ``ResponseTimeout``. Binary bytes never count as an
         acknowledgement. The first command after opening waits for a clean
         frame boundary so the reply cannot be confused with an ongoing stream.
@@ -307,6 +312,12 @@ class SerialDevice:
             raise ValueError("command must contain exactly one nonempty line")
         if response not in {"auto", "none"}:
             raise ValueError("response must be auto or none")
+        once = _ONCE_PATTERN.fullmatch(command.upper())
+        if response == "auto" and once and once["port"]:
+            raise ValueError(
+                "LOG COMn <MSG> ONMARK ONCE cannot be confirmed on this connection; "
+                "use response='none' (CLI: --no-reply)."
+            )
         duration = _positive_timeout(self.timeout if timeout is None else timeout)
         with self._lock:
             ser = self._require_open()
@@ -350,13 +361,12 @@ class SerialDevice:
             if response == "none":
                 return CommandResult(command, "", False)
             lines: list[str] = []
-            once = _ONCE_PATTERN.fullmatch(command.upper())
             while time.monotonic() < deadline:
                 samples = self._pump(deadline - time.monotonic())
                 if self._collect_response_lines(command, lines):
                     return CommandResult(command, "\n".join(lines), True)
-                if once and any(s.type == once[1] for s in samples):
-                    return CommandResult(command, "\n".join(lines), False, verified=True)
+                if once and any(s.type == once["message"] for s in samples):
+                    return CommandResult(command, "\n".join(lines), False)
             raise ResponseTimeout(
                 f"No OK reply to {command!r} within {duration:g}s. Check the command "
                 "spelling; the device does not answer unknown commands."
@@ -419,27 +429,23 @@ class SerialDevice:
         self,
         baudrate: int,
         *,
-        device_port: str | None = None,
         recovery_timeout: float = 5.0,
         save: bool = False,
     ) -> DeviceInfo:
         """Send ``SERIALCONFIG``, switch the host to the new speed and query identity.
 
-        The device answers ``OK`` and switches immediately. Pass ``device_port``
-        (``COM1``..``COM4``) only to name another device port explicitly.
+        Only the currently connected device port is changed. The device answers
+        ``OK`` and switches immediately; ``save=True`` saves after reconnection.
         """
         if baudrate not in BAUDRATES:
             raise ValueError(f"unsupported baudrate; expected one of {BAUDRATES}")
-        if device_port is not None and not re.fullmatch(r"COM[1-4]", device_port.upper()):
-            raise ValueError("device_port must be COM1..COM4")
         _positive_timeout(recovery_timeout)
         with self._lock:
             ser = self._require_open()
-            target = f"{device_port.upper()} " if device_port is not None else ""
             previous = self.baudrate
             unacknowledged = False
             try:
-                self.command(f"SERIALCONFIG {target}{baudrate}", timeout=0.5)
+                self.command(f"SERIALCONFIG {baudrate}", timeout=0.5)
             except ResponseTimeout:
                 # The device answers before switching, so a missing reply also
                 # means the command may not have been applied at all.

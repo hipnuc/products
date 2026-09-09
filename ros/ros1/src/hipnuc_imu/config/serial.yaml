@@ -1,6 +1,4 @@
 # Configure the device for ENU output before starting; no automatic verification.
-port: /dev/ttyUSB0          # prefer /dev/serial/by-id/... on a machine with several adapters
-baudrate: 115200
 frame_id: imu_link
 publish_imu: true
 publish_mag: true

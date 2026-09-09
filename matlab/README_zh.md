@@ -13,19 +13,20 @@ plot_imu('sample_hi91.csv')
 result = analyze_imu('sample_hi91.csv');
 ```
 
-然后将文件名替换为自己的 CHCenter CSV。在 CHCenter 中开启 HI91 输出和 CSV 录制；
-做 Allan 分析时使用固定输出率，并保持设备静止。录制时间应超过 10 秒；短数据可以
+然后将文件名替换为自己的 CHCenter CSV 或 SDK JSONL。录制固定输出率的 HI91；
+做 Allan 分析时保持设备静止。录制时间应超过 10 秒；短数据可以
 演示代码，但不能用于判断长期噪声。
 
 | 函数 | 用途 |
 | --- | --- |
 | `read_hi91_csv(filename)` | 返回普通 MATLAB table，供客户程序直接使用。 |
-| `read_hipnuc_jsonl(filename)` | 从 SDK 的 JSONL 录制返回同样的 table。 |
+| `read_hipnuc_jsonl(filename)` | 从 SDK 的 HI91 JSONL 返回相同的测量列和单位。 |
 | `plot_imu(filename)` | 绘制加速度、角速度、磁场和姿态。 |
 | `analyze_imu(filename)` | 绘制 Allan 偏差并返回数值汇总；第二个参数传 `false` 可关闭绘图。 |
 | `batch_analyze(folder)` | 分析目录中的 CSV 和 JSONL，不逐文件开图；写入 `<folder>/analysis_results/summary.csv`。 |
 
-`plot_imu`、`analyze_imu`、`batch_analyze` 按扩展名选择读取函数，两种录制来源行为一致。
+`plot_imu`、`analyze_imu`、`batch_analyze` 按扩展名选择读取函数，使用两种来源共有的测量列。
+CSV 还可能包含 `pc_counter` 等额外列。
 
 ```matlab
 data = read_hi91_csv('sample_hi91.csv');
@@ -39,8 +40,8 @@ summary = batch_analyze('recordings');
 CSV 字段保留 CHCenter 的单位：`sys_time` 为 ms，`acc_x/y/z` 为 G，`gyr_x/y/z`
 为 °/s，`mag_x/y/z` 为 μT，`roll/pitch/imu_yaw` 为 °。JSONL 读取函数把 SDK 的 SI
 字段换算为同样的列和单位。这些产品的加速度 G 值
-乘以 9.8 即为 m/s²。同一文件允许包含其他报文和重复 HI91 表头，但只能录制一台设备：
-此 CSV 格式没有设备标识。
+乘以 9.8 即为 m/s²。其他报文会跳过，没有 HI91 样本的文件无法分析。
+CSV 允许重复 HI91 表头；每个文件只录制一台设备。
 
 读取时会检查缺失表头、异常数值和不递增的时间。分析还会检查采样是否均匀，允许
 1 ms 时间戳分辨率造成的量化误差；不补点、不自动重采样。批处理中有问题的文件

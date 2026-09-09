@@ -7,11 +7,12 @@ or your Python application. Supports HI91/HI81/HI83, NMEA GGA/RMC and Modbus RTU
 with **Python 3.10–3.14** on Windows, Linux (including Ubuntu and Raspberry Pi OS),
 and macOS.
 
-Optional CAN support (J1939/CANFD83) uses python-can, with Linux SocketCAN as
-the tested default. Firmware update is available over serial and over CAN.
+Optional CAN support (J1939/CANFD83) uses python-can. The CAN CLI uses Linux
+SocketCAN; Python applications can use other adapters. Firmware update is
+available over serial and over CAN.
 
 Supported devices: firmware 1.6.9 or later (HI01–HI06, HI12–HI18, HI32,
-HI70/HI71, CH0X0).
+HI70/HI71, CH0X0). The early 1.7.1 HI83 layout with a 4-byte timestamp is not supported.
 
 ## Install
 
@@ -77,7 +78,8 @@ hihost command --file commands.txt -p COM3 -b 115200 --save
 
 Replace `COM3` with your port, for example `/dev/ttyUSB0` on Linux.
 Connection options follow the **final command**, including `modbus read`.
-`-b` sets host connection speed only; `hihost baudrate NEW_BAUD` changes the device.
+`-b` sets host connection speed only; `hihost baudrate NEW_BAUD -p PORT` changes
+the baudrate of the device's currently connected port, then reconnects.
 Use `hihost scan -p PORT` for an unknown baudrate, `reboot` to restart, and append
 `--help` for options. Configuration commands require an explicit port.
 
@@ -87,7 +89,12 @@ add `--reboot` only when the settings require it. Use the managed `baudrate`
 and `reboot` commands for connection changes. Command names and applicability
 come from the product's command and programming manual.
 
-MATLAB reads the recorded JSONL directly; see [matlab/](../matlab/README.md).
+`LOG HI91 ONMARK ONCE` (also HI81/HI83/GGA/RMC) has no command ACK; the SDK
+waits for a matching sample. Receiving one does not prove the command executed,
+because that message may already be streaming. An explicit destination such as
+`LOG COM2 HI91 ONMARK ONCE` requires `--no-reply` (Python: `response="none"`).
+
+MATLAB reads **HI91** JSONL recordings; see [matlab/](../matlab/README.md).
 Recording keeps all decoded samples independently of the display's five
 readings/second limit per message type. Add `--record-raw capture.bin` for
 received bytes, `--quiet` to hide readings or `--jsonl` for machine output.
@@ -115,7 +122,7 @@ selects a known connection; omitted connection parameters use discovery.
 | `device.read(timeout=None)`, `device.iter_samples(idle_timeout=None)` | Read new samples; idle expiry raises `ResponseTimeout`, defaulting to device timeout |
 | `device.read_info()` | Product, firmware and serial number |
 | `device.command("LOG VERSION").text` | Send ASCII and receive the reply; an unsupported command may time out |
-| `device.save_config()`, `device.set_baudrate(...)`, `device.reboot()` | Explicit save and managed connection changes |
+| `device.save_config()`, `device.set_baudrate(baudrate)`, `device.reboot()` | Explicit save and managed changes on the current serial connection |
 | `Decoder().feed(data)` | Incremental byte decoding without a device; reuse one decoder, call `finish()` at end of input |
 | `sample.values`, `sample.to_dict()` | Protocol-specific fields and JSON-compatible output |
 
@@ -131,6 +138,9 @@ The SDK does not change the device's coordinate configuration.
 Communication errors derive from `HipnucError`: `TransportError`,
 `ResponseTimeout`, `DeviceError` and `VerificationError` (readback mismatch).
 Invalid arguments raise `ValueError`; recording I/O failures raise `OSError`.
+`command()` returns `CommandResult` with `command`, `text` and `acknowledged`;
+an ACK is not configuration readback. Send-only calls and ONCE samples without an
+ACK return `acknowledged=False`; a missing expected reply raises `ResponseTimeout`.
 
 For recording, connect before creating files, then attach callbacks before reading:
 
@@ -207,8 +217,8 @@ See [modbus_multinode.py](examples/modbus_multinode.py) for multi-device polling
 
 ## CAN
 
-Install the optional dependency from this directory and configure your interface
-at the device's bitrate. SocketCAN on Linux is the tested default:
+The CAN CLI requires Linux SocketCAN. Install the optional dependency from this
+directory and configure your interface at the device's bitrate:
 
 ```sh
 python -m pip install ".[can]"
@@ -218,10 +228,8 @@ hihost can read -i can0
 hihost can read -i can0 --id 8 --record samples.jsonl
 ```
 
-Other python-can adapters, including on Windows, work through `--bus-type`, for
-example `hihost can read --bus-type pcan -i PCAN_USBBUS1`; configure the adapter
-and its bitrate with the vendor's own tools. For CAN FD, configure the
-arbitration/data bitrates first, then add `--fd` to `can read`. `--id` filters one source; omitting it receives all sources.
+For CAN FD, configure the arbitration/data bitrates first, then add `--fd` to
+`can read`. `--id` filters one source; omitting it receives all sources.
 Recording uses the same JSONL format and file protection as serial. Each record
 keeps `node_id`, CAN identifier and host receive time; separate PGNs are never merged.
 Use system tools such as `ip` and `candump` for interface status and raw captures.
@@ -243,6 +251,11 @@ with can.Bus(interface="socketcan", channel="can0", ignore_config=True) as bus:
         if sample is not None:
             print(sample.values)
 ```
+
+For other adapters, including on Windows, create the bus with the backend's
+required settings, for example `can.Bus(interface="pcan", channel="PCAN_USBBUS1",
+bitrate=500000, ignore_config=True)`, and use the same SDK functions. CAN FD
+timing parameters depend on the adapter.
 
 `decode_message()` returns `None` for unrelated traffic and raises `ValueError`
 for a malformed supported frame. `read_register(bus, node_id, address)` returns

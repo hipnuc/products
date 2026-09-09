@@ -5,12 +5,15 @@
 Serial and SocketCAN drivers for HiPNUC IMU/AHRS/MRU/INS devices, using the
 shared C decoder. Supported targets: ROS 2 Humble (Ubuntu 22.04), Jazzy (24.04),
 Lyrical (26.04), and ROS 1 Noetic (20.04).
+Noetic has reached upstream end of life; use ROS 2 for new projects.
 
 **Before starting, configure the device for ENU output with its default attitude
 convention.** The driver does not verify or change device configuration.
 Set `frame_id` (in the package's config YAML) to your sensor's body frame; the
 driver does not publish TF.
 
+Source builds need colcon and rosdep for ROS 2, or catkin_make and rosdep for ROS 1.
+On Ubuntu, install the ROS 2 development tools with `sudo apt install ros-dev-tools`.
 If rosdep has never been initialized on this machine, run `sudo rosdep init` once.
 
 ## ROS 2
@@ -83,10 +86,14 @@ Its definition is in
 
 ## Connection tips
 
-- The package's `config/serial.yaml` and `config/can.yaml` hold the connection
-  settings, `frame_id` (default `imu_link`) and the `publish_imu`, `publish_mag`,
-  `publish_temperature` and `publish_hipnuc` switches. Launch arguments override
-  the connection settings only. For ROS 2, rebuild after editing the YAML.
+- Set connections through the launch arguments shown above, or command-line node
+  parameters. The package's `config/serial.yaml` and `config/can.yaml` contain
+  `frame_id` (default `imu_link`) and the `publish_imu`, `publish_mag`,
+  `publish_temperature` and `publish_hipnuc` switches. For ROS 2, rebuild after
+  editing the source YAML.
+- Driver parameters are read at startup; restart the node after changing them.
+  ROS 2 rejects runtime changes to these parameters. Standard ROS namespaces
+  and node renaming are supported through your launch file or ROS remapping.
 - For `Permission denied`, run `sudo usermod -aG dialout "$USER"`, then log out
   and back in. A virtual environment does not grant serial access.
 - Prefer a path under `/dev/serial/by-id/` when several USB adapters are present.

@@ -6,6 +6,8 @@
 #include <thread>
 
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp/executors/single_threaded_executor.hpp>
+#include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/magnetic_field.hpp>
@@ -21,13 +23,16 @@ class SerialNode : public rclcpp::Node {
 public:
     SerialNode() : Node("hipnuc_serial")
     {
-        port_ = declare_parameter<std::string>("port", "/dev/ttyUSB0");
-        baudrate_ = declare_parameter<int>("baudrate", 115200);
-        frame_id_ = declare_parameter<std::string>("frame_id", "imu_link");
-        publish_imu_ = declare_parameter<bool>("publish_imu", true);
-        publish_mag_ = declare_parameter<bool>("publish_mag", true);
-        publish_temperature_ = declare_parameter<bool>("publish_temperature", true);
-        publish_hipnuc_ = declare_parameter<bool>("publish_hipnuc", true);
+        rcl_interfaces::msg::ParameterDescriptor startup;
+        startup.read_only = true;
+        startup.description = "Applied at startup; restart the node to change this parameter.";
+        port_ = declare_parameter<std::string>("port", "/dev/ttyUSB0", startup);
+        baudrate_ = declare_parameter<int>("baudrate", 115200, startup);
+        frame_id_ = declare_parameter<std::string>("frame_id", "imu_link", startup);
+        publish_imu_ = declare_parameter<bool>("publish_imu", true, startup);
+        publish_mag_ = declare_parameter<bool>("publish_mag", true, startup);
+        publish_temperature_ = declare_parameter<bool>("publish_temperature", true, startup);
+        publish_hipnuc_ = declare_parameter<bool>("publish_hipnuc", true, startup);
         if (port_.empty() || baudrate_ <= 0 || frame_id_.empty())
             throw std::invalid_argument("port/frame_id must be nonempty and baudrate positive");
         imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("imu/data", 100);
@@ -42,6 +47,8 @@ public:
 
     void run()
     {
+        rclcpp::executors::SingleThreadedExecutor executor;
+        executor.add_node(shared_from_this());
         auto last_diag = SteadyClock::now();
         auto next_retry = last_diag;
         auto next_warning = last_diag;
@@ -73,7 +80,7 @@ public:
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
             // Failure and idle paths must still service ROS and diagnostics.
-            rclcpp::spin_some(shared_from_this());
+            executor.spin_some();
             current = SteadyClock::now();
             const double elapsed = std::chrono::duration<double>(current - last_diag).count();
             if (elapsed >= 1.0) {
@@ -125,7 +132,7 @@ private:
         diagnostic_msgs::msg::DiagnosticArray arr;
         diagnostic_msgs::msg::DiagnosticStatus st;
         arr.header.stamp = now();
-        st.name = std::string(get_name()) + ": serial";
+        st.name = std::string(get_fully_qualified_name()) + ": serial";
         st.hardware_id = port_;
         const double age = received_sample_ ? std::chrono::duration<double>(current - last_frame_).count() : -1.0;
         if (!serial_.is_open) {

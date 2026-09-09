@@ -6,6 +6,7 @@
 
 Libraries, tools and examples for reading, configuring and recording data from
 HiPNUC IMU/AHRS/MRU and INS devices (firmware 1.6.9 or later).
+The early 1.7.1 HI83 layout with a 4-byte timestamp is not supported.
 
 ## Choose your platform
 
@@ -17,7 +18,7 @@ HiPNUC IMU/AHRS/MRU and INS devices (firmware 1.6.9 or later).
 | [python/](python/README.md) | Python SDK and `hihost` CLI: serial, Modbus RTU, CAN, recording and firmware update |
 
 Also available: [EtherCAT for HI15](ethercat/README.md),
-[MATLAB analysis of CHCenter HI91 CSV](matlab/README.md)
+[MATLAB analysis of HI91 CSV/JSONL recordings](matlab/README.md)
 and the [Classic CAN J1939 database](dbc/README.md).
 
 ## Tools and documentation

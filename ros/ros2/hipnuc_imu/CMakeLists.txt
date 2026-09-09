@@ -3,6 +3,7 @@ project(hipnuc_imu)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(hipnuc_msgs REQUIRED)
@@ -23,12 +24,12 @@ endif()
 add_executable(serial_node src/serial_node.cpp)
 target_include_directories(serial_node PRIVATE ${HIPNUC_ROS_COMMON_DIR})
 target_link_libraries(serial_node PRIVATE hipnuc_serial rclcpp::rclcpp
-  ${sensor_msgs_TARGETS} ${diagnostic_msgs_TARGETS} ${hipnuc_msgs_TARGETS})
+  ${rcl_interfaces_TARGETS} ${sensor_msgs_TARGETS} ${diagnostic_msgs_TARGETS} ${hipnuc_msgs_TARGETS})
 
 add_executable(can_node src/can_node.cpp)
 target_include_directories(can_node PRIVATE ${HIPNUC_ROS_COMMON_DIR})
 target_link_libraries(can_node PRIVATE hipnuc_j1939 rclcpp::rclcpp
-  ${sensor_msgs_TARGETS} ${diagnostic_msgs_TARGETS} ${hipnuc_msgs_TARGETS})
+  ${rcl_interfaces_TARGETS} ${sensor_msgs_TARGETS} ${diagnostic_msgs_TARGETS} ${hipnuc_msgs_TARGETS})
 
 set_target_properties(serial_node can_node PROPERTIES
   CXX_STANDARD ${HIPNUC_NODE_CXX_STANDARD} CXX_STANDARD_REQUIRED YES)

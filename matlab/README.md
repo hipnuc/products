@@ -13,21 +13,22 @@ plot_imu('sample_hi91.csv')
 result = analyze_imu('sample_hi91.csv');
 ```
 
-Replace the filename with your CHCenter CSV. Enable HI91 output and CSV
-recording in CHCenter; use a fixed output rate and keep the device still for
-Allan analysis. Record for more than 10 seconds; short recordings demonstrate
+Replace the filename with your CHCenter CSV or SDK JSONL. Record HI91 output
+at a fixed rate and keep the device still for Allan analysis. Record for more
+than 10 seconds; short recordings demonstrate
 the code but cannot characterize long-term noise.
 
 | Function | Purpose |
 | --- | --- |
 | `read_hi91_csv(filename)` | Return measurements as a normal MATLAB table. |
-| `read_hipnuc_jsonl(filename)` | The same table from an SDK JSONL recording. |
+| `read_hipnuc_jsonl(filename)` | Return the same measurement columns and units from an SDK HI91 JSONL recording. |
 | `plot_imu(filename)` | Plot acceleration, angular velocity, magnetic field and attitude. |
 | `analyze_imu(filename)` | Plot Allan deviation and return a numerical summary. Pass `false` as the second argument to suppress figures. |
 | `batch_analyze(folder)` | Analyze the CSV and JSONL files in a folder without opening figures; write `<folder>/analysis_results/summary.csv`. |
 
 `plot_imu`, `analyze_imu` and `batch_analyze` select the reader from the file
-extension, so both recording sources behave identically.
+extension and use the shared measurement columns. CSV may contain additional
+columns such as `pc_counter`.
 
 ```matlab
 data = read_hi91_csv('sample_hi91.csv');
@@ -42,8 +43,8 @@ CSV columns keep CHCenter's units: `sys_time` in ms, `acc_x/y/z` in G,
 `gyr_x/y/z` in deg/s, `mag_x/y/z` in uT, and `roll/pitch/imu_yaw` in degrees.
 The JSONL reader converts the SDK's SI fields to those same columns and units.
 For these products, acceleration in G converts to m/s² by multiplying by 9.8.
-Other message types and repeated HI91 headers may occur in the file. Each file
-must contain one device: this CSV format has no device identifier.
+Other message types are skipped; a file without HI91 samples cannot be analyzed.
+Repeated HI91 headers are accepted in CSV. Record one device per file.
 
 The reader reports missing headers, invalid numbers and non-increasing time.
 Analysis also checks regular sampling, allowing the 1 ms timestamp resolution;

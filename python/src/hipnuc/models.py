@@ -183,12 +183,11 @@ class DeviceInfo:
 
 @dataclass
 class CommandResult:
-    """Command acknowledgement and optional independent readback result."""
+    """ASCII command reply; acknowledgement does not imply readback verification."""
 
     command: str
     text: str
     acknowledged: bool
-    verified: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _json_value(vars(self))

@@ -158,13 +158,7 @@ int hipnuc_serial_open(hipnuc_serial_t *device, const char *port, int baudrate)
         config.c_cc[VMIN] = 0;
         config.c_cc[VTIME] = 0;
         if (ioctl(fd, TCSETS2, &config) < 0) goto configure_error;
-        /* termios2 supports product rates such as 256000 without rounding. */
-        if (ioctl(fd, TCGETS2, &config) < 0) goto configure_error;
-        if (config.c_ispeed != (unsigned)baudrate || config.c_ospeed != (unsigned)baudrate) {
-            snprintf(device->error, sizeof(device->error), "Port did not accept %d baud", baudrate);
-            hipnuc_serial_close(device);
-            return -1;
-        }
+        /* Drivers may round the requested rate to a hardware divider. */
         receive_error_total(fd, &device->error_snapshot);
     }
 #endif

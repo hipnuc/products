@@ -5,6 +5,7 @@
 # HiPNUC SDK 与例程
 
 用于读取、配置和录制 HiPNUC IMU/AHRS/MRU 与 INS 设备数据的库、工具和例程（固件 1.6.9 及以上）。
+不支持早期 1.7.1 中使用 4 字节时间戳的 HI83 布局。
 
 ## 选择你的平台
 
@@ -16,7 +17,7 @@
 | [python/](python/README_zh.md) | Python SDK 与 `hihost` 命令行：串口、Modbus RTU、CAN、录制和固件升级 |
 
 其他资源：[HI15 EtherCAT](ethercat/README_zh.md)、
-[MATLAB 分析 CHCenter HI91 CSV](matlab/README_zh.md)、
+[MATLAB 分析 HI91 CSV/JSONL 录制](matlab/README_zh.md)、
 [Classic CAN J1939 数据库](dbc/README_zh.md)。
 
 ## 工具与文档

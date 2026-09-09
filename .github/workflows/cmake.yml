@@ -53,7 +53,11 @@ jobs:
       fail-fast: false
       matrix:
         distro: [humble, jazzy, lyrical]
-    runs-on: ubuntu-24.04
+        os: [ubuntu-24.04]
+        include:
+          - distro: jazzy
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
     container: ros:${{ matrix.distro }}-ros-base
     steps:
       - uses: actions/checkout@v4

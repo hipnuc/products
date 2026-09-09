@@ -33,7 +33,8 @@ typedef struct {
 } hipnuc_serial_t;
 
 /* Explicit port (COM3 or /dev/ttyUSB0) and baud rate. Returns 0 or -1.
- * Opening an already open object fails without closing its connection. */
+ * Opening an already open object fails without closing its connection.
+ * Drivers may round the baud rate; opening does not verify device communication. */
 int hipnuc_serial_open(hipnuc_serial_t *device, const char *port, int baudrate);
 
 /* Returns 1 for one NEW sample, 0 on timeout, -1 on transport/argument error.

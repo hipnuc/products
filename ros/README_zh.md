@@ -5,10 +5,13 @@
 面向 HiPNUC IMU/AHRS/MRU/INS 的串口与 SocketCAN 驱动，复用 C 协议库。
 目标平台：ROS 2 Humble（Ubuntu 22.04）、Jazzy（24.04）、Lyrical（26.04），
 以及 ROS 1 Noetic（20.04）。
+Noetic 已结束上游维护，新项目建议使用 ROS 2。
 
 **启动前，请将设备配置为 ENU 输出，并使用默认姿态约定。**
 驱动不验证或修改设备配置。`frame_id`（在软件包的 config YAML 中）表示传感器机体坐标系，驱动不发布 TF。
 
+源码构建需要 ROS 2 的 colcon 和 rosdep，或 ROS 1 的 catkin_make 和 rosdep。
+Ubuntu 的 ROS 2 开发工具可通过 `sudo apt install ros-dev-tools` 安装。
 若这台电脑尚未初始化 rosdep，先执行一次 `sudo rosdep init`。
 
 ## ROS 2
@@ -76,9 +79,12 @@ roslaunch hipnuc_imu serial.launch port:=/dev/ttyUSB0 baudrate:=115200
 
 ## 连接提示
 
-- 软件包的 `config/serial.yaml` 与 `config/can.yaml` 包含连接参数、`frame_id`（默认 `imu_link`）
-  以及 `publish_imu`、`publish_mag`、`publish_temperature`、`publish_hipnuc` 开关。
-  启动参数只覆盖连接参数。ROS 2 修改源码中的 YAML 后需要重新构建。
+- 连接参数通过上述 launch 参数或节点命令行参数设置。软件包的 `config/serial.yaml`
+  与 `config/can.yaml` 只包含 `frame_id`（默认 `imu_link`）以及 `publish_imu`、
+  `publish_mag`、`publish_temperature`、`publish_hipnuc` 开关。
+  ROS 2 修改源码中的 YAML 后需要重新构建。
+- 驱动参数在启动时读取，修改后须重启节点；ROS 2 会拒绝运行时修改这些参数。
+  可通过自己的 launch 文件或 ROS 重映射设置标准 namespace 和节点名称。
 - 出现 `Permission denied` 时，执行 `sudo usermod -aG dialout "$USER"`，然后注销并重新登录。
   虚拟环境不会授予串口权限。
 - 多个 USB 转接器并存时，优先使用 `/dev/serial/by-id/` 下的路径。

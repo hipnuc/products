@@ -6,10 +6,11 @@
 支持 HI91/HI81/HI83、NMEA GGA/RMC 和 Modbus RTU，适用于 **Python 3.10–3.14**、
 Windows、Linux（含 Ubuntu 和树莓派系统）及 macOS。
 
-可选 CAN 支持（J1939/CANFD83）基于 python-can，默认且经过测试的是 Linux SocketCAN。
-固件升级支持串口和 CAN。
+可选 CAN 支持（J1939/CANFD83）基于 python-can。CAN 命令行使用 Linux SocketCAN；
+Python 程序可以使用其他适配器。固件升级支持串口和 CAN。
 
 支持设备：固件 1.6.9 及以上（HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0）。
+不支持早期 1.7.1 中使用 4 字节时间戳的 HI83 布局。
 
 ## 安装
 
@@ -74,7 +75,8 @@ hihost command --file commands.txt -p COM3 -b 115200 --save
 
 将 `COM3` 替换成实际端口，例如 Linux 的 `/dev/ttyUSB0`。
 连接参数放在**最终命令之后**，包括 `modbus read`。
-`-b` 只设置电脑连接速度，`hihost baudrate NEW_BAUD` 才修改设备速度。
+`-b` 只设置电脑连接速度，`hihost baudrate NEW_BAUD -p PORT` 修改当前连接所用设备端口的
+波特率，并按新速度重新连接。
 未知波特率用 `hihost scan -p PORT`，重启用 `reboot`，具体选项在最终命令后加
 `--help` 查看。配置命令要求明确指定端口。
 
@@ -83,7 +85,12 @@ hihost command --file commands.txt -p COM3 -b 115200 --save
 连接变化使用 SDK 管理的 `baudrate` 和 `reboot` 命令。
 指令名称及适用范围以产品的指令与编程手册为准。
 
-MATLAB 可直接读取录制的 JSONL，见 [matlab/](../matlab/README_zh.md)。
+`LOG HI91 ONMARK ONCE`（也支持 HI81/HI83/GGA/RMC）没有命令 ACK，SDK 等待对应类型的
+样本。该报文可能本就在周期输出，因此收到样本不证明命令执行成功。
+显式指定目标的命令，如 `LOG COM2 HI91 ONMARK ONCE`，需使用 `--no-reply`
+（Python：`response="none"`）。
+
+MATLAB 可读取 **HI91** JSONL 录制，见 [matlab/](../matlab/README_zh.md)。
 录制保留全部已解码样本，与屏幕每种报文每秒最多五次的显示限速独立。
 加 `--record-raw capture.bin` 保存原始接收字节，`--quiet` 隐藏读数，
 `--jsonl` 输出机器数据。文件默认位于当前目录，明确加 `--overwrite` 才覆盖已有文件。
@@ -109,7 +116,7 @@ with SerialDevice() as device:
 | `device.read(timeout=None)`、`device.iter_samples(idle_timeout=None)` | 读取新样本，空闲超时抛出 `ResponseTimeout`，默认使用设备 timeout |
 | `device.read_info()` | 型号、固件及序列号 |
 | `device.command("LOG VERSION").text` | 发送 ASCII 并获取回复；不支持的指令可能超时 |
-| `device.save_config()`、`device.set_baudrate(...)`、`device.reboot()` | 显式保存及受管理的连接变化 |
+| `device.save_config()`、`device.set_baudrate(baudrate)`、`device.reboot()` | 显式保存及当前串口连接上的受管理操作 |
 | `Decoder().feed(data)` | 不依赖设备的增量字节解码；持续复用一个解码器，输入结束时调用 `finish()` |
 | `sample.values`、`sample.to_dict()` | 协议特有字段及 JSON 兼容输出 |
 
@@ -122,6 +129,9 @@ heading 从北顺时针计算，与 Euler yaw 区分；SDK 不修改设备坐标
 
 通信异常继承 `HipnucError`：`TransportError`、`ResponseTimeout`、`DeviceError`、
 `VerificationError`（读回不一致）。无效参数抛出 `ValueError`，录制 I/O 错误抛出 `OSError`。
+`command()` 返回 `CommandResult`，包含 `command`、`text` 和 `acknowledged`；
+ACK 不代表配置读回验证。仅发送，或 ONCE 收到样本但没有 ACK 时，返回
+`acknowledged=False`；等待的回复未收到时，抛出 `ResponseTimeout`。
 
 录制时先连接，再创建文件；开始读取前设置回调：
 
@@ -192,7 +202,7 @@ Python 录制时先打开总线，再打开 `Recorder`，写入每次返回的�
 
 ## CAN
 
-在本目录安装可选依赖，并按设备波特率配置接口。默认且经过测试的是 Linux SocketCAN：
+CAN 命令行需要 Linux SocketCAN。在本目录安装可选依赖，并按设备波特率配置接口：
 
 ```sh
 python -m pip install ".[can]"
@@ -202,9 +212,8 @@ hihost can read -i can0
 hihost can read -i can0 --id 8 --record samples.jsonl
 ```
 
-其它 python-can 适配器（包括 Windows）通过 `--bus-type` 使用，例如
-`hihost can read --bus-type pcan -i PCAN_USBBUS1`；适配器和波特率用厂商自带工具配置。
-使用 CAN FD 时先配置仲裁段／数据段波特率，再给 `can read` 加上 `--fd`。`--id` 筛选一个来源，省略则接收所有来源。录制沿用串口的 JSONL 格式和
+使用 CAN FD 时先配置仲裁段／数据段波特率，再给 `can read` 加上 `--fd`。
+`--id` 筛选一个来源，省略则接收所有来源。录制沿用串口的 JSONL 格式和
 文件保护；每条记录保留 `node_id`、CAN 标识符和主机接收时间，不合并不同 PGN。
 接口状态和原始抓包使用 `ip`、`candump` 等系统工具。
 
@@ -224,6 +233,10 @@ with can.Bus(interface="socketcan", channel="can0", ignore_config=True) as bus:
         if sample is not None:
             print(sample.values)
 ```
+
+使用其他适配器（包括 Windows）时，按后端要求创建总线，例如
+`can.Bus(interface="pcan", channel="PCAN_USBBUS1", bitrate=500000, ignore_config=True)`，
+再使用同一套 SDK 函数。CAN FD 的 timing 参数由适配器决定。
 
 `decode_message()` 对无关报文返回 `None`，对格式错误的已支持报文抛出 `ValueError`。
 `read_register(bus, node_id, address)` 返回原始整数；
