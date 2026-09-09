@@ -7,8 +7,8 @@ or your Python application. Supports HI91/HI81/HI83, NMEA GGA/RMC and Modbus RTU
 with **Python 3.10–3.14** on Windows, Linux (including Ubuntu and Raspberry Pi OS),
 and macOS.
 
-Optional CAN support uses Linux SocketCAN (J1939/CANFD83). Firmware update is
-available over serial on Windows/Linux and over CAN on Linux.
+Optional CAN support (J1939/CANFD83) uses python-can, with Linux SocketCAN as
+the tested default. Firmware update is available over serial and over CAN.
 
 Supported devices: firmware 1.6.9 or later (HI01–HI06, HI12–HI18, HI32,
 HI70/HI71, CH0X0).
@@ -204,10 +204,10 @@ JSONL records keep `metadata.device_id`; Modbus raw-bus recording is not provide
 For Python recording, open the bus before `Recorder` and write each returned sample.
 See [modbus_multinode.py](examples/modbus_multinode.py) for multi-device polling.
 
-## CAN on Linux
+## CAN
 
 Install the optional dependency from this directory and configure your interface
-at the device's bitrate:
+at the device's bitrate. SocketCAN on Linux is the tested default:
 
 ```sh
 python -m pip install ".[can]"
@@ -217,8 +217,10 @@ hihost can read -i can0
 hihost can read -i can0 --id 8 --record samples.jsonl
 ```
 
-For CAN FD, configure the arbitration/data bitrates in Linux first, then add
-`--fd` to `can read`. `--id` filters one source; omitting it receives all sources.
+Other python-can adapters, including on Windows, work through `--bus-type`, for
+example `hihost can read --bus-type pcan -i PCAN_USBBUS1`; configure the adapter
+and its bitrate with the vendor's own tools. For CAN FD, configure the
+arbitration/data bitrates first, then add `--fd` to `can read`. `--id` filters one source; omitting it receives all sources.
 Recording uses the same JSONL format and file protection as serial. Each record
 keeps `node_id`, CAN identifier and host receive time; separate PGNs are never merged.
 Use system tools such as `ip` and `candump` for interface status and raw captures.
@@ -251,7 +253,7 @@ register transactions consume intervening traffic and must not run alongside a r
 
 ## Firmware update
 
-CHCenter is the desktop option. For a terminal or headless Linux, use the
+CHCenter is the desktop option. For a terminal or a headless system, use the
 application firmware for the **exact device model** and specify the target:
 
 ```sh

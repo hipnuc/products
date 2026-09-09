@@ -860,27 +860,34 @@ def modbus_reboot(device, save, as_json):
 
 
 @contextmanager
-def _can_connection(interface: str, *, fd: bool = False) -> Iterator:
-    """Own a SocketCAN bus; never load python-can configuration files."""
+def _can_connection(interface: str, *, fd: bool = False, bus_type: str = "socketcan") -> Iterator:
+    """Own one python-can bus; never load python-can configuration files."""
     try:
         import can
     except ModuleNotFoundError as exc:
         if exc.name != "can":
             raise
         raise TransportError('CAN support requires: python -m pip install ".[can]"') from exc
-    if not sys.platform.startswith("linux"):
-        raise TransportError("The CAN CLI uses Linux SocketCAN. Use CHCenter for desktop CAN.")
-    hint = (
-        "Check the SocketCAN interface, link state and bitrate "
-        f"with 'ip -details link show {interface}'."
-    )
+    if bus_type == "socketcan":
+        if not sys.platform.startswith("linux"):
+            raise TransportError(
+                "SocketCAN needs Linux. On other systems select an adapter with --bus-type."
+            )
+        hint = (
+            "Check the SocketCAN interface, link state and bitrate "
+            f"with 'ip -details link show {interface}'."
+        )
+    else:
+        hint = f"Check the {bus_type} adapter, its channel name and the configured bitrate."
+    # Omit fd for adapters whose backend does not accept the argument.
+    options = {"fd": True} if fd else {}
     try:
-        bus = can.Bus(interface="socketcan", channel=interface, fd=fd, ignore_config=True)
-    except (can.CanError, OSError) as exc:
+        bus = can.Bus(interface=bus_type, channel=interface, ignore_config=True, **options)
+    except (can.CanError, OSError, ValueError) as exc:
         raise TransportError(f"Cannot open {interface}: {exc}. {hint}") from exc
     try:
         with bus:
-            click.echo(f"Connected to SocketCAN {interface}.", err=True)
+            click.echo(f"Connected to {bus_type} {interface}.", err=True)
             yield bus
     except can.CanError as exc:
         raise TransportError(f"{interface}: {exc}. {hint}") from exc
@@ -896,9 +903,15 @@ def _can_options(func=None, *, require_node=False, update=False):
         required=require_node,
         help="Target node ID; read all sources when omitted.",
     )(func)
-    return click.option("-i", "--interface", required=True, help="Linux CAN interface, e.g. can0.")(
-        func
-    )
+    func = click.option(
+        "--bus-type",
+        default="socketcan",
+        show_default=True,
+        help="python-can interface name; SocketCAN is the tested default.",
+    )(func)
+    return click.option(
+        "-i", "--interface", required=True, help="CAN channel, e.g. can0 or PCAN_USBBUS1."
+    )(func)
 
 
 @main.group("can", invoke_without_command=True)
@@ -919,14 +932,25 @@ def can_group(ctx):
 )
 @_errors
 def can_read(
-    interface, node_id, timeout, record, duration, display_rate, quiet, jsonl, overwrite, count, fd
+    interface,
+    bus_type,
+    node_id,
+    timeout,
+    record,
+    duration,
+    display_rate,
+    quiet,
+    jsonl,
+    overwrite,
+    count,
+    fd,
 ):
     """Read current-frame measurements continuously; Ctrl-C stops."""
     from .can import decode_message
 
     samples = frames = invalid = 0
     with ExitStack() as stack:
-        bus = stack.enter_context(_can_connection(interface, fd=fd))
+        bus = stack.enter_context(_can_connection(interface, fd=fd, bus_type=bus_type))
         recording = stack.enter_context(Recorder(record, overwrite=overwrite)) if record else None
         stopped = stack.enter_context(_stop_on_interrupt())
         consume = _sample_consumer(
@@ -1001,12 +1025,12 @@ def _check_can_register(node_id: int, address: int, value: int = 0) -> None:
 @_timeout_option
 @click.option("--json", "as_json", is_flag=True)
 @_errors
-def can_reg_read(address, interface, node_id, timeout, as_json):
+def can_reg_read(address, interface, bus_type, node_id, timeout, as_json):
     """Read one raw 32-bit register value."""
     from .can import read_register
 
     _check_can_register(node_id, address)
-    with _can_connection(interface) as bus:
+    with _can_connection(interface, bus_type=bus_type) as bus:
         value = read_register(bus, node_id, address, timeout=timeout)
     _show({"node_id": node_id, "address": address, "value": value}, as_json)
 
@@ -1018,12 +1042,12 @@ def can_reg_read(address, interface, node_id, timeout, as_json):
 @_timeout_option
 @click.option("--json", "as_json", is_flag=True)
 @_errors
-def can_reg_write(address, value, interface, node_id, timeout, as_json):
+def can_reg_write(address, value, interface, bus_type, node_id, timeout, as_json):
     """Write one raw register and check its reply; does not save or reboot."""
     from .can import write_register
 
     _check_can_register(node_id, address, value)
-    with _can_connection(interface) as bus:
+    with _can_connection(interface, bus_type=bus_type) as bus:
         write_register(bus, node_id, address, value, timeout=timeout)
     _show({"node_id": node_id, "address": address, "value": value, "acknowledged": True}, as_json)
 
@@ -1075,11 +1099,11 @@ def serial_update(image, port, baudrate, as_json):
 @click.option("--bin", "raw_binary", is_flag=True, help="Use a raw binary instead of Intel HEX.")
 @click.option("--json", "as_json", is_flag=True)
 @_errors
-def can_update(image, interface, node_id, raw_binary, as_json):
+def can_update(image, interface, bus_type, node_id, raw_binary, as_json):
     """Update one node using its model-specific application image (CAN SDO)."""
     from .update import update_can
 
-    with _can_connection(interface) as bus:
+    with _can_connection(interface, bus_type=bus_type) as bus:
         click.echo(f"Updating node {node_id} from {image}.", err=True)
         result = update_can(bus, node_id, image, raw_binary=raw_binary, progress=_update_progress())
     _show_update(result, as_json)

@@ -6,8 +6,8 @@
 支持 HI91/HI81/HI83、NMEA GGA/RMC 和 Modbus RTU，适用于 **Python 3.10–3.14**、
 Windows、Linux（含 Ubuntu 和树莓派系统）及 macOS。
 
-可选 CAN 支持使用 Linux SocketCAN（J1939/CANFD83）。固件升级支持 Windows/Linux
-串口及 Linux CAN。
+可选 CAN 支持（J1939/CANFD83）基于 python-can，默认且经过测试的是 Linux SocketCAN。
+固件升级支持串口和 CAN。
 
 支持设备：固件 1.6.9 及以上（HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0）。
 
@@ -189,9 +189,9 @@ JSONL 保留 `metadata.device_id`，不提供 Modbus 总线原始帧录制。
 Python 录制时先打开总线，再打开 `Recorder`，写入每次返回的样本。
 多站轮询见 [modbus_multinode.py](examples/modbus_multinode.py)。
 
-## Linux CAN
+## CAN
 
-在本目录安装可选依赖，并按设备波特率配置接口：
+在本目录安装可选依赖，并按设备波特率配置接口。默认且经过测试的是 Linux SocketCAN：
 
 ```sh
 python -m pip install ".[can]"
@@ -201,8 +201,9 @@ hihost can read -i can0
 hihost can read -i can0 --id 8 --record samples.jsonl
 ```
 
-使用 CAN FD 时，先在 Linux 配置仲裁段／数据段波特率，再给 `can read` 加上
-`--fd`。`--id` 筛选一个来源，省略则接收所有来源。录制沿用串口的 JSONL 格式和
+其它 python-can 适配器（包括 Windows）通过 `--bus-type` 使用，例如
+`hihost can read --bus-type pcan -i PCAN_USBBUS1`；适配器和波特率用厂商自带工具配置。
+使用 CAN FD 时先配置仲裁段／数据段波特率，再给 `can read` 加上 `--fd`。`--id` 筛选一个来源，省略则接收所有来源。录制沿用串口的 JSONL 格式和
 文件保护；每条记录保留 `node_id`、CAN 标识符和主机接收时间，不合并不同 PGN。
 接口状态和原始抓包使用 `ip`、`candump` 等系统工具。
 
@@ -232,7 +233,7 @@ with can.Bus(interface="socketcan", channel="can0", ignore_config=True) as bus:
 
 ## 固件升级
 
-桌面操作可使用 CHCenter。终端或无桌面 Linux 使用**对应设备型号**的应用固件，
+桌面操作可使用 CHCenter。终端或无桌面环境使用**对应设备型号**的应用固件，
 并明确指定目标：
 
 ```sh
