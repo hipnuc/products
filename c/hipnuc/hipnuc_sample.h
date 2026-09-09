@@ -101,6 +101,7 @@ typedef enum {
 #define HIPNUC_VALID_NMEA_STATUS        (UINT64_C(1) << 36)
 #define HIPNUC_VALID_NMEA_MODE          (UINT64_C(1) << 37)
 #define HIPNUC_VALID_UTC_TIME_OF_DAY    (UINT64_C(1) << 38) /* date may be absent */
+#define HIPNUC_VALID_INCLINATION_YAW   (UINT64_C(1) << 39)
 
 typedef struct {
     uint16_t year;        /* four digits */
@@ -138,6 +139,7 @@ typedef struct {
     float heading;                     /* rad, 0..2pi clockwise from north (INS heading) */
     float quat[4];                     /* w, x, y, z; body to navigation */
     float inclination[2];              /* rad, two independent tilt angles */
+    float inclination_yaw;             /* rad, yaw carried by the HI83 inclination field */
 
     /* Time */
     uint64_t device_time_us;           /* device counter; HI91 ms x 1000 */

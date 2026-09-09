@@ -5,7 +5,7 @@
 # HiPNUC SDKs and Examples
 
 Libraries, tools and examples for reading, configuring and recording data from
-HiPNUC IMU/AHRS/MRU and INS devices (firmware 1.6.9 or later).
+HiPNUC IMU/AHRS/MRU and INS devices (firmware 1.7.0 or later).
 The early 1.7.1 HI83 layout with a 4-byte timestamp is not supported.
 
 ## Choose your platform

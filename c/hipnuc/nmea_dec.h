@@ -34,7 +34,7 @@ typedef enum {
 typedef struct {
     uint8_t  hour;            /* UTC time of day */
     uint8_t  minute;
-    double   second;
+    uint16_t second_ms;       /* second * 1000 + millisecond, 0..60999 */
     uint8_t  has_time;
     double   lat;             /* deg, north positive */
     double   lon;             /* deg, east positive */
@@ -64,7 +64,7 @@ typedef struct {
     uint8_t  has_date;
     uint8_t  hour;
     uint8_t  minute;
-    double   second;
+    uint16_t second_ms;       /* second * 1000 + millisecond, 0..60999 */
     uint8_t  has_time;
     uint8_t  has_status;
     char     status;          /* 'A' = valid, 'V' = void */

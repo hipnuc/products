@@ -119,7 +119,8 @@ int main(void)
                 }
             }
             io_result = ecrt_master_sync_slave_clocks(ctx.master);
-            if (io_result < 0) {
+            /* This call also needs a reference clock during startup/recovery. */
+            if (io_result < 0 && !(io_result == -ENXIO && !valid)) {
                 fprintf(stderr, "EtherCAT slave clock sync failed (%d)\n", io_result);
                 result = 1;
                 break;

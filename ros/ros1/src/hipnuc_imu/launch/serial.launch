@@ -2,10 +2,11 @@
   <arg name="port" default="/dev/ttyUSB0"/>
   <arg name="baudrate" default="115200"/>
   <arg name="frame_id" default="imu_link"/>
+  <arg name="params_file" default="$(find hipnuc_imu)/config/serial.yaml"/>
   <node pkg="hipnuc_imu" type="serial_node" name="hipnuc_serial" output="screen">
-    <rosparam command="load" file="$(find hipnuc_imu)/config/serial.yaml"/>
+    <rosparam command="load" file="$(arg params_file)"/>
     <param name="port" value="$(arg port)"/>
     <param name="baudrate" value="$(arg baudrate)"/>
-    <param name="frame_id" value="$(arg frame_id)"/>
+    <param name="frame_id" type="str" value="$(arg frame_id)"/>
   </node>
 </launch>

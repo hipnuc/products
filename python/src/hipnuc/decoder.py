@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from binascii import crc_hqx
 from collections import deque
 from datetime import date, datetime, time, timezone
 import math
@@ -86,11 +87,7 @@ _HI83_SCALAR_NAMES = {
 
 def _crc16(data: bytes, crc: int = 0) -> int:
     """CRC-16/XMODEM (poly 0x1021, init 0), as used by the HiPNUC frame header."""
-    for value in data:
-        crc ^= value << 8
-        for _ in range(8):
-            crc = ((crc << 1) ^ (0x1021 if crc & 0x8000 else 0)) & 0xFFFF
-    return crc
+    return crc_hqx(data, crc)
 
 
 def status_flags(main_status: int) -> list[str]:
@@ -245,6 +242,11 @@ class Decoder:
     def buffered_bytes(self) -> int:
         """Number of undecoded bytes, excluding the bounded text-line queue."""
         return len(self._buffer) + len(self._text)
+
+    @property
+    def needs_resync(self) -> bool:
+        """True after binary corruption, until a valid frame or ``reset()``."""
+        return self._quarantine
 
     def reset(self) -> None:
         """Discard pending input and response lines; retain diagnostic counts."""

@@ -150,6 +150,11 @@ class Sample:
         """Two independent inclination angles, in radians; not Euler roll/pitch."""
         return cast(Vector2 | None, self._vector("inclination_rad"))
 
+    @property
+    def inclination_yaw_rad(self) -> float | None:
+        """HI83 inclination yaw, in radians; distinct from Euler yaw."""
+        return _finite_number(self.values.get("inclination_yaw_rad"))
+
     def to_dict(self, *, include_raw: bool = False) -> dict[str, Any]:
         """Export a flat record suitable for ``json.dumps(allow_nan=False)``."""
         result = _json_value(self.values)

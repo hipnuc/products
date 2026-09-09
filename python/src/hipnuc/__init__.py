@@ -1,7 +1,14 @@
 """HiPNUC SDK. Importing never opens a connection or requires CAN support."""
 
 from .decoder import Decoder
-from .errors import DeviceError, HipnucError, ResponseTimeout, TransportError, VerificationError
+from .errors import (
+    CommandTimeout,
+    DeviceError,
+    HipnucError,
+    ResponseTimeout,
+    TransportError,
+    VerificationError,
+)
 from .models import CommandResult, DeviceInfo, Sample
 from .modbus import ModbusBus, ModbusDevice, WriteResult
 from .recording import Recorder
@@ -23,6 +30,7 @@ __all__ = [
     "DeviceError",
     "TransportError",
     "ResponseTimeout",
+    "CommandTimeout",
     "VerificationError",
     "ModbusBus",
     "ModbusDevice",

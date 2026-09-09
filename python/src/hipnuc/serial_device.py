@@ -11,6 +11,7 @@ import re
 import threading
 import time
 from types import TracebackType
+from typing import NoReturn
 
 import serial
 from serial.tools import list_ports
@@ -23,7 +24,7 @@ from ._connection import (
     open_error,
 )
 from .decoder import Decoder
-from .errors import DeviceError, ResponseTimeout, TransportError, VerificationError
+from .errors import CommandTimeout, DeviceError, ResponseTimeout, TransportError, VerificationError
 from .models import CommandResult, DeviceInfo, Sample
 
 BAUDRATES = (115200, 921600, 460800, 230400, 256000, 57600, 38400, 19200, 9600, 4800)
@@ -292,6 +293,23 @@ class SerialDevice:
             raise DeviceError("Command response exceeds 64 KiB", response="\n".join(lines))
         return acknowledged
 
+    def _command_timeout(self, message: str, *, sent: bool) -> NoReturn:
+        """Reopen a desynchronized stream once, without replaying the command."""
+        if self.decoder.needs_resync or self.decoder.buffered_bytes:
+            message += " Serial input is incomplete or desynchronized."
+            try:
+                self.close()
+                self.open()
+            except (TransportError, OSError) as exc:
+                raise CommandTimeout(
+                    f"{message} Reopening {self.port} at {self.baudrate} baud failed: {exc}",
+                    sent=sent,
+                ) from exc
+            message += (
+                f" Reopened {self.port} at {self.baudrate} baud; the command was not retried."
+            )
+        raise CommandTimeout(message, sent=sent)
+
     def command(
         self, command: str, *, timeout: float | None = None, response: str = "auto"
     ) -> CommandResult:
@@ -306,6 +324,10 @@ class SerialDevice:
         command surfaces as ``ResponseTimeout``. Binary bytes never count as an
         acknowledgement. The first command after opening waits for a clean
         frame boundary so the reply cannot be confused with an ongoing stream.
+        Known corruption waits for a valid frame within the response timeout
+        before sending. ``CommandTimeout.sent`` reports whether the command was
+        written; unresolved corruption reopens the same port once for the next
+        call. No command is automatically retried. Send-only calls skip this wait.
         """
         command = command.strip()
         if not command or "\r" in command or "\n" in command:
@@ -321,6 +343,7 @@ class SerialDevice:
         duration = _positive_timeout(self.timeout if timeout is None else timeout)
         with self._lock:
             ser = self._require_open()
+            write_started = False
             try:
                 if not self._command_prepared:
                     # Opening a USB UART can start in the middle of a frame.
@@ -345,18 +368,42 @@ class SerialDevice:
                 queued = ser.in_waiting
                 while queued:
                     if time.monotonic() >= deadline:
-                        raise ResponseTimeout("Timed out draining the serial receive queue")
+                        self._command_timeout(
+                            "Timed out draining the serial receive queue; command was not sent",
+                            sent=False,
+                        )
                     before = self.decoder.statistics["bytes_received"]
                     self._pump(0)
                     consumed = self.decoder.statistics["bytes_received"] - before
                     if not consumed:
                         break
                     queued = max(0, queued - consumed)
+                if response == "auto":
+                    while self.decoder.needs_resync:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            self._command_timeout(
+                                f"Cannot synchronize serial input before {command!r}; "
+                                "command was not sent",
+                                sent=False,
+                            )
+                        self._pump(remaining)
+                    if time.monotonic() >= deadline:
+                        self._command_timeout(
+                            f"Timed out preparing {command!r}; command was not sent", sent=False
+                        )
                 self.decoder.drain_lines(discard_partial=True)
                 encoded = (command + "\r\n").encode("ascii")
+                write_started = True
                 if ser.write(encoded) != len(encoded):
                     raise TransportError("Short serial write")
-            except (serial.SerialException, OSError) as exc:
+            except CommandTimeout:
+                raise
+            except (TransportError, OSError) as exc:
+                if not write_started:
+                    self._command_timeout(
+                        f"Cannot prepare {command!r}; command was not sent: {exc}", sent=False
+                    )
                 raise TransportError(f"Write to {self.port} failed: {exc}") from exc
             if response == "none":
                 return CommandResult(command, "", False)
@@ -367,9 +414,11 @@ class SerialDevice:
                     return CommandResult(command, "\n".join(lines), True)
                 if once and any(s.type == once["message"] for s in samples):
                     return CommandResult(command, "\n".join(lines), False)
-            raise ResponseTimeout(
+            self._command_timeout(
                 f"No OK reply to {command!r} within {duration:g}s. Check the command "
-                "spelling; the device does not answer unknown commands."
+                "spelling; the device does not answer unknown commands. "
+                "The command was sent; execution is unconfirmed.",
+                sent=True,
             )
 
     def read_info(self) -> DeviceInfo:
@@ -441,17 +490,19 @@ class SerialDevice:
             raise ValueError(f"unsupported baudrate; expected one of {BAUDRATES}")
         _positive_timeout(recovery_timeout)
         with self._lock:
-            ser = self._require_open()
+            self._require_open()
             previous = self.baudrate
             unacknowledged = False
             try:
                 self.command(f"SERIALCONFIG {baudrate}", timeout=0.5)
-            except ResponseTimeout:
+            except CommandTimeout as exc:
+                if not exc.sent or not self.is_open:
+                    raise
                 # The device answers before switching, so a missing reply also
                 # means the command may not have been applied at all.
                 unacknowledged = True
             try:
-                ser.baudrate = baudrate
+                self._require_open().baudrate = baudrate
             except (serial.SerialException, OSError) as exc:
                 raise TransportError(f"Cannot configure {self.port} at {baudrate}: {exc}") from exc
             self.baudrate = baudrate
@@ -469,14 +520,15 @@ class SerialDevice:
             return info
 
     def reboot(self, *, recovery_timeout: float = 5.0) -> DeviceInfo:
-        """Send ``REBOOT`` once and wait until the device answers again."""
+        """Send ``REBOOT`` once, discard old queued samples and wait for identity."""
         _positive_timeout(recovery_timeout)
         with self._lock:
             self._require_open()
             try:
                 self.command("REBOOT", timeout=0.5)
-            except ResponseTimeout:
-                pass
+            except CommandTimeout as exc:
+                if not exc.sent or not self.is_open:
+                    raise
             except TransportError:
                 # A native USB port may disappear while the device resets;
                 # _wait_for_info reopens it.
@@ -486,6 +538,8 @@ class SerialDevice:
                     pass
             # Do not query identity while the pre-reset application still runs.
             time.sleep(0.01)
+            self._samples.clear()
+            self.decoder.reset()
             return self._wait_for_info(recovery_timeout)
 
 

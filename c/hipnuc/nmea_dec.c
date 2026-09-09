@@ -84,21 +84,28 @@ static int parse_coordinate(const char *value, const char *hemi, char positive, 
     return 1;
 }
 
-/* hhmmss[.sss] */
-static int parse_time(const char *s, uint8_t *hour, uint8_t *minute, double *second)
+/* hhmmss[.fraction], with sub-millisecond digits truncated. */
+static int parse_time(const char *s, uint8_t *hour, uint8_t *minute, uint16_t *second_ms)
 {
-    double t;
-    uint32_t whole;
+    unsigned h, m, second, ms = 0, scale = 100;
     int i;
-    if (strlen(s) < 6 || (s[6] != '\0' && s[6] != '.')) return 0;
     for (i = 0; i < 6; i++) if (s[i] < '0' || s[i] > '9') return 0;
-    if (!parse_number(s, &t) || t < 0 || t >= 240000) return 0;
-    whole = (uint32_t)t;
-    *hour = (uint8_t)(whole / 10000);
-    *minute = (uint8_t)((whole / 100) % 100);
-    *second = t - (whole / 100) * 100;
-    return *hour < 24 && *minute < 60 && *second < 61 &&
-           (*second < 60 || (*hour == 23 && *minute == 59));
+    if (s[6] != '\0' && s[6] != '.') return 0;
+    h = (unsigned)(s[0] - '0') * 10 + (unsigned)(s[1] - '0');
+    m = (unsigned)(s[2] - '0') * 10 + (unsigned)(s[3] - '0');
+    second = (unsigned)(s[4] - '0') * 10 + (unsigned)(s[5] - '0');
+    if (h >= 24 || m >= 60 || second > 60 || (second == 60 && (h != 23 || m != 59))) return 0;
+    if (s[6] == '.') {
+        for (i = 7; s[i]; i++) {
+            if (s[i] < '0' || s[i] > '9') return 0;
+            ms += (unsigned)(s[i] - '0') * scale;
+            scale /= 10;
+        }
+    }
+    *hour = (uint8_t)h;
+    *minute = (uint8_t)m;
+    *second_ms = (uint16_t)(second * 1000 + ms);
+    return 1;
 }
 
 /* ddmmyy */
@@ -120,7 +127,7 @@ static void dec_gga(nmea_gga_t *g, char **f, int n)
     uint32_t i;
     memset(g, 0, sizeof(*g));
     if (n < 14) return;
-    g->has_time = (uint8_t)parse_time(f[1], &g->hour, &g->minute, &g->second);
+    g->has_time = (uint8_t)parse_time(f[1], &g->hour, &g->minute, &g->second_ms);
     g->has_position = (uint8_t)(parse_coordinate(f[2], f[3], 'N', 'S', &g->lat) &&
                                 parse_coordinate(f[4], f[5], 'E', 'W', &g->lon));
     if (parse_uint(f[6], UINT8_MAX, &i)) { g->quality = (uint8_t)i; g->has_quality = 1; }
@@ -138,7 +145,7 @@ static void dec_rmc(nmea_rmc_t *r, char **f, int n)
     r->status = 'V';
     r->mode = 'N';
     if (n < 10) return;
-    r->has_time = (uint8_t)parse_time(f[1], &r->hour, &r->minute, &r->second);
+    r->has_time = (uint8_t)parse_time(f[1], &r->hour, &r->minute, &r->second_ms);
     if ((f[2][0] == 'A' || f[2][0] == 'V') && f[2][1] == '\0') {
         r->status = f[2][0];
         r->has_status = 1;
@@ -252,13 +259,12 @@ int nmea_input(nmea_raw_t *raw, uint8_t data)
 }
 
 /* NMEA fields to SI sample conversion. */
-static void set_time_of_day(hipnuc_sample_t *s, uint8_t hour, uint8_t minute, double second)
+static void set_time_of_day(hipnuc_sample_t *s, uint8_t hour, uint8_t minute, uint16_t second_ms)
 {
-    unsigned ms = (unsigned)(second * 1000.0);
     s->utc.hour = hour;
     s->utc.minute = minute;
-    s->utc.second = (uint8_t)(ms / 1000);
-    s->utc.millisecond = (uint16_t)(ms % 1000);
+    s->utc.second = (uint8_t)(second_ms / 1000);
+    s->utc.millisecond = (uint16_t)(second_ms % 1000);
     s->valid |= HIPNUC_VALID_UTC_TIME_OF_DAY;
 }
 
@@ -279,7 +285,7 @@ void hipnuc_sample_from_gga(const nmea_gga_t *g, hipnuc_sample_t *s)
     if (g->has_diff_age) { s->diff_age = g->diff_age; s->valid |= HIPNUC_VALID_DIFF_AGE; }
     if (g->has_time) {
         /* Time of day only: the date is unknown, so UTC stays invalid. */
-        set_time_of_day(s, g->hour, g->minute, g->second);
+        set_time_of_day(s, g->hour, g->minute, g->second_ms);
     }
 }
 
@@ -302,7 +308,7 @@ void hipnuc_sample_from_rmc(const nmea_rmc_t *r, hipnuc_sample_t *s)
         s->cog = r->cog * HIPNUC_DEG2RAD;
         s->valid |= HIPNUC_VALID_COG;
     }
-    if (r->has_time) set_time_of_day(s, r->hour, r->minute, r->second);
+    if (r->has_time) set_time_of_day(s, r->hour, r->minute, r->second_ms);
     if (r->has_date && r->has_time) {
         s->utc.year = r->year;
         s->utc.month = r->month;

@@ -9,7 +9,7 @@ Windows、Linux（含 Ubuntu 和树莓派系统）及 macOS。
 可选 CAN 支持（J1939/CANFD83）基于 python-can。CAN 命令行使用 Linux SocketCAN；
 Python 程序可以使用其他适配器。固件升级支持串口和 CAN。
 
-支持设备：固件 1.6.9 及以上（HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0）。
+支持设备：固件 1.7.0 及以上（HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0）。
 不支持早期 1.7.1 中使用 4 字节时间戳的 HI83 布局。
 
 ## 安装
@@ -113,7 +113,7 @@ with SerialDevice() as device:
 | 接口 | 用途 |
 | --- | --- |
 | `SerialDevice(..., timeout=2.0)` | 串口连接，超时单位为秒 |
-| `device.read(timeout=None)`、`device.iter_samples(idle_timeout=None)` | 读取新样本，空闲超时抛出 `ResponseTimeout`，默认使用设备 timeout |
+| `device.read(timeout=None)`、`device.iter_samples(idle_timeout=None)` | 读取队列中或新收到的样本，空闲超时抛出 `ResponseTimeout`，默认使用设备 timeout |
 | `device.read_info()` | 型号、固件及序列号 |
 | `device.command("LOG VERSION").text` | 发送 ASCII 并获取回复；不支持的指令可能超时 |
 | `device.save_config()`、`device.set_baudrate(baudrate)`、`device.reboot()` | 显式保存及当前串口连接上的受管理操作 |
@@ -126,12 +126,18 @@ with SerialDevice() as device:
 heading 从北顺时针计算，与 Euler yaw 区分；SDK 不修改设备坐标配置。
 `received_time_ns` 为主机接收时间，设备时间与 UTC 为独立字段。
 `complete`、`issues`、`metadata` 保留解析和来源信息。
+受管理的重启在等待设备恢复前清空旧样本队列；已经交给录制回调的样本保留。
 
 通信异常继承 `HipnucError`：`TransportError`、`ResponseTimeout`、`DeviceError`、
 `VerificationError`（读回不一致）。无效参数抛出 `ValueError`，录制 I/O 错误抛出 `OSError`。
 `command()` 返回 `CommandResult`，包含 `command`、`text` 和 `acknowledged`；
 ACK 不代表配置读回验证。仅发送，或 ONCE 收到样本但没有 ACK 时，返回
 `acknowledged=False`；等待的回复未收到时，抛出 `ResponseTimeout`。
+
+串口命令使用 `ResponseTimeout` 的子类 `CommandTimeout`：`sent=False` 表示命令
+未写出，`sent=True` 表示是否执行尚未确认。遇到损坏输入时，SDK 在命令超时内等待
+合法帧恢复同步；仍无法恢复时，仅重新打开一次原端口和波特率，供下一次调用使用。
+重开失败则保持关闭。原命令不会自动重发，`response="none"` 仍为仅发送。
 
 录制时先连接，再创建文件；开始读取前设置回调：
 

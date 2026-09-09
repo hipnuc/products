@@ -8,7 +8,8 @@
 //     specific force in m/s^2 (gravity not removed). A covariance whose first
 //     element is -1 means "not provided"; all zeros means "unknown".
 //   * Standard orientation requires ENU device configuration.
-//   * The time stamp is set by the node from its own clock.
+//   * The node stamps each decoded sample with its ROS clock before publishing;
+//     this is neither a kernel receive timestamp nor the device sampling time.
 
 #ifndef HIPNUC_ROS_CONVERT_HPP
 #define HIPNUC_ROS_CONVERT_HPP
@@ -40,15 +41,13 @@ inline double quaternion_norm(const hipnuc_sample_t &s)
 }
 
 // Measurements belong to this sample only; heading cannot supply orientation.
-// An absent quantity is zero-filled with a -1 covariance, and common consumers
-// integrate those zeros, so a standard Imu needs a complete inertial pair or an
-// orientation. One classic-CAN PGN carries neither; its fields stay in the
-// product message.
+// sensor_msgs/Imu permits partial measurements; fill_imu marks missing quantities
+// with -1 covariance. Consumers must support those markers or require full input.
 inline bool has_imu(const hipnuc_sample_t &s)
 {
     const bool acc = (s.valid & HIPNUC_VALID_ACC) && finite_vector(s.acc);
     const bool gyr = (s.valid & HIPNUC_VALID_GYR) && finite_vector(s.gyr);
-    return (acc && gyr) || quaternion_norm(s) > 0.0;
+    return acc || gyr || quaternion_norm(s) > 0.0;
 }
 
 template <class Imu>
@@ -137,6 +136,7 @@ void fill_hipnuc(const hipnuc_sample_t &s, HipnucImu &m)
     for (int i = 0; i < 4; ++i) m.quaternion_wxyz[i] = s.quat[i];
     m.inclination[0] = s.inclination[0];
     m.inclination[1] = s.inclination[1];
+    m.inclination_yaw = s.inclination_yaw;
     m.device_time_us = s.device_time_us;
     m.utc_valid = (s.valid & HIPNUC_VALID_UTC) != 0;
     m.utc_year = s.utc.year;

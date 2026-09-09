@@ -41,8 +41,9 @@ uint64 VALID_COG=34359738368
 uint64 VALID_NMEA_STATUS=68719476736
 uint64 VALID_NMEA_MODE=137438953472
 uint64 VALID_UTC_TIME_OF_DAY=274877906944
+uint64 VALID_INCLINATION_YAW=549755813888
 
-std_msgs/Header header         # host reception time; frame_id describes body axes
+std_msgs/Header header         # host ROS time after decoding, before publishing; body-axis frame_id
 uint8 source                 # 1 HI91, 2 HI81, 3 HI83, 4 GGA, 5 RMC, 6 J1939, 7 CANFD83
 uint64 valid
 uint8 node_id                # CAN source address or HI83 node id
@@ -64,6 +65,7 @@ float32 yaw
 float32 heading              # rad, clockwise from north (INS / J1939)
 float32[4] quaternion_wxyz   # body to navigation
 float32[2] inclination       # rad
+float32 inclination_yaw      # rad, HI83 inclinometer yaw, VALID_INCLINATION_YAW
 
 uint64 device_time_us
 bool utc_valid

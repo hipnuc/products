@@ -217,6 +217,7 @@ int hipnuc_json_sample(const hipnuc_sample_t *s, char *buf, size_t size)
     if (v & HIPNUC_VALID_HEADING) scalar(&w, "heading_rad", s->heading, 7);
     if (v & HIPNUC_VALID_QUAT) vector(&w, "quaternion_wxyz", s->quat, 4, 7);
     if (v & HIPNUC_VALID_INCLINATION) vector(&w, "inclination_rad", s->inclination, 2, 7);
+    if (v & HIPNUC_VALID_INCLINATION_YAW) scalar(&w, "inclination_yaw_rad", s->inclination_yaw, 7);
     if (v & HIPNUC_VALID_PRESSURE) scalar(&w, "pressure_pa", s->pressure, 8);
     if (v & HIPNUC_VALID_TEMPERATURE) scalar(&w, "temperature_c", s->temperature, 6);
     if (v & HIPNUC_VALID_HEAVE) vector(&w, "heave_surge_sway_m", s->heave_m, 3, 6);

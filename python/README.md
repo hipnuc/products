@@ -11,7 +11,7 @@ Optional CAN support (J1939/CANFD83) uses python-can. The CAN CLI uses Linux
 SocketCAN; Python applications can use other adapters. Firmware update is
 available over serial and over CAN.
 
-Supported devices: firmware 1.6.9 or later (HI01–HI06, HI12–HI18, HI32,
+Supported devices: firmware 1.7.0 or later (HI01–HI06, HI12–HI18, HI32,
 HI70/HI71, CH0X0). The early 1.7.1 HI83 layout with a 4-byte timestamp is not supported.
 
 ## Install
@@ -119,7 +119,7 @@ selects a known connection; omitted connection parameters use discovery.
 | Interface | Purpose |
 | --- | --- |
 | `SerialDevice(..., timeout=2.0)` | Serial connection; timeouts are in seconds |
-| `device.read(timeout=None)`, `device.iter_samples(idle_timeout=None)` | Read new samples; idle expiry raises `ResponseTimeout`, defaulting to device timeout |
+| `device.read(timeout=None)`, `device.iter_samples(idle_timeout=None)` | Read queued/new samples; idle expiry raises `ResponseTimeout`, defaulting to device timeout |
 | `device.read_info()` | Product, firmware and serial number |
 | `device.command("LOG VERSION").text` | Send ASCII and receive the reply; an unsupported command may time out |
 | `device.save_config()`, `device.set_baudrate(baudrate)`, `device.reboot()` | Explicit save and managed changes on the current serial connection |
@@ -134,6 +134,8 @@ configured convention. Heading is clockwise from north, distinct from Euler yaw.
 The SDK does not change the device's coordinate configuration.
 `received_time_ns` is host reception time; device time and UTC are separate fields.
 `complete`, `issues` and `metadata` retain parsing and source information.
+Managed reboot clears old queued samples before waiting for the restarted device;
+samples already delivered to recording callbacks remain recorded.
 
 Communication errors derive from `HipnucError`: `TransportError`,
 `ResponseTimeout`, `DeviceError` and `VerificationError` (readback mismatch).
@@ -141,6 +143,13 @@ Invalid arguments raise `ValueError`; recording I/O failures raise `OSError`.
 `command()` returns `CommandResult` with `command`, `text` and `acknowledged`;
 an ACK is not configuration readback. Send-only calls and ONCE samples without an
 ACK return `acknowledged=False`; a missing expected reply raises `ResponseTimeout`.
+
+Serial commands use `CommandTimeout`, a `ResponseTimeout` subclass. Its `sent`
+flag is false when the command was not written, and true when execution is
+unconfirmed. After corrupted input, the SDK waits for a valid frame within the
+command timeout. If synchronization still fails, it reopens the same port and
+baudrate once for the next call; a failed reopen leaves it closed. The command
+is never automatically retried. `response="none"` remains send-only.
 
 For recording, connect before creating files, then attach callbacks before reading:
 

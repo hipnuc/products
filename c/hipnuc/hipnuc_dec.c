@@ -516,7 +516,8 @@ void hipnuc_sample_from_hi83(const hi83_t *p, hipnuc_sample_t *s)
     if (bm & HI83_BMAP_INCLINATION) {
         s->inclination[0] = p->inclination[0] * HIPNUC_DEG2RAD;
         s->inclination[1] = p->inclination[1] * HIPNUC_DEG2RAD;
-        s->valid |= HIPNUC_VALID_INCLINATION;
+        s->inclination_yaw = p->inclination[2] * HIPNUC_DEG2RAD;
+        s->valid |= HIPNUC_VALID_INCLINATION | HIPNUC_VALID_INCLINATION_YAW;
     }
     if (bm & HI83_BMAP_HSS) {
         for (i = 0; i < 3; ++i) s->heave_m[i] = p->hss[i];

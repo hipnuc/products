@@ -12,7 +12,7 @@
  * Structure fields keep the units used on the wire (see comments). Use
  * hipnuc_sample.h to obtain SI units with validity flags.
  *
- * Supported firmware: current platform, 1.6.9 or later. The HI83 timestamp is
+ * Supported firmware: current platform, 1.7.0 or later. The HI83 timestamp is
  * the 8-byte microsecond layout; early 1.7.1 builds with a 4-byte layout must
  * be upgraded.
  */
