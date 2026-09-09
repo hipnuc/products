@@ -11,8 +11,7 @@ Optional CAN support (J1939/CANFD83) uses python-can. The CAN CLI uses Linux
 SocketCAN; Python applications can use other adapters. Firmware update is
 available over serial and over CAN.
 
-Supported devices: firmware 1.7.0 or later (HI01–HI06, HI12–HI18, HI32,
-HI70/HI71, CH0X0). The early 1.7.1 HI83 layout with a 4-byte timestamp is not supported.
+Supported devices: HI01–HI06, HI12–HI18, HI32, HI70/HI71 and CH0X0.
 
 ## Install
 

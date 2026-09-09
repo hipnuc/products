@@ -124,9 +124,7 @@ temperature °C. The device's coordinate configuration is preserved. Units,
 status and quality fields are documented in [hipnuc_sample.h](hipnuc/hipnuc_sample.h).
 Use the derived convergence fields: a set device `ATT_CONV`/`WB_CONV` bit is a warning.
 
-Supported products use current-platform firmware 1.7.0 or later, excluding
-the early 1.7.1 HI83 layout with a 4-byte timestamp. The core
-requires 8-bit bytes and IEEE 754 floats; position fields require 8-byte
+The core requires 8-bit bytes and IEEE 754 floats; position fields require 8-byte
 `double`. Unsupported binary layouts and HI83 bitmap fields are rejected.
 Only the optional JSON formatter uses `stdio`.
 

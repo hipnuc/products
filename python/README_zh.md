@@ -9,8 +9,7 @@ Windows、Linux（含 Ubuntu 和树莓派系统）及 macOS。
 可选 CAN 支持（J1939/CANFD83）基于 python-can。CAN 命令行使用 Linux SocketCAN；
 Python 程序可以使用其他适配器。固件升级支持串口和 CAN。
 
-支持设备：固件 1.7.0 及以上（HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0）。
-不支持早期 1.7.1 中使用 4 字节时间戳的 HI83 布局。
+支持设备：HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0。
 
 ## 安装
 
