@@ -40,10 +40,15 @@ inline double quaternion_norm(const hipnuc_sample_t &s)
 }
 
 // Measurements belong to this sample only; heading cannot supply orientation.
+// An absent quantity is zero-filled with a -1 covariance, and common consumers
+// integrate those zeros, so a standard Imu needs a complete inertial pair or an
+// orientation. One classic-CAN PGN carries neither; its fields stay in the
+// product message.
 inline bool has_imu(const hipnuc_sample_t &s)
 {
-    return ((s.valid & HIPNUC_VALID_ACC) && finite_vector(s.acc)) ||
-           ((s.valid & HIPNUC_VALID_GYR) && finite_vector(s.gyr)) || quaternion_norm(s) > 0.0;
+    const bool acc = (s.valid & HIPNUC_VALID_ACC) && finite_vector(s.acc);
+    const bool gyr = (s.valid & HIPNUC_VALID_GYR) && finite_vector(s.gyr);
+    return (acc && gyr) || quaternion_norm(s) > 0.0;
 }
 
 template <class Imu>

@@ -14,6 +14,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("port", default_value="/dev/ttyUSB0"),
             DeclareLaunchArgument("baudrate", default_value="115200"),
+            DeclareLaunchArgument("frame_id", default_value="imu_link"),
             Node(
                 package="hipnuc_imu",
                 executable="serial_node",
@@ -21,7 +22,11 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     config,
-                    {"port": LaunchConfiguration("port"), "baudrate": ParameterValue(LaunchConfiguration("baudrate"), value_type=int)},
+                    {
+                        "port": LaunchConfiguration("port"),
+                        "baudrate": ParameterValue(LaunchConfiguration("baudrate"), value_type=int),
+                        "frame_id": LaunchConfiguration("frame_id"),
+                    },
                 ],
             ),
         ]

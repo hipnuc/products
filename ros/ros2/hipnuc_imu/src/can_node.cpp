@@ -7,6 +7,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/executors/single_threaded_executor.hpp>
+#include <rclcpp/qos_overriding_options.hpp>
 #include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <sensor_msgs/msg/imu.hpp>
@@ -36,10 +37,15 @@ public:
         publish_hipnuc_ = declare_parameter<bool>("publish_hipnuc", true, startup);
         if (interface_.empty() || node_id_ < 0 || node_id_ > 255 || frame_id_.empty())
             throw std::invalid_argument("interface/frame_id must be nonempty and node_id in 0..255");
-        imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("imu/data", 100);
-        mag_pub_ = create_publisher<sensor_msgs::msg::MagneticField>("imu/mag", 100);
-        temp_pub_ = create_publisher<sensor_msgs::msg::Temperature>("imu/temperature", 10);
-        full_pub_ = create_publisher<hipnuc_msgs::msg::HipnucImu>("hipnuc/imu", 100);
+        rclcpp::PublisherOptions publisher_options;
+        // Let a deployment relax reliability or depth without rebuilding, e.g.
+        // qos_overrides./imu/data.publisher.reliability:=best_effort.
+        publisher_options.qos_overriding_options =
+            rclcpp::QosOverridingOptions::with_default_policies();
+        imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("imu/data", 100, publisher_options);
+        mag_pub_ = create_publisher<sensor_msgs::msg::MagneticField>("imu/mag", 100, publisher_options);
+        temp_pub_ = create_publisher<sensor_msgs::msg::Temperature>("imu/temperature", 10, publisher_options);
+        full_pub_ = create_publisher<hipnuc_msgs::msg::HipnucImu>("hipnuc/imu", 100, publisher_options);
         diag_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
         RCLCPP_INFO(get_logger(), "Requires device ENU output configuration; the driver does not verify or change it.");
     }

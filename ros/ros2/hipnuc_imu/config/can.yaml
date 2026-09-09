@@ -1,7 +1,6 @@
 # Configure the device for ENU output before starting; no automatic verification.
 /**:
   ros__parameters:
-    frame_id: imu_link
     publish_hipnuc: true
     publish_imu: true
     publish_mag: true

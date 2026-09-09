@@ -9,8 +9,8 @@ Noetic has reached upstream end of life; use ROS 2 for new projects.
 
 **Before starting, configure the device for ENU output with its default attitude
 convention.** The driver does not verify or change device configuration.
-Set `frame_id` (in the package's config YAML) to your sensor's body frame; the
-driver does not publish TF.
+Set the `frame_id` launch argument to your sensor's body frame; the driver
+does not publish TF.
 
 Source builds need colcon and rosdep for ROS 2, or catkin_make and rosdep for ROS 1.
 On Ubuntu, install the ROS 2 development tools with `sudo apt install ros-dev-tools`.
@@ -71,17 +71,20 @@ catkin config --source-space src/products/ros/ros1/src && catkin build
 
 | Topic | Message | Contents |
 | --- | --- | --- |
-| `imu/data` | `sensor_msgs/Imu` | current acceleration, angular velocity and/or quaternion |
+| `imu/data` | `sensor_msgs/Imu` | acceleration with angular velocity, or an orientation |
 | `imu/mag` | `sensor_msgs/MagneticField` | magnetic field, T |
 | `imu/temperature` | `sensor_msgs/Temperature` | temperature, °C |
 | `hipnuc/imu` | `HipnucImu` | product fields, source, device time, status and presence bits |
 | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | connection, receive rate and error counts |
 
-Only quantities present in the current frame are published. Classic CAN
-publishes each PGN independently; it does not wait for yaw or merge old fields.
-An `Imu` covariance starting with `-1` marks a missing quantity; zero covariance
-means unknown. Check whether your consumer accepts partial IMU messages and
-provide application-specific uncertainty where required.
+Only quantities present in the current frame are published, and old fields are
+never merged into a new one. An absent quantity in `Imu` is zeroed and marked
+with a `-1` covariance, which consumers that ignore covariances would integrate,
+so `imu/data` is published only for a frame carrying both acceleration and
+angular velocity, or an orientation. Serial output and CAN FD carry those
+together. Classic CAN sends one quantity per PGN, so there `imu/data` carries
+the orientation and every other field stays in `hipnuc/imu`. A zero covariance
+means unknown; supply application-specific uncertainty where you need one.
 
 Headers carry host reception time from the ROS clock, not device sampling time.
 Acceleration is specific force, including gravity. Navigation position and
@@ -95,14 +98,16 @@ Its definition is in
 
 ## Connection tips
 
-- Set connections through the launch arguments shown above, or command-line node
-  parameters. The package's `config/serial.yaml` and `config/can.yaml` contain
-  `frame_id` (default `imu_link`) and the `publish_imu`, `publish_mag`,
-  `publish_temperature` and `publish_hipnuc` switches. For ROS 2, rebuild after
-  editing the source YAML.
+- `port`/`baudrate` (or `interface`/`node_id`) and `frame_id` (default
+  `imu_link`) are launch arguments. The package's `config/serial.yaml` and
+  `config/can.yaml` hold the `publish_imu`, `publish_mag`, `publish_temperature`
+  and `publish_hipnuc` switches; for ROS 2, rebuild after editing the source YAML.
 - Driver parameters are read at startup; restart the node after changing them.
   ROS 2 rejects runtime changes to these parameters. Standard ROS namespaces
   and node renaming are supported through your launch file or ROS remapping.
+- ROS 2 publisher QoS is overridable per topic without rebuilding, for example
+  `--ros-args -p qos_overrides./imu/data.publisher.reliability:=best_effort`
+  for a lossy link.
 - For `Permission denied`, run `sudo usermod -aG dialout "$USER"`, then log out
   and back in. A virtual environment does not grant serial access.
 - Prefer a path under `/dev/serial/by-id/` when several USB adapters are present.

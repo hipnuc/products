@@ -1,9 +1,11 @@
 <launch>
   <arg name="interface" default="can0"/>
   <arg name="node_id" default="8"/>
+  <arg name="frame_id" default="imu_link"/>
   <node pkg="hipnuc_imu" type="can_node" name="hipnuc_can" output="screen">
     <rosparam command="load" file="$(find hipnuc_imu)/config/can.yaml"/>
     <param name="interface" value="$(arg interface)"/>
     <param name="node_id" value="$(arg node_id)"/>
+    <param name="frame_id" value="$(arg frame_id)"/>
   </node>
 </launch>

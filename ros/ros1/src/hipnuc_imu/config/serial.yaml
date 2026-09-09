@@ -1,5 +1,4 @@
 # Configure the device for ENU output before starting; no automatic verification.
-frame_id: imu_link
 publish_imu: true
 publish_mag: true
 publish_temperature: true

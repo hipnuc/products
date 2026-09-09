@@ -8,7 +8,7 @@
 Noetic 已结束上游维护，新项目建议使用 ROS 2。
 
 **启动前，请将设备配置为 ENU 输出，并使用默认姿态约定。**
-驱动不验证或修改设备配置。`frame_id`（在软件包的 config YAML 中）表示传感器机体坐标系，驱动不发布 TF。
+驱动不验证或修改设备配置。用 launch 参数 `frame_id` 指定传感器机体坐标系；驱动不发布 TF。
 
 源码构建需要 ROS 2 的 colcon 和 rosdep，或 ROS 1 的 catkin_make 和 rosdep。
 Ubuntu 的 ROS 2 开发工具可通过 `sudo apt install ros-dev-tools` 安装。
@@ -68,15 +68,17 @@ catkin config --source-space src/products/ros/ros1/src && catkin build
 
 | 话题 | 消息类型 | 内容 |
 | --- | --- | --- |
-| `imu/data` | `sensor_msgs/Imu` | 当前加速度、角速度及／或四元数 |
+| `imu/data` | `sensor_msgs/Imu` | 加速度与角速度成对，或一个姿态 |
 | `imu/mag` | `sensor_msgs/MagneticField` | 磁场，T |
 | `imu/temperature` | `sensor_msgs/Temperature` | 温度，°C |
 | `hipnuc/imu` | `HipnucImu` | 产品字段、来源、设备时间、状态与字段存在位 |
 | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | 连接、接收速率和错误计数 |
 
-只发布当前帧中存在的物理量。Classic CAN 逐 PGN 发布，不等待 yaw，也不拼接旧字段。
-`Imu` 协方差首元素为 `-1` 表示该物理量缺失；全零协方差表示未知。
-请确认上层程序是否支持部分 IMU 消息，并按应用要求提供不确定度。
+只发布当前帧中存在的物理量，绝不把旧字段拼进新消息。`Imu` 中缺失的物理量会被填零并把
+协方差首元素置为 `-1`，而忽略协方差的上层程序会把这些零当成测量值积分，因此
+`imu/data` 只在一帧同时带有加速度和角速度、或带有姿态时才发布。串口输出和 CAN FD
+本身就成对提供；Classic CAN 每个 PGN 只带一个物理量，因此那里的 `imu/data` 承载姿态，
+其余字段都在 `hipnuc/imu` 中。全零协方差表示未知，需要不确定度时请按应用自行提供。
 
 消息头使用 ROS 时钟标记的主机接收时间，不代表设备采样时间。
 加速度为包含重力的比力。定位与速度保留在独立产品消息中，不提供标准导航话题。
@@ -87,12 +89,14 @@ catkin config --source-space src/products/ros/ros1/src && catkin build
 
 ## 连接提示
 
-- 连接参数通过上述 launch 参数或节点命令行参数设置。软件包的 `config/serial.yaml`
-  与 `config/can.yaml` 只包含 `frame_id`（默认 `imu_link`）以及 `publish_imu`、
-  `publish_mag`、`publish_temperature`、`publish_hipnuc` 开关。
+- `port`/`baudrate`（或 `interface`/`node_id`）和 `frame_id`（默认 `imu_link`）
+  都是 launch 参数。软件包的 `config/serial.yaml` 与 `config/can.yaml` 只包含
+  `publish_imu`、`publish_mag`、`publish_temperature`、`publish_hipnuc` 开关；
   ROS 2 修改源码中的 YAML 后需要重新构建。
 - 驱动参数在启动时读取，修改后须重启节点；ROS 2 会拒绝运行时修改这些参数。
   可通过自己的 launch 文件或 ROS 重映射设置标准 namespace 和节点名称。
+- ROS 2 的发布者 QoS 可以逐话题覆盖，无需重新编译，例如链路质量差时使用
+  `--ros-args -p qos_overrides./imu/data.publisher.reliability:=best_effort`。
 - 出现 `Permission denied` 时，执行 `sudo usermod -aG dialout "$USER"`，然后注销并重新登录。
   虚拟环境不会授予串口权限。
 - 多个 USB 转接器并存时，优先使用 `/dev/serial/by-id/` 下的路径。
