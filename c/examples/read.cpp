@@ -55,7 +55,11 @@ int main()
         }
         if (received == 0) {
             if (!waiting && !stopped)
-                std::cerr << "No valid sample; check baudrate, device output and TIMEOUT_MS. Waiting...\n";
+                std::cerr << "No sample in " << TIMEOUT_MS << " ms: " << device.bytes_received
+                          << " bytes, " << device.binary.crc_error_count << " CRC errors, "
+                          << device.binary.invalid_count << " undecoded frames, "
+                          << device.receive_errors << " receive errors."
+                          << " Check baudrate and device output. Waiting...\n";
             waiting = true;
             continue;
         }

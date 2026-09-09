@@ -8,7 +8,8 @@ Lyrical (26.04), and ROS 1 Noetic (20.04).
 
 **Before starting, configure the device for ENU output with its default attitude
 convention.** The driver does not verify or change device configuration.
-Set `frame_id` to your sensor's body frame; the driver does not publish TF.
+Set `frame_id` (in the package's config YAML) to your sensor's body frame; the
+driver does not publish TF.
 
 If rosdep has never been initialized on this machine, run `sudo rosdep init` once.
 
@@ -82,9 +83,10 @@ Its definition is in
 
 ## Connection tips
 
-- Edit the package's `config/serial.yaml` or `config/can.yaml` for topic switches
-  and frame name. For ROS 2, rebuild after editing the source YAML files.
-  Launch arguments override the connection parameters.
+- The package's `config/serial.yaml` and `config/can.yaml` hold the connection
+  settings, `frame_id` (default `imu_link`) and the `publish_imu`, `publish_mag`,
+  `publish_temperature` and `publish_hipnuc` switches. Launch arguments override
+  the connection settings only. For ROS 2, rebuild after editing the YAML.
 - For `Permission denied`, run `sudo usermod -aG dialout "$USER"`, then log out
   and back in. A virtual environment does not grant serial access.
 - Prefer a path under `/dev/serial/by-id/` when several USB adapters are present.

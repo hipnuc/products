@@ -22,7 +22,7 @@ the code but cannot characterize long-term noise.
 | `read_hi91_csv(filename)` | Return measurements as a normal MATLAB table. |
 | `plot_imu(filename)` | Plot acceleration, angular velocity, magnetic field and attitude. |
 | `analyze_imu(filename)` | Plot Allan deviation and return a numerical summary. Pass `false` as the second argument to suppress figures. |
-| `batch_analyze(folder)` | Analyze the CSV files in a folder without opening figures; write `analysis_results/summary.csv`. |
+| `batch_analyze(folder)` | Analyze the CSV files in a folder without opening figures; write `<folder>/analysis_results/summary.csv`. |
 
 ```matlab
 data = read_hi91_csv('sample_hi91.csv');

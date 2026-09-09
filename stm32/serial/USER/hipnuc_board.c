@@ -6,8 +6,8 @@
  * Transfer-complete events and CNDTR give an accumulated byte count. The
  * main loop owns the consumed count; hardware wraps do not reset it.
  *
- * Interrupt mode: the RXNE handler appends to a ring buffer; the main loop
- * drains it. The interrupt does nothing else.
+ * Interrupt mode: the RXNE handler appends to a ring buffer and observes the
+ * UART error flags; the main loop drains the buffer.
  */
 
 #include "hipnuc_board.h"
@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "hipnuc_dec.h"
+#include "nmea_dec.h"
 #include "stm32f10x.h"
 #include "stm32f10x_dma.h"
 #include "stm32f10x_gpio.h"
@@ -42,6 +43,7 @@ static volatile uint32_t rx_hardware_errors;
 static uint32_t rx_hardware_errors_seen;
 
 static hipnuc_raw_t decoder;
+static nmea_raw_t nmea;
 static hipnuc_board_stats_t stats;
 
 static void reset_decoder(void)
@@ -52,6 +54,7 @@ static void reset_decoder(void)
     memset(&decoder, 0, sizeof(decoder));
     decoder.crc_error_count = crc;
     decoder.invalid_count = invalid;
+    nmea.nbyte = 0;
 }
 
 void SysTick_Handler(void)
@@ -317,7 +320,7 @@ void hipnuc_board_init(uint32_t baudrate)
 int hipnuc_board_poll(hipnuc_sample_t *sample)
 {
     while (rx_available()) {
-        int ret;
+        int ret, in_binary;
 #if HIPNUC_BOARD_USE_DMA
         uint8_t ch = rx_buf[rx_consumed & (RX_SIZE - 1U)];
         /* DMA could overtake us during the byte copy or a preempting ISR. */
@@ -329,12 +332,20 @@ int hipnuc_board_poll(hipnuc_sample_t *sample)
         __DMB();                           /* finish copying before freeing the slot */
         rx_tail = (uint16_t)((rx_tail + 1U) % RX_SIZE);
 #endif
+        in_binary = decoder.nbyte != 0;
         ret = hipnuc_input(&decoder, ch);
         stats.crc_errors = decoder.crc_error_count;
         stats.invalid_frames = decoder.invalid_count;
-        if (ret > 0) {
+        if (in_binary || decoder.nbyte != 0) {
+            /* A binary header also cancels a truncated NMEA sentence. */
+            nmea.nbyte = 0;
+            if (ret > 0) {
+                stats.frames++;
+                if (hipnuc_sample_from_raw(&decoder, sample)) return 1;
+            }
+        } else if (nmea_input(&nmea, ch) > 0 && hipnuc_sample_from_nmea(&nmea, sample)) {
             stats.frames++;
-            if (hipnuc_sample_from_raw(&decoder, sample)) return 1;
+            return 1;
         }
     }
     return 0;

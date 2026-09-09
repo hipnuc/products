@@ -5,7 +5,9 @@
 Import [J1939.dbc](J1939.dbc) into a DBC-capable CAN analysis tool to view
 HiPNUC measurements. Vector CANdb++ can edit the database.
 
-- Classic CAN, 29-bit identifiers, eight-byte payloads, little-endian signals.
+- Classic CAN, 29-bit identifiers, little-endian signals. Messages are declared
+  with eight bytes; a device may send a shorter frame, and its trailing signals
+  are then absent.
 - The 13 message identifiers use priority **3** and source address **0x08**.
   If your device uses another address or priority, update the identifiers in
   your tool or a copy of the database.

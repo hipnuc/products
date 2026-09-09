@@ -103,7 +103,7 @@ For Windows/Linux serial input, set `HIPNUC_BUILD_SERIAL` to `ON` before
 `add_subdirectory()` and link `hipnuc_serial`. Start with a zero-initialized
 `hipnuc_serial_t`; open the explicit port and baudrate, read, then close.
 `hipnuc_serial_read_sample()` returns `1` for a new sample, `0` on timeout,
-or a negative value on failure. See [hipnuc_serial.h](serial/hipnuc_serial.h)
+or `-1` on failure. See [hipnuc_serial.h](serial/hipnuc_serial.h)
 for ownership and timeout contracts. Existing projects may also include
 `c/hipnuc` or `c/serial` directly.
 

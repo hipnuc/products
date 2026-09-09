@@ -500,7 +500,7 @@ def _decode_hi81(data: bytes, frame: bytes, offset: int) -> Sample:
         "pressure_pa": struct.unpack_from("<h", data, 30)[0] + 100000,
         "odometer_speed_m_s": struct.unpack_from("<h", data, 32)[0] * 0.01,
         "temperature_c": struct.unpack_from("<b", data, 34)[0],
-        "utc": _utc(utc_parts, issues),
+        "utc": _utc(utc_parts, issues, synchronized=not bool(status & _UTC_UNSYNC)),
         "roll_rad": math.radians(struct.unpack_from("<h", data, 42)[0] * 0.01),
         "pitch_rad": math.radians(struct.unpack_from("<h", data, 44)[0] * 0.01),
         "heading_rad": math.radians(struct.unpack_from("<H", data, 46)[0] * 0.01),

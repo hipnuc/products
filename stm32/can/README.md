@@ -45,8 +45,9 @@ roll/pitch message does not contain yaw, acceleration or gyro readings.
 Check `sample.valid`; the example does not assemble a combined snapshot.
 Field definitions are in the [C sample header](../../c/hipnuc/hipnuc_sample.h).
 
-[hipnuc_board.c](USER/hipnuc_board.c) owns CAN1, its RX interrupt and the
-1 ms SysTick. The interrupt only queues frames; the main loop filters the
+[hipnuc_board.c](USER/hipnuc_board.c) owns CAN1, the `USB_LP_CAN1_RX0`
+interrupt it shares with USB low-priority, USART1/PA9 for the console and the
+1 ms SysTick; `hipnuc_board_init()` also selects NVIC priority group 2. The interrupt only queues frames; the main loop filters the
 full source address and decodes them. The 64-slot software queue holds
 63 frames and drops new arrivals when full, preserving frames being read.
 Software drops and hardware FIFO overruns have separate counters.

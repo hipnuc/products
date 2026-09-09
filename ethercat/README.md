@@ -45,8 +45,8 @@ application, keeping one owner of the master and one cyclic receive loop.
   device timestamps are possible; an exchange is not necessarily a new sample.
 - RxPDO `0x7000:01` is reserved and is written as zero.
 
-The [HI15 ESI file](https://download.hipnuc.com/esi/hi15_esi.zip) describes the
-device identity and PDOs for master configuration. This C example uses the fixed
+The HI15 ESI file, from the [official downloads](https://download.hipnuc.com),
+describes the device identity and PDOs for master configuration. This C example uses the fixed
 mapping directly and does not load the XML at runtime.
 
 If no slave appears, check power, cabling and the master interface. If the

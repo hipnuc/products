@@ -17,7 +17,7 @@
 
 其他资源：[HI15 EtherCAT](ethercat/README_zh.md)、
 [MATLAB 分析 CHCenter HI91 CSV](matlab/README_zh.md)、
-[Classic CAN DBC 文件](dbc/README_zh.md)。
+[Classic CAN J1939 数据库](dbc/README_zh.md)。
 
 ## 工具与文档
 

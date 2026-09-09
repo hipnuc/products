@@ -19,6 +19,8 @@ static void print_sample(const hipnuc_sample_t *sample)
         printf("acc %.2f %.2f %.2f m/s2", sample->acc[0], sample->acc[1], sample->acc[2]);
     } else if (sample->valid & HIPNUC_VALID_GYR) {
         printf("gyr %.2f %.2f %.2f rad/s", sample->gyr[0], sample->gyr[1], sample->gyr[2]);
+    } else if (sample->valid & HIPNUC_VALID_GNSS_POSITION) {
+        printf("gnss lon %.7f lat %.7f deg", sample->gnss_longitude, sample->gnss_latitude);
     } else {
         printf("sample source %u", (unsigned)sample->source);
     }

@@ -307,7 +307,7 @@ def _human_sample(sample: Sample) -> str:
     scalar("temperature", sample.temperature_c, "°C")
     scalar("pressure", sample.pressure_pa, "Pa")
     values = sample.to_dict()
-    scalar("course over ground", values.get("course_rad"), "°", 180 / math.pi)
+    scalar("course over ground", values.get("course_over_ground_rad"), "°", 180 / math.pi)
     if len(parts) == 1:
         parts.append(_json(values))
     if not sample.complete or sample.issues:
@@ -538,6 +538,11 @@ def read_command(
                 f"Stopped: {stats['samples']} samples, {stats['bytes_received']} bytes, "
                 f"CRC errors {stats['crc_errors']}, length errors {stats['length_errors']}."
                 + (
+                    f" Undecoded valid frames: {stats['malformed_packets']}."
+                    if stats["malformed_packets"]
+                    else ""
+                )
+                + (
                     f" Recorded: {recording.samples_written} samples, {recording.raw_bytes_written} raw bytes."
                     if recording
                     else ""
@@ -548,11 +553,13 @@ def read_command(
     if stopped.is_set():
         raise click.exceptions.Exit(130)
     if not device.decoder.statistics["samples"]:
-        reason = (
-            "No bytes received."
-            if not device.decoder.statistics["bytes_received"]
-            else "Received bytes but no valid measurement frames."
-        )
+        stats = device.decoder.statistics
+        if not stats["bytes_received"]:
+            reason = "No bytes received."
+        elif stats["malformed_packets"]:
+            reason = f"Received {stats['malformed_packets']} valid frames this SDK does not decode."
+        else:
+            reason = "Received bytes but no valid measurement frames."
         raise click.ClickException(
             f"No samples collected. {reason} Check the connection, host baudrate "
             "and supported output messages. For slow output, allow a longer --duration."
@@ -1043,8 +1050,7 @@ def _show_update(result, as_json: bool) -> None:
         )
         if not result.start_acknowledged:
             click.echo("No start acknowledgement; the bootloader may already have reset.", err=True)
-        if not result.application_verified:
-            click.echo("Running application was not verified.", err=True)
+        click.echo("Reconnect and read the identity to confirm the new application.", err=True)
 
 
 @main.command("update")

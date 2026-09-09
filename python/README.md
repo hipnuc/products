@@ -268,7 +268,7 @@ Failures and Ctrl-C stop without an automatic restart.
 
 For integration, `update_serial(path, port=..., baudrate=...)` owns and closes its
 connection; `update_can(bus, node_id, path)` uses a caller-owned bus. Both return
-`UpdateResult` with transfer/start acknowledgement flags and `application_verified`.
+`UpdateResult` with the transferred size and the bootloader acknowledgements.
 An optional `progress(written, total)` callback runs synchronously; raising from
 it cancels the operation. No CAN dependency is needed for serial updates.
 

@@ -54,7 +54,11 @@ int main(void)
         }
         if (received == 0) {
             if (!waiting && !stopped)
-                fputs("No valid sample; check baudrate, device output and TIMEOUT_MS. Waiting...\n", stderr);
+                fprintf(stderr,
+                        "No sample in %d ms: %" PRIu64 " bytes, %u CRC errors, %u undecoded frames,"
+                        " %" PRIu64 " receive errors. Check baudrate and device output. Waiting...\n",
+                        TIMEOUT_MS, device.bytes_received, device.binary.crc_error_count,
+                        device.binary.invalid_count, device.receive_errors);
             waiting = 1;
             continue;
         }

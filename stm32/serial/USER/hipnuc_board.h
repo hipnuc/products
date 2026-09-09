@@ -1,8 +1,8 @@
 /*
  * Board support for the HiPNUC serial example (STM32F103, StdPeriph).
  *
- * Owns USART2 reception (DMA circular buffer or RXNE interrupt), the
- * decoder and sample conversion. main.c calls this interface without
+ * Owns USART2 reception (DMA circular buffer or RXNE interrupt), binary and
+ * NMEA decoding, and sample conversion. main.c calls this interface without
  * touching buffers or interrupts.
  */
 

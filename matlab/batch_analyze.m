@@ -1,7 +1,7 @@
 function summary = batch_analyze(folder)
 %BATCH_ANALYZE Analyze the HI91 CSV files directly inside a folder.
 % Example: summary = batch_analyze('recordings')
-% Write/replace analysis_results/summary.csv. Failed files get an error row;
+% Write/replace <folder>/analysis_results/summary.csv. Failed files get an error row;
 % successful files get six axis rows. No per-file figures are opened.
 
 files = dir(fullfile(folder, '*.csv'));

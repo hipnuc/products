@@ -18,7 +18,7 @@ HiPNUC IMU/AHRS/MRU and INS devices (firmware 1.6.9 or later).
 
 Also available: [EtherCAT for HI15](ethercat/README.md),
 [MATLAB analysis of CHCenter HI91 CSV](matlab/README.md)
-and [Classic CAN DBC files](dbc/README.md).
+and the [Classic CAN J1939 database](dbc/README.md).
 
 ## Tools and documentation
 

@@ -98,7 +98,7 @@ target_link_libraries(my_app PRIVATE hipnuc_core)
 Windows/Linux 串口应用在 `add_subdirectory()` 前将 `HIPNUC_BUILD_SERIAL`
 设为 `ON`，然后链接 `hipnuc_serial`。从清零的 `hipnuc_serial_t` 开始，
 按指定端口和波特率打开、读取，最后关闭。`hipnuc_serial_read_sample()` 返回
-`1` 表示新样本、`0` 表示超时、负数表示失败。资源归属及超时约定见
+`1` 表示新样本、`0` 表示超时、`-1` 表示失败。资源归属及超时约定见
 [hipnuc_serial.h](serial/hipnuc_serial.h)。已有工程也可直接包含 `c/hipnuc` 或 `c/serial`。
 
 ## 数据约定

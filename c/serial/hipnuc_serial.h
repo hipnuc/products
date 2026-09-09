@@ -13,14 +13,18 @@ extern "C" {
 #endif
 
 /* Zero-initialize once. One owner per connection; do not copy an open object
- * or use it concurrently. is_open and counters are read-only diagnostics;
- * other fields are implementation state. No heap allocation is needed. */
+ * or use it concurrently. is_open and counters are read-only diagnostics and
+ * start again at each open; other fields are implementation state. A growing
+ * receive_errors count means the host lost bytes, not that the port failed.
+ * No heap allocation is needed. */
 typedef struct {
     intptr_t handle;
     int is_open;
     char error[256];
     uint64_t bytes_received;
     uint64_t samples_received;
+    uint64_t receive_errors;   /* UART overrun/framing/parity events: bytes were lost */
+    uint32_t error_snapshot;
     hipnuc_raw_t binary;
     nmea_raw_t nmea;
     uint8_t received[1024];

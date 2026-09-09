@@ -41,7 +41,9 @@ if (sample.valid & HIPNUC_VALID_ACC) {
 yaw、加速度或角速度。读取前检查 `sample.valid`，例程不会拼接多条报文
 形成整包快照。完整定义见 [C 样本头文件](../../c/hipnuc/hipnuc_sample.h)。
 
-[hipnuc_board.c](USER/hipnuc_board.c) 管理 CAN1、接收中断和 1 ms SysTick。
+[hipnuc_board.c](USER/hipnuc_board.c) 占用 CAN1、与 USB 低优先级共用的
+`USB_LP_CAN1_RX0` 中断、作为控制台的 USART1/PA9 和 1 ms SysTick；
+`hipnuc_board_init()` 还会设置 NVIC 优先级分组 2。
 中断只将报文放入队列，主循环按完整源地址筛选并解码。
 64 个槽位的队列最多存放 63 帧，满时丢弃新到报文，不修改主循环正在读取的帧。
 软件队列丢帧与硬件 FIFO 溢出分别计数。

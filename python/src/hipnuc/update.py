@@ -31,13 +31,12 @@ _Progress = Callable[[int, int], None]
 
 @dataclass(frozen=True)
 class UpdateResult:
-    """Transfer/start acknowledgements; application verification is a separate step."""
+    """Bootloader acknowledgements only; the running application is not checked."""
 
     bytes_written: int
     transfer_acknowledged: bool
     start_requested: bool
     start_acknowledged: bool
-    application_verified: bool = False
 
 
 def _frame(kind: int, payload: bytes) -> bytes:

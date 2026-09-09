@@ -21,7 +21,7 @@ result = analyze_imu('sample_hi91.csv');
 | `read_hi91_csv(filename)` | 返回普通 MATLAB table，供客户程序直接使用。 |
 | `plot_imu(filename)` | 绘制加速度、角速度、磁场和姿态。 |
 | `analyze_imu(filename)` | 绘制 Allan 偏差并返回数值汇总；第二个参数传 `false` 可关闭绘图。 |
-| `batch_analyze(folder)` | 分析目录中的 CSV，不逐文件开图；写入 `analysis_results/summary.csv`。 |
+| `batch_analyze(folder)` | 分析目录中的 CSV，不逐文件开图；写入 `<folder>/analysis_results/summary.csv`。 |
 
 ```matlab
 data = read_hi91_csv('sample_hi91.csv');

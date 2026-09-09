@@ -38,7 +38,7 @@ IgH 安装在自定义前缀时，在 CMake 命令后添加 `-DCMAKE_PREFIX_PATH
 - 仅显示运行状态正常且完整交换的 PDO。设备时间可能重复，一次总线交换不一定对应新样本。
 - RxPDO `0x7000:01` 为保留字段，写入零。
 
-[HI15 ESI 文件](https://download.hipnuc.com/esi/hi15_esi.zip) 提供主站配置所需的设备标识及 PDO 描述。
+HI15 ESI 文件（见[官方下载](https://download.hipnuc.com)）提供主站配置所需的设备标识及 PDO 描述。
 本 C 例程直接使用固定映射，运行时不读取 XML。
 
 未枚举到从站时，检查供电、接线和主站网卡。程序显示 `No valid PDO` 时，检查输出的 AL 状态、

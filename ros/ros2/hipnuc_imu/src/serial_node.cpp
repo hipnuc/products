@@ -148,6 +148,7 @@ private:
         kv("frame_rate_hz", std::to_string((frames_ - frames_at_last_diag_) / elapsed));
         kv("connection_bytes", std::to_string(serial_.bytes_received));
         kv("connection_crc_errors", std::to_string(serial_.binary.crc_error_count));
+        kv("connection_receive_errors", std::to_string(serial_.receive_errors));
         kv("connection_invalid_frames", std::to_string(serial_.binary.invalid_count));
         kv("connection_nmea_checksum_errors", std::to_string(serial_.nmea.checksum_error_count));
         kv("last_error", hipnuc_serial_last_error(&serial_));

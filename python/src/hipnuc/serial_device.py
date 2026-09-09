@@ -238,15 +238,24 @@ class SerialDevice:
             duration = _positive_timeout(self.timeout if timeout is None else timeout)
             deadline = time.monotonic() + duration
             received = self.decoder.statistics["bytes_received"]
+            unsupported = self.decoder.statistics["malformed_packets"]
             while not self._samples:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     count = self.decoder.statistics["bytes_received"] - received
+                    rejected = self.decoder.statistics["malformed_packets"] - unsupported
                     if not count:
                         state = (
                             "No bytes received. Check power, TX/RX wiring and whether output "
                             "is enabled. For slow output, increase timeout (--timeout in the "
                             "CLI) beyond the output interval."
+                        )
+                    elif rejected:
+                        # The checksum matched, so the connection is fine.
+                        state = (
+                            f"Received {rejected} valid frames this SDK does not decode. "
+                            "Select a supported output message (HI91, HI81, HI83, GGA or RMC) "
+                            "or update the SDK for newer firmware."
                         )
                     else:
                         state = (
@@ -427,16 +436,28 @@ class SerialDevice:
         with self._lock:
             ser = self._require_open()
             target = f"{device_port.upper()} " if device_port is not None else ""
+            previous = self.baudrate
+            unacknowledged = False
             try:
                 self.command(f"SERIALCONFIG {target}{baudrate}", timeout=0.5)
             except ResponseTimeout:
-                pass  # The switch may happen before the OK reaches the host.
+                # The device answers before switching, so a missing reply also
+                # means the command may not have been applied at all.
+                unacknowledged = True
             try:
                 ser.baudrate = baudrate
             except (serial.SerialException, OSError) as exc:
                 raise TransportError(f"Cannot configure {self.port} at {baudrate}: {exc}") from exc
             self.baudrate = baudrate
-            info = self._wait_for_info(recovery_timeout)
+            try:
+                info = self._wait_for_info(recovery_timeout)
+            except (ResponseTimeout, TransportError) as exc:
+                if unacknowledged:
+                    raise ResponseTimeout(
+                        f"SERIALCONFIG was not acknowledged and {self.port} stayed silent at "
+                        f"{baudrate} baud; the device may still use {previous} baud. {exc}"
+                    ) from exc
+                raise
             if save:
                 self.save_config()
             return info
@@ -511,6 +532,8 @@ def discover(
                 # An occupied/missing port cannot be fixed by changing its baudrate.
                 result.errors[name] = str(exc)
                 _logger.info("%s: %s; skipping this port.", name, exc)
+                if fallback is not None:
+                    result.devices.append(fallback)
                 break
             try:
                 protocol = None
@@ -606,6 +629,9 @@ def discover(
             except TransportError as exc:
                 result.errors[name] = str(exc)
                 _logger.info("%s: %s; skipping this port.", name, exc)
+                # Keep a data-only candidate found at an earlier baudrate.
+                if fallback is not None:
+                    result.devices.append(fallback)
                 break
             finally:
                 device.close()

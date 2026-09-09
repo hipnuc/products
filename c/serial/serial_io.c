@@ -15,12 +15,41 @@
 #include <windows.h>
 #else
 #include <asm/termbits.h>
+#include <linux/serial.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
+#endif
+
+/* One lost-byte event: the partial frame is gone, the connection is not. */
+static void note_receive_error(hipnuc_serial_t *device)
+{
+    ++device->receive_errors;
+    device->binary.nbyte = 0;
+    device->nmea.nbyte = 0;
+}
+
+#ifndef _WIN32
+/* Cumulative driver counters, baselined at open; not every driver has them. */
+static int receive_error_total(int fd, uint32_t *total)
+{
+    struct serial_icounter_struct counters;
+    if (ioctl(fd, TIOCGICOUNT, &counters) != 0) return 0;
+    *total = (uint32_t)counters.overrun + (uint32_t)counters.buf_overrun +
+             (uint32_t)counters.frame + (uint32_t)counters.parity;
+    return 1;
+}
+
+static void poll_receive_errors(hipnuc_serial_t *device)
+{
+    uint32_t total = device->error_snapshot;
+    if (!receive_error_total((int)device->handle, &total)) return;
+    if (total > device->error_snapshot) note_receive_error(device);
+    device->error_snapshot = total;
+}
 #endif
 
 static int io_error(hipnuc_serial_t *device, const char *operation)
@@ -136,6 +165,7 @@ int hipnuc_serial_open(hipnuc_serial_t *device, const char *port, int baudrate)
             hipnuc_serial_close(device);
             return -1;
         }
+        receive_error_total(fd, &device->error_snapshot);
     }
 #endif
     return 0;
@@ -183,12 +213,9 @@ int hipnuc_serial_read_bytes(hipnuc_serial_t *device, uint8_t *data, size_t size
         COMSTAT status;
         HANDLE handle = (HANDLE)device->handle;
         if (!ClearCommError(handle, &errors, &status)) return io_error(device, "Cannot inspect serial port");
-        if (errors & (CE_OVERRUN | CE_RXOVER | CE_FRAME | CE_RXPARITY)) {
-            snprintf(device->error, sizeof(device->error),
-                     "Serial receive error (flags 0x%lX): data may be lost; check baudrate and connection",
-                     (unsigned long)errors);
-            return -1;
-        }
+        /* The condition is already cleared. Lost bytes are not a transport
+         * failure: count them and let the decoder resynchronize. */
+        if (errors & (CE_OVERRUN | CE_RXOVER | CE_FRAME | CE_RXPARITY)) note_receive_error(device);
         timeouts.ReadIntervalTimeout = MAXDWORD;
         /* MAXDWORD/0/0 is nonblocking. With a positive constant, MAXDWORD
          * for BOTH interval and multiplier waits only for the first byte. */
@@ -204,6 +231,7 @@ int hipnuc_serial_read_bytes(hipnuc_serial_t *device, uint8_t *data, size_t size
     {
         ssize_t got;
         int ready = wait_port(device, POLLIN, timeout_ms);
+        poll_receive_errors(device);
         if (ready <= 0) return ready;
         got = read((int)device->handle, data, size);
         if (got < 0 && (errno == EAGAIN || errno == EINTR)) return 0;

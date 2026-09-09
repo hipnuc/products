@@ -247,7 +247,7 @@ bootloader 无法验证固件型号。传输和启动请求成功不代表新应
 
 程序集成可用 `update_serial(path, port=..., baudrate=...)`，由函数打开和关闭连接；
 `update_can(bus, node_id, path)` 使用调用方持有的总线。二者返回 `UpdateResult`，
-区分传输／启动确认及 `application_verified`。可选的 `progress(written, total)`
+给出传输字节数与引导程序确认标志。可选的 `progress(written, total)`
 回调同步运行，抛出异常即取消升级。串口升级不需要 CAN 依赖。
 
 ## 常见问题
