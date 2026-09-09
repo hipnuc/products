@@ -86,6 +86,23 @@ jobs:
           test "$(ros2 pkg prefix hipnuc_msgs)" = "$PWD/ws/install/hipnuc_msgs"
           test -x ws/install/hipnuc_imu/lib/hipnuc_imu/serial_node
           test -x ws/install/hipnuc_imu/lib/hipnuc_imu/can_node
+      - name: Run each node without hardware
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          source ws/install/setup.bash
+          # No device is attached, so each node must keep retrying instead of
+          # exiting, then shut down cleanly on SIGINT. wait reports its status.
+          # Signal the node itself: ros2 run would only forward from a terminal.
+          smoke() {
+            "ws/install/hipnuc_imu/lib/hipnuc_imu/$1" --ros-args -p "$2" &
+            local node=$!
+            sleep 5
+            kill -INT $node 2>/dev/null || true   # already gone: let wait report why
+            wait $node
+          }
+          smoke serial_node port:=/hipnuc_missing
+          smoke can_node interface:=hipnuc_missing
 
   ros1-noetic:
     runs-on: ubuntu-24.04

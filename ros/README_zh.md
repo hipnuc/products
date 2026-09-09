@@ -8,7 +8,9 @@
 Noetic 已结束上游维护，新项目建议使用 ROS 2。
 
 **启动前，请将设备配置为 ENU 输出，并使用默认姿态约定。**
-驱动不验证或修改设备配置。用 launch 参数 `frame_id` 指定传感器机体坐标系；驱动不发布 TF。
+驱动不验证或修改设备配置。请先用 CHCenter 或 `python/` 下的命令行工具
+设置输出格式，并确认设备已在输出数据，再启动节点。
+用 launch 参数 `frame_id` 指定传感器机体坐标系；驱动不发布 TF。
 
 源码构建需要 ROS 2 的 colcon 和 rosdep，或 ROS 1 的 catkin_make 和 rosdep。
 Ubuntu 的 ROS 2 开发工具可通过 `sudo apt install ros-dev-tools` 安装。
@@ -31,9 +33,11 @@ source install/setup.bash
 ros2 launch hipnuc_imu serial.launch.py port:=/dev/ttyUSB0 baudrate:=115200
 ```
 
-使用 CAN 时，先按设备波特率配置 SocketCAN 接口，再运行：
+使用 CAN 时，先按设备波特率启用接口；ROS 1 同样需要这两条命令：
 
 ```sh
+sudo ip link set can0 type can bitrate 500000
+sudo ip link set can0 up
 ros2 launch hipnuc_imu can.launch.py interface:=can0 node_id:=8
 ```
 
@@ -137,7 +141,8 @@ SDK 更新涉及 `HipnucImu` 定义变化时，请重新构建驱动及所有使
 - 出现 `Permission denied` 时，执行 `sudo usermod -aG dialout "$USER"`，然后注销并重新登录。
   虚拟环境不会授予串口权限。
 - 多个 USB 转接器并存时，优先使用 `/dev/serial/by-id/` 下的路径。
-  端口或接口不可用时驱动会重试，并持续发布诊断；ROS 仿真时间暂停也不影响诊断检查。
+  端口或接口不可用时驱动会重试，状态每次变化都会打印日志，并持续发布诊断；
+  ROS 仿真时间暂停也不影响诊断检查。
 
 要把部署配置放在自己的机器人 bringup 包中，复制对应 ROS 版本的 YAML，
 修改后通过绝对路径传入：

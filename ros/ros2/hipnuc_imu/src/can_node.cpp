@@ -65,7 +65,6 @@ public:
                 next_retry = current + std::chrono::seconds(1);
                 if (opened) {
                     received_sample_ = false;
-                    other_nodes_at_open_ = other_nodes_;
                     RCLCPP_INFO(get_logger(), "listening on %s for source address %d", interface_.c_str(), node_id_);
                 } else if (current >= next_warning) {
                     RCLCPP_WARN(get_logger(), "cannot open %s: %s", interface_.c_str(), error.c_str());
@@ -77,7 +76,7 @@ public:
                 const int result = can_.read(frame, 50);
                 if (result > 0) handle(frame);
                 if (result < 0) {
-                    RCLCPP_ERROR(get_logger(), "%s read failed; reopening", interface_.c_str());
+                    RCLCPP_ERROR(get_logger(), "%s read failed: %s; reopening", interface_.c_str(), can_.last_error());
                     can_.close();
                     received_sample_ = false;
                     next_retry = SteadyClock::now() + std::chrono::seconds(1);
@@ -156,10 +155,17 @@ private:
             st.message = "interface not open";
         } else if (age < 0.0 || age > 2.0) {
             st.level = st.WARN;
-            st.message = other_nodes_ > other_nodes_at_open_ ? "no frames from the configured source address" : "no valid frames";
+            st.message = other_nodes_ > other_nodes_at_last_diag_ ? "frames from other source addresses (check node_id)"
+                                                                  : "no frames (check bitrate and wiring)";
         } else {
             st.level = st.OK;
             st.message = "receiving";
+        }
+        // Nothing else reaches the console after a successful open: report each change.
+        if (st.level != last_level_) {
+            last_level_ = st.level;
+            if (st.level == st.OK) RCLCPP_INFO(get_logger(), "%s", st.message.c_str());
+            else RCLCPP_WARN(get_logger(), "%s", st.message.c_str());
         }
         auto kv = [&](const char *key, const std::string &value) {
             diagnostic_msgs::msg::KeyValue entry;
@@ -172,6 +178,7 @@ private:
         kv("invalid_frames", std::to_string(invalid_));
         kv("frames_from_other_nodes", std::to_string(other_nodes_));
         frames_at_last_diag_ = frames_;
+        other_nodes_at_last_diag_ = other_nodes_;
         arr.status.push_back(st);
         diag_pub_->publish(arr);
     }
@@ -181,8 +188,9 @@ private:
     bool publish_imu_, publish_mag_, publish_temperature_, publish_hipnuc_;
     hipnuc_ros::SocketCan can_;
     uint64_t frames_ = 0, frames_at_last_diag_ = 0;
-    uint64_t invalid_ = 0, other_nodes_ = 0, other_nodes_at_open_ = 0;
+    uint64_t invalid_ = 0, other_nodes_ = 0, other_nodes_at_last_diag_ = 0;
     bool received_sample_ = false;
+    int last_level_ = -1;
     SteadyClock::time_point last_frame_{};
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
     rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr mag_pub_;

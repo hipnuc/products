@@ -67,8 +67,8 @@ float32[4] quaternion_wxyz   # body to navigation
 float32[2] inclination       # rad
 float32 inclination_yaw      # rad, HI83 inclinometer yaw, VALID_INCLINATION_YAW
 
-uint64 device_time_us
-bool utc_valid
+uint64 device_time_us        # HI91: 32-bit ms count, wraps (UTC time of day once synchronized)
+bool utc_valid               # VALID_UTC, date and time; VALID_UTC_TIME_OF_DAY alone leaves the date zero
 uint16 utc_year
 uint8 utc_month
 uint8 utc_day
@@ -96,7 +96,7 @@ float32[3] velocity_enu      # m/s
 float32[3] acceleration_enu  # m/s^2
 uint8 position_quality       # GGA quality: 0 none, 1 GNSS, 2 DGNSS, 4 RTK fixed, 5 RTK float
 uint8 position_satellites
-uint8 heading_quality
+uint8 heading_quality        # 4 = fixed; only then is a dual-antenna heading valid
 uint8 heading_satellites
 float32 pdop
 float32 hdop

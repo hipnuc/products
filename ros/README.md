@@ -9,6 +9,8 @@ Noetic has reached upstream end of life; use ROS 2 for new projects.
 
 **Before starting, configure the device for ENU output with its default attitude
 convention.** The driver does not verify or change device configuration.
+Use CHCenter or the Python CLI in `python/` to set the output format and confirm
+the device streams data before starting a node.
 Set the `frame_id` launch argument to your sensor's body frame; the driver
 does not publish TF.
 
@@ -33,9 +35,12 @@ source install/setup.bash
 ros2 launch hipnuc_imu serial.launch.py port:=/dev/ttyUSB0 baudrate:=115200
 ```
 
-For CAN, configure your SocketCAN interface at the device's bitrate, then run:
+For CAN, bring the interface up at the device's bitrate first; ROS 1 needs the
+same two commands:
 
 ```sh
+sudo ip link set can0 type can bitrate 500000
+sudo ip link set can0 up
 ros2 launch hipnuc_imu can.launch.py interface:=can0 node_id:=8
 ```
 
@@ -132,7 +137,8 @@ standard navigation topics are not provided. The product message is not a
 drop-in input for a generic fusion node. Read only fields whose `VALID_*` bits
 are set; presence is separate
 from convergence and GNSS fix status. Pressure is retained only as a raw product
-field because its availability and freshness are not established by the protocol.
+field because its availability and freshness are not established by the protocol;
+no standard pressure topic is published.
 The product type is
 [`hipnuc_msgs/msg/HipnucImu`](ros2/hipnuc_msgs/msg/HipnucImu.msg) in ROS 2 and
 [`hipnuc_imu/HipnucImu`](ros1/src/hipnuc_imu/msg/HipnucImu.msg) in ROS 1.
@@ -151,8 +157,8 @@ that use this message.
 - For `Permission denied`, run `sudo usermod -aG dialout "$USER"`, then log out
   and back in. A virtual environment does not grant serial access.
 - Prefer a path under `/dev/serial/by-id/` when several USB adapters are present.
-  The driver retries an unavailable port/interface and continues publishing
-  diagnostics, including when ROS simulated time is paused.
+  The driver retries an unavailable port/interface, logs every status change,
+  and keeps publishing diagnostics, including when ROS simulated time is paused.
 
 To keep deployment settings in your own robot bringup package, copy the matching
 YAML from the ROS generation you use, edit it, and pass its absolute path:

@@ -139,6 +139,12 @@ private:
             st.level = st.OK;
             st.message = "receiving";
         }
+        // Nothing else reaches the console after a successful open: report each change.
+        if (st.level != last_level_) {
+            last_level_ = st.level;
+            if (st.level == st.OK) ROS_INFO("%s", st.message.c_str());
+            else ROS_WARN("%s", st.message.c_str());
+        }
         auto kv = [&](const char *key, const std::string &value) {
             diagnostic_msgs::KeyValue entry;
             entry.key = key;
@@ -167,6 +173,7 @@ private:
     uint64_t frames_ = 0, frames_at_last_diag_ = 0;
     uint64_t bytes_at_last_diag_ = 0;
     bool received_sample_ = false;
+    int last_level_ = -1;
     SteadyClock::time_point last_frame_{};
     ros::Publisher imu_pub_;
     ros::Publisher mag_pub_;
