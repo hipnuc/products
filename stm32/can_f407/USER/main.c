@@ -76,6 +76,8 @@ int main(void)
     while (1) {
         uint32_t now;
         if (hipnuc_board_poll(&sample)) {
+            /* Application: process this new PGN here. Check sample.valid before
+             * using a field; fields from other PGNs are not included. */
             now = hipnuc_board_millis();
             if (PRINT_PERIOD_MS && now - last_print >= PRINT_PERIOD_MS) {
                 last_print = now;

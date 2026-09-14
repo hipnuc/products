@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README_zh.md)
 
-通过 CAN1 接收 HiPNUC J1939 报文。工程适用于同级 CAN 例程使用的
+通过 CAN1 接收 HiPNUC J1939 报文。工程适用于
 STM32F407IGT6 开发板，使用 Keil MDK 5、ARM Compiler 5 和 STM32F4 HAL 驱动。
 STM32F407 仅支持 **Classic CAN，不支持 CAN FD**。
 
@@ -13,6 +13,10 @@ F407 启动文件；`Libraries/CMSIS/` 与 `Libraries/STM32F4xx_HAL_Driver/` 分
 提供设备头文件和 HAL 驱动。可移植的 HiPNUC J1939 解码器刻意通过
 `../../c/hipnuc/` 共享引用，使各平台例程始终使用同一份协议实现。Keil 生成的
 `OBJ/` 与 `Listings/` 是构建产物，已由仓库根目录的忽略规则排除，不应提交。
+
+本地库仅保留此 ARM Compiler 5 工程需要的依赖。新增外设时，按需添加驱动文件
+及其依赖，不要复制整套 STM32Cube 库。CAN 驱动包含一处本地 FIFO 释放修正，
+避免清除尚未处理的硬件溢出标志。
 
 ## 接线与运行
 
@@ -28,7 +32,7 @@ F407 启动文件；`Libraries/CMSIS/` 与 `Libraries/STM32F4xx_HAL_Driver/` 分
 用 USB-TTL 转换器连接 PB6/GND，串口助手设置为 115200、8N1。
 
 1. 在 [main.c](USER/main.c) 顶部设置与设备一致的 `CAN_BAUD_KBPS` 和
-   `DEVICE_NODE_ID`（默认 1000 kbit/s，源地址 8）。
+   `DEVICE_NODE_ID`（默认 500 kbit/s，源地址 8）。
 2. 打开 `USER/hipnuc_can_decode_f407.uvprojx`，编译并下载。
 3. 例程最多每 200 ms 显示一条新报文，每两秒报告接收情况、无数据或恢复接收。
 

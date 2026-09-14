@@ -3,8 +3,8 @@
 [English](README.md) | [中文](README_zh.md)
 
 Read HiPNUC J1939 messages with CAN1. The supplied project targets the
-STM32F407IGT6 board used by the sibling CAN example, Keil MDK 5 / ARM Compiler
-5 and the STM32F4 HAL driver. STM32F407 supports **Classic CAN**, not CAN FD.
+STM32F407IGT6 and uses Keil MDK 5 / ARM Compiler 5 with the STM32F4 HAL driver.
+STM32F407 supports **Classic CAN**, not CAN FD.
 
 ## Project layout
 
@@ -15,6 +15,11 @@ device and HAL dependencies. The portable HiPNUC J1939 decoder is intentionally
 referenced from `../../c/hipnuc/`, so fixes to the decoder remain shared by
 every platform example. Keil-generated `OBJ/` and `Listings/` directories are
 build products and are ignored by the repository.
+
+The local libraries contain only the dependencies needed by this ARM Compiler 5
+project. When adding peripherals, add the required driver files and their
+dependencies rather than copying the full STM32Cube library. The CAN driver has
+a local FIFO-release fix that preserves pending hardware overrun flags.
 
 ## Connect and run
 
@@ -31,7 +36,7 @@ bus directly to PI9/PB9. Terminate both physical ends of the bus with
 PB6/GND and open its terminal at 115200, 8N1.
 
 1. Set `CAN_BAUD_KBPS` and `DEVICE_NODE_ID` in [main.c](USER/main.c) to match
-   the device (defaults: 1000 kbit/s, source address 8).
+   the device (defaults: 500 kbit/s, source address 8).
 2. Open `USER/hipnuc_can_decode_f407.uvprojx`, build and download.
 3. The console displays one new message at most every 200 ms, and reports
    reception, missing traffic or recovery every two seconds.

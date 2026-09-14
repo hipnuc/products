@@ -1574,13 +1574,13 @@ HAL_StatusTypeDef HAL_CAN_GetRxMessage(CAN_HandleTypeDef *hcan, uint32_t RxFifo,
     /* Release the FIFO */
     if (RxFifo == CAN_RX_FIFO0) /* Rx element is assigned to Rx FIFO 0 */
     {
-      /* Release RX FIFO 0 */
-      SET_BIT(hcan->Instance->RF0R, CAN_RF0R_RFOM0);
+      /* Local fix: release only; preserve W1C flags raised after the IRQ snapshot. */
+      hcan->Instance->RF0R = CAN_RF0R_RFOM0;
     }
     else /* Rx element is assigned to Rx FIFO 1 */
     {
-      /* Release RX FIFO 1 */
-      SET_BIT(hcan->Instance->RF1R, CAN_RF1R_RFOM1);
+      /* Local fix: release only; preserve W1C flags raised after the IRQ snapshot. */
+      hcan->Instance->RF1R = CAN_RF1R_RFOM1;
     }
 
     /* Return function status */
