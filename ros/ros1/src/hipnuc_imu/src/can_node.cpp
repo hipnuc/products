@@ -1,5 +1,6 @@
-// One decoded frame produces one sample. No cross-frame measurement cache.
+// Cache IMU components across decoded CAN frames to assemble complete samples.
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -53,6 +54,8 @@ public:
                 next_retry = current + std::chrono::seconds(1);
                 if (opened) {
                     received_sample_ = false;
+                    imu_cache_ = hipnuc_sample_t{};
+                    imu_components_updated_ = 0;
                     ROS_INFO("listening on %s for source address %d", interface_.c_str(), node_id_);
                 } else if (current >= next_warning) {
                     ROS_WARN("cannot open %s: %s", interface_.c_str(), error.c_str());
@@ -84,6 +87,11 @@ public:
     }
 
 private:
+    static constexpr uint8_t kAccUpdated = 1;
+    static constexpr uint8_t kGyrUpdated = 2;
+    static constexpr uint8_t kQuatUpdated = 4;
+    static constexpr uint8_t kFullImuMask = kAccUpdated | kGyrUpdated | kQuatUpdated;
+
     void handle(const hipnuc_can_frame_t &frame)
     {
         hipnuc_sample_t sample;
@@ -100,12 +108,17 @@ private:
         ++frames_;
         last_frame_ = SteadyClock::now();
         received_sample_ = true;
-        if (publish_imu_ && hipnuc_ros::has_imu(s)) {
+        update_imu_cache(s);
+        // CAN PGNs can carry acceleration, angular velocity, and orientation at
+        // different rates. A publish consumes one update of every component, so
+        // the output rate is bounded by the slowest component and has no repeats.
+        if (publish_imu_ && imu_components_updated_ == kFullImuMask) {
             sensor_msgs::Imu m;
             m.header.stamp = stamp;
             m.header.frame_id = frame_id_;
-            hipnuc_ros::fill_imu(s, m);
+            hipnuc_ros::fill_imu(imu_cache_, m);
             imu_pub_.publish(m);
+            imu_components_updated_ = 0;
         }
         if (publish_mag_ && (s.valid & HIPNUC_VALID_MAG) && hipnuc_ros::finite_vector(s.mag)) {
             sensor_msgs::MagneticField m;
@@ -127,6 +140,25 @@ private:
             m.header.frame_id = frame_id_;
             hipnuc_ros::fill_hipnuc(s, m);
             full_pub_.publish(m);
+        }
+    }
+
+    void update_imu_cache(const hipnuc_sample_t &s)
+    {
+        if ((s.valid & HIPNUC_VALID_ACC) && hipnuc_ros::finite_vector(s.acc)) {
+            for (int i = 0; i < 3; ++i) imu_cache_.acc[i] = s.acc[i];
+            imu_cache_.valid |= HIPNUC_VALID_ACC;
+            imu_components_updated_ |= kAccUpdated;
+        }
+        if ((s.valid & HIPNUC_VALID_GYR) && hipnuc_ros::finite_vector(s.gyr)) {
+            for (int i = 0; i < 3; ++i) imu_cache_.gyr[i] = s.gyr[i];
+            imu_cache_.valid |= HIPNUC_VALID_GYR;
+            imu_components_updated_ |= kGyrUpdated;
+        }
+        if (hipnuc_ros::quaternion_norm(s) > 0.0) {
+            for (int i = 0; i < 4; ++i) imu_cache_.quat[i] = s.quat[i];
+            imu_cache_.valid |= HIPNUC_VALID_QUAT;
+            imu_components_updated_ |= kQuatUpdated;
         }
     }
 
@@ -179,6 +211,8 @@ private:
     uint64_t frames_ = 0, frames_at_last_diag_ = 0;
     uint64_t invalid_ = 0, other_nodes_ = 0, other_nodes_at_last_diag_ = 0;
     bool received_sample_ = false;
+    hipnuc_sample_t imu_cache_{};
+    uint8_t imu_components_updated_ = 0;
     int last_level_ = -1;
     SteadyClock::time_point last_frame_{};
     ros::Publisher imu_pub_;
