@@ -3,5 +3,14 @@
   ros__parameters:
     publish_hipnuc: true
     publish_imu: true
-    publish_mag: true
-    publish_temperature: true
+    publish_mag: false
+    publish_temperature: false
+
+    # All listed fields must arrive within this window to form one Imu sample.
+    # Default: 3 ms. For a 500 Hz device output, set this to 2 ms.
+    imu_assembly_timeout_ms: 3
+    # List IMU PGNs actually enabled in the device CAN output.
+    # J1939 defaults to ACC and GYR. Enable the QUAT PGN on the device first,
+    # then add quat here. Omitted fields are marked unavailable in Imu by
+    # covariance[0] = -1. A listed field missing for 3 seconds logs a warning.
+    imu_required_fields: [acc, gyr]

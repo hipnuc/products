@@ -1,9 +1,10 @@
-// One decoded frame produces one sample. No cross-frame measurement cache.
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/executors/single_threaded_executor.hpp>
@@ -35,17 +36,25 @@ public:
         publish_mag_ = declare_parameter<bool>("publish_mag", true, startup);
         publish_temperature_ = declare_parameter<bool>("publish_temperature", true, startup);
         publish_hipnuc_ = declare_parameter<bool>("publish_hipnuc", true, startup);
-        if (interface_.empty() || node_id_ < 0 || node_id_ > 255 || frame_id_.empty())
-            throw std::invalid_argument("interface/frame_id must be nonempty and node_id in 0..255");
+        imu_assembly_timeout_ms_ = declare_parameter<int>("imu_assembly_timeout_ms", 3, startup);
+        imu_required_valid_ = imu_required_mask(declare_parameter<std::vector<std::string>>(
+            "imu_required_fields", std::vector<std::string>{"acc", "gyr"}, startup));
+        if (interface_.empty() || node_id_ < 0 || node_id_ > 255 || frame_id_.empty() || imu_assembly_timeout_ms_ <= 0)
+            throw std::invalid_argument(
+                "interface/frame_id must be nonempty, node_id in 0..255, and imu_assembly_timeout_ms positive");
         rclcpp::PublisherOptions publisher_options;
         // Let a deployment relax reliability or depth without rebuilding, e.g.
         // qos_overrides./imu/data.publisher.reliability:=best_effort.
         publisher_options.qos_overriding_options =
             rclcpp::QosOverridingOptions::with_default_policies();
-        imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("imu/data", 100, publisher_options);
-        mag_pub_ = create_publisher<sensor_msgs::msg::MagneticField>("imu/mag", 100, publisher_options);
-        temp_pub_ = create_publisher<sensor_msgs::msg::Temperature>("imu/temperature", 10, publisher_options);
-        full_pub_ = create_publisher<hipnuc_msgs::msg::HipnucImu>("hipnuc/imu", 100, publisher_options);
+        if (publish_imu_)
+            imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("imu/data", 100, publisher_options);
+        if (publish_mag_)
+            mag_pub_ = create_publisher<sensor_msgs::msg::MagneticField>("imu/mag", 100, publisher_options);
+        if (publish_temperature_)
+            temp_pub_ = create_publisher<sensor_msgs::msg::Temperature>("imu/temperature", 10, publisher_options);
+        if (publish_hipnuc_)
+            full_pub_ = create_publisher<hipnuc_msgs::msg::HipnucImu>("hipnuc/imu", 100, publisher_options);
         diag_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
         RCLCPP_INFO(get_logger(), "Requires device ENU output configuration; the driver does not verify or change it.");
     }
@@ -65,6 +74,8 @@ public:
                 next_retry = current + std::chrono::seconds(1);
                 if (opened) {
                     received_sample_ = false;
+                    clear_imu_cache();
+                    reset_imu_field_watches(current);
                     RCLCPP_INFO(get_logger(), "listening on %s for source address %d", interface_.c_str(), node_id_);
                 } else if (current >= next_warning) {
                     RCLCPP_WARN(get_logger(), "cannot open %s: %s", interface_.c_str(), error.c_str());
@@ -79,6 +90,7 @@ public:
                     RCLCPP_ERROR(get_logger(), "%s read failed: %s; reopening", interface_.c_str(), can_.last_error());
                     can_.close();
                     received_sample_ = false;
+                    clear_imu_cache();
                     next_retry = SteadyClock::now() + std::chrono::seconds(1);
                 }
             } else {
@@ -96,6 +108,18 @@ public:
     }
 
 private:
+    struct ImuCache {
+        hipnuc_sample_t sample{};
+        SteadyClock::time_point started_at{};
+        bool active = false;
+    };
+
+    struct ImuFieldWatch {
+        SteadyClock::time_point last_received{};
+        bool seen = false;
+        bool missing_reported = false;
+    };
+
     void handle(const hipnuc_can_frame_t &frame)
     {
         hipnuc_sample_t sample;
@@ -109,16 +133,12 @@ private:
     void publish(const hipnuc_sample_t &s)
     {
         const auto stamp = now();
+        const auto received_at = SteadyClock::now();
         ++frames_;
-        last_frame_ = SteadyClock::now();
+        last_frame_ = received_at;
         received_sample_ = true;
-        if (publish_imu_ && hipnuc_ros::has_imu(s)) {
-            sensor_msgs::msg::Imu m;
-            m.header.stamp = stamp;
-            m.header.frame_id = frame_id_;
-            hipnuc_ros::fill_imu(s, m);
-            imu_pub_->publish(m);
-        }
+        note_imu_fields(s, received_at);
+        update_and_publish_imu(s, stamp, received_at);
         if (publish_mag_ && (s.valid & HIPNUC_VALID_MAG) && hipnuc_ros::finite_vector(s.mag)) {
             sensor_msgs::msg::MagneticField m;
             m.header.stamp = stamp;
@@ -140,6 +160,126 @@ private:
             hipnuc_ros::fill_hipnuc(s, m);
             full_pub_->publish(m);
         }
+    }
+
+    // Classic J1939 splits one IMU epoch across separate ACC, GYR and QUAT
+    // PGNs.  Retain the newest value of each; a fast PGN may overwrite its
+    // cache several times before the slowest PGN completes the next sample.
+    void update_and_publish_imu(const hipnuc_sample_t &s, const rclcpp::Time &stamp,
+                                SteadyClock::time_point received_at)
+    {
+        if (!publish_imu_) return;
+
+        const bool has_acc = (s.valid & HIPNUC_VALID_ACC) && hipnuc_ros::finite_vector(s.acc);
+        const bool has_gyr = (s.valid & HIPNUC_VALID_GYR) && hipnuc_ros::finite_vector(s.gyr);
+        const bool has_quat = hipnuc_ros::quaternion_norm(s) > 0.0;
+        const uint64_t received_valid = (has_acc ? HIPNUC_VALID_ACC : 0) |
+                                        (has_gyr ? HIPNUC_VALID_GYR : 0) |
+                                        (has_quat ? HIPNUC_VALID_QUAT : 0);
+        if ((received_valid & imu_required_valid_) == 0) return;
+
+        // A J1939 PGN has no measurement sequence number. Treat the first
+        // field as the start of one assembly window. Once that window has
+        // expired, discard every partial field and let this incoming field
+        // begin the next window; it must never be paired with old values.
+        if (imu_cache_.active && imu_cache_timed_out(received_at)) clear_imu_cache();
+        if (!imu_cache_.active) {
+            imu_cache_.active = true;
+            imu_cache_.started_at = received_at;
+        }
+
+        if (has_acc && (imu_required_valid_ & HIPNUC_VALID_ACC)) {
+            std::copy(s.acc, s.acc + 3, imu_cache_.sample.acc);
+            imu_cache_.sample.valid |= HIPNUC_VALID_ACC;
+        }
+        if (has_gyr && (imu_required_valid_ & HIPNUC_VALID_GYR)) {
+            std::copy(s.gyr, s.gyr + 3, imu_cache_.sample.gyr);
+            imu_cache_.sample.valid |= HIPNUC_VALID_GYR;
+        }
+        if (has_quat && (imu_required_valid_ & HIPNUC_VALID_QUAT)) {
+            std::copy(s.quat, s.quat + 4, imu_cache_.sample.quat);
+            imu_cache_.sample.valid |= HIPNUC_VALID_QUAT;
+        }
+
+        // Clearing the entire cache after each publish means every component
+        // must arrive again, so the rate follows the slowest PGN.
+        if ((imu_cache_.sample.valid & imu_required_valid_) != imu_required_valid_) {
+            return;
+        }
+
+        sensor_msgs::msg::Imu m;
+        m.header.stamp = stamp;
+        m.header.frame_id = frame_id_;
+        hipnuc_ros::fill_imu(imu_cache_.sample, m);
+        imu_pub_->publish(m);
+        clear_imu_cache();
+    }
+
+    bool imu_cache_timed_out(SteadyClock::time_point received_at) const
+    {
+        return received_at - imu_cache_.started_at > std::chrono::milliseconds(imu_assembly_timeout_ms_);
+    }
+
+    static uint64_t imu_required_mask(const std::vector<std::string> &fields)
+    {
+        uint64_t mask = 0;
+        for (const auto &field : fields) {
+            uint64_t bit = 0;
+            if (field == "acc") bit = HIPNUC_VALID_ACC;
+            else if (field == "gyr") bit = HIPNUC_VALID_GYR;
+            else if (field == "quat") bit = HIPNUC_VALID_QUAT;
+            else throw std::invalid_argument("imu_required_fields entries must be acc, gyr, or quat");
+            if (mask & bit) throw std::invalid_argument("imu_required_fields must not contain duplicates");
+            mask |= bit;
+        }
+        if (mask == 0) throw std::invalid_argument("imu_required_fields must not be empty");
+        return mask;
+    }
+
+    void clear_imu_cache()
+    {
+        imu_cache_ = ImuCache{};
+    }
+
+    void reset_imu_field_watches(SteadyClock::time_point started_at)
+    {
+        imu_watch_started_at_ = started_at;
+        acc_watch_ = ImuFieldWatch{};
+        gyr_watch_ = ImuFieldWatch{};
+        quat_watch_ = ImuFieldWatch{};
+    }
+
+    void note_imu_fields(const hipnuc_sample_t &s, SteadyClock::time_point received_at)
+    {
+        auto note = [&](uint64_t bit, bool received, ImuFieldWatch &watch) {
+            if ((imu_required_valid_ & bit) && received) {
+                watch.last_received = received_at;
+                watch.seen = true;
+                watch.missing_reported = false;
+            }
+        };
+        note(HIPNUC_VALID_ACC, (s.valid & HIPNUC_VALID_ACC) && hipnuc_ros::finite_vector(s.acc), acc_watch_);
+        note(HIPNUC_VALID_GYR, (s.valid & HIPNUC_VALID_GYR) && hipnuc_ros::finite_vector(s.gyr), gyr_watch_);
+        note(HIPNUC_VALID_QUAT, hipnuc_ros::quaternion_norm(s) > 0.0, quat_watch_);
+    }
+
+    void warn_if_imu_field_missing(const char *name, uint64_t bit, ImuFieldWatch &watch,
+                                   SteadyClock::time_point current)
+    {
+        if (!(imu_required_valid_ & bit)) return;
+        const auto last = watch.seen ? watch.last_received : imu_watch_started_at_;
+        if (current - last < std::chrono::seconds(3) || watch.missing_reported) return;
+        RCLCPP_WARN(get_logger(), "required IMU field '%s' has not been received for 3 seconds; check device data output",
+                    name);
+        watch.missing_reported = true;
+    }
+
+    void warn_if_required_imu_fields_missing(SteadyClock::time_point current)
+    {
+        if (!publish_imu_ || !can_.is_open() || imu_watch_started_at_ == SteadyClock::time_point{}) return;
+        warn_if_imu_field_missing("acc", HIPNUC_VALID_ACC, acc_watch_, current);
+        warn_if_imu_field_missing("gyr", HIPNUC_VALID_GYR, gyr_watch_, current);
+        warn_if_imu_field_missing("quat", HIPNUC_VALID_QUAT, quat_watch_, current);
     }
 
     void publish_diagnostics(SteadyClock::time_point current, double elapsed)
@@ -181,11 +321,16 @@ private:
         other_nodes_at_last_diag_ = other_nodes_;
         arr.status.push_back(st);
         diag_pub_->publish(arr);
+        warn_if_required_imu_fields_missing(current);
     }
 
     std::string interface_, frame_id_;
-    int node_id_;
+    int node_id_, imu_assembly_timeout_ms_;
+    uint64_t imu_required_valid_ = 0;
     bool publish_imu_, publish_mag_, publish_temperature_, publish_hipnuc_;
+    ImuCache imu_cache_;
+    SteadyClock::time_point imu_watch_started_at_{};
+    ImuFieldWatch acc_watch_, gyr_watch_, quat_watch_;
     hipnuc_ros::SocketCan can_;
     uint64_t frames_ = 0, frames_at_last_diag_ = 0;
     uint64_t invalid_ = 0, other_nodes_ = 0, other_nodes_at_last_diag_ = 0;
