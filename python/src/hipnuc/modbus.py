@@ -2,43 +2,60 @@
 
 Register addresses are zero based. One :class:`ModbusBus` owns one serial
 port and serializes complete operations for all its devices. Only FC03 and
-FC06 are used; neither broadcasts nor Modbus TCP are provided.
+FC06 are used; neither broadcasts nor Modbus TCP are provided. Importing
+this module never requires the optional ``modbus`` extra; opening a bus does.
 """
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version as _package_version
 import math
 import struct
 import threading
 import time
-from dataclasses import asdict, dataclass
 from typing import Any
-
-from pymodbus.client import ModbusSerialClient
-from pymodbus.exceptions import ModbusException, ModbusIOException
 
 from ._connection import SERIAL_OPEN_ERRORS, open_error
 from .decoder import GRAVITY, status_flags
 from .errors import DeviceError, ResponseTimeout, TransportError, VerificationError
-from .models import DeviceInfo, Sample
+from .models import DeviceInfo, Sample, WriteResult, identity_from_registers
+
+_REQUIRED_PYMODBUS = "3.15"
+try:
+    from pymodbus.client import ModbusSerialClient
+    from pymodbus.exceptions import ModbusException, ModbusIOException
+except ImportError as _missing:  # Absent, or an incompatible layout such as PyModbus 2.x.
+    ModbusSerialClient = None
+    _import_error: str | None = str(_missing)
+
+    class ModbusException(Exception):  # Never raised without PyModbus.
+        pass
+
+    class ModbusIOException(ModbusException):
+        pass
+else:
+    _import_error = None
+
+
+def _require_pymodbus() -> None:
+    """Fail with one actionable message instead of a traceback from a wrong PyModbus."""
+    hint = (
+        f'Modbus support requires PyModbus {_REQUIRED_PYMODBUS}: python -m pip install ".[modbus]"'
+    )
+    if ModbusSerialClient is None:
+        raise TransportError(f"{hint} ({_import_error})")
+    try:
+        installed = _package_version("pymodbus")
+    except PackageNotFoundError:
+        return  # Vendored or unpackaged module; let it try.
+    if not installed.startswith(_REQUIRED_PYMODBUS + "."):
+        raise TransportError(f"{hint} (found {installed})")
+
 
 # Public IMU/AHRS manual, Modbus RTU baudrate register codes (code = index).
 BAUDRATES = (4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600, 256000)
 _MAGNETIC_COUNTS_PER_UT = 32.768
-
-
-@dataclass(frozen=True)
-class WriteResult:
-    """An echo acknowledges receipt; only a readback verifies a value/state."""
-
-    address: int
-    value: int
-    acknowledged: bool
-    verified: bool = False
-    readback: int | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+__all__ = ["BAUDRATES", "ModbusBus", "ModbusDevice", "WriteResult"]
 
 
 def _integer(value: int, minimum: int, maximum: int, name: str) -> int:
@@ -57,8 +74,13 @@ def _words_bytes(registers: list[int]) -> bytes:
     return struct.pack(f">{len(registers)}H", *registers)
 
 
-def _version(value: int) -> str | None:
-    return f"{value // 100}.{value // 10 % 10}.{value % 10}" if value else None
+def _request_timeout(budget: float, deadline: float | None) -> float:
+    if deadline is None:
+        return budget
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise ResponseTimeout("Modbus response deadline expired")
+    return min(budget, remaining)
 
 
 class ModbusBus:
@@ -81,6 +103,7 @@ class ModbusBus:
     ) -> None:
         if not isinstance(port, str) or not port:
             raise ValueError("port must be a nonempty serial port name")
+        _require_pymodbus()
         self.port = port
         self.baudrate = _integer(baudrate, 1, 10_000_000, "baudrate")
         self.timeout = _duration(timeout, "timeout")
@@ -142,7 +165,15 @@ class ModbusBus:
             self._client = self._make_client()
             self.open()
 
-    def _request(self, device_id: int, function: int, address: int, argument: int) -> Any:
+    def _request(
+        self,
+        device_id: int,
+        function: int,
+        address: int,
+        argument: int,
+        *,
+        deadline: float | None = None,
+    ) -> Any:
         # The caller holds the bus lock for both this request and its readback.
         try:
             response_bytes = 5 + 2 * argument if function == 3 else 8
@@ -150,9 +181,11 @@ class ModbusBus:
             # PyModbus 3.15 keeps separate CommParams copies: the serial client
             # uses one for recv(), and the transaction manager another for its
             # complete-response deadline. Update both for EVERY request.
+            self._client.comm_params.timeout_connect = _request_timeout(budget, deadline)
+            self.open()
+            budget = _request_timeout(budget, deadline)
             self._client.comm_params.timeout_connect = budget
             self._client.transaction.comm_params.timeout_connect = budget
-            self.open()
             self._client.socket.timeout = budget
             self._client.socket.write_timeout = budget
             if function == 3:
@@ -174,6 +207,8 @@ class ModbusBus:
             raise TransportError(
                 f"Modbus communication with node {device_id} failed: {exc}"
             ) from exc
+        if deadline is not None and time.monotonic() >= deadline:
+            raise ResponseTimeout("Modbus response deadline expired")
         if response is None:
             raise ResponseTimeout(f"No Modbus response from node {device_id}")
         if response.isError():
@@ -202,12 +237,18 @@ class ModbusDevice:
         if address + count > 0x10000:
             raise ValueError("register range exceeds 0xFFFF")
         with self.bus._lock:
-            response = self.bus._request(self.device_id, 3, address, count)
-            if len(response.registers) != count:
-                raise VerificationError(
-                    f"FC03 returned {len(response.registers)} registers; expected {count}"
-                )
-            return list(response.registers)
+            return self._read_registers(address, count)
+
+    def _read_registers(
+        self, address: int, count: int, *, deadline: float | None = None
+    ) -> list[int]:
+        # The caller holds the bus lock and has validated the register range.
+        response = self.bus._request(self.device_id, 3, address, count, deadline=deadline)
+        if len(response.registers) != count:
+            raise VerificationError(
+                f"FC03 returned {len(response.registers)} registers; expected {count}"
+            )
+        return list(response.registers)
 
     def _write_ack(self, address: int, value: int) -> WriteResult:
         response = self.bus._request(self.device_id, 6, address, value)
@@ -243,18 +284,12 @@ class ModbusDevice:
     def read_info(self) -> DeviceInfo:
         """Read the documented 19-register identity block; cache its identity."""
         with self.bus._lock:
-            raw = _words_bytes(self.read_registers(0x70, 19))
-            product_name = raw[:16].split(b"\0", 1)[0].decode("ascii", errors="replace").strip()
-            serial = raw[30:38]
-            self._info = DeviceInfo(
-                product_name=product_name or None,
-                firmware_version=_version(int.from_bytes(raw[16:18], "big")),
-                bootloader_version=_version(int.from_bytes(raw[18:20], "big")),
-                serial_number=serial.hex().upper() if any(serial) else None,
-                build=None,
-                raw_response=raw.hex(),
-            )
-            return self._info
+            return self._read_info()
+
+    def _read_info(self, *, deadline: float | None = None) -> DeviceInfo:
+        # The caller holds the bus lock throughout identity acquisition.
+        self._info = identity_from_registers(self._read_registers(0x70, 19, deadline=deadline))
+        return self._info
 
     def read_status(self) -> dict[str, Any]:
         """Read main status (with flag names), calibration status and progress."""
@@ -410,15 +445,15 @@ class ModbusDevice:
                 self.bus.reconfigure(baudrate)
             deadline = time.monotonic() + timeout
             last_error: Exception | None = None
-            while True:
+            while time.monotonic() < deadline:
                 try:
-                    return self.read_info()
+                    return self._read_info(deadline=deadline)
                 except (TransportError, ResponseTimeout) as exc:
                     last_error = exc
                 remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise ResponseTimeout(
-                        f"Node {self.device_id} did not answer within {timeout:g}s after reboot "
-                        f"at {self.bus.baudrate} baud"
-                    ) from last_error
-                time.sleep(min(0.05, remaining))
+                if remaining > 0:
+                    time.sleep(min(0.05, remaining))
+            raise ResponseTimeout(
+                f"Node {self.device_id} did not answer within {timeout:g}s after reboot "
+                f"at {self.bus.baudrate} baud"
+            ) from last_error

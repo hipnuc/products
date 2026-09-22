@@ -3,13 +3,13 @@
 [English](README.md) | [中文](README_zh.md)
 
 Read, configure and record HiPNUC IMU/AHRS/MRU and INS devices from a terminal
-or your Python application. Supports HI91/HI81/HI83, NMEA GGA/RMC and Modbus RTU
+or your Python application. Supports HI91/HI81/HI83 and NMEA GGA/RMC
 with **Python 3.10–3.14** on Windows, Linux (including Ubuntu and Raspberry Pi OS),
 and macOS.
 
-Optional CAN support (J1939/CANFD83) uses python-can. The CAN CLI uses Linux
-SocketCAN; Python applications can use other adapters. Firmware update is
-available over serial and over CAN.
+Modbus RTU (`[modbus]`, PyModbus) and CAN J1939/CANFD83 (`[can]`, python-can)
+are optional extras. The CAN CLI uses Linux SocketCAN; Python applications can
+use other adapters. Firmware update is available over serial and over CAN.
 
 Supported devices: HI01–HI06, HI12–HI18, HI32, HI70/HI71 and CH0X0.
 
@@ -47,6 +47,7 @@ hihost --help
 Activate the environment again in each new terminal. For an existing application,
 activate its environment and run `python -m pip install "/path/to/products/python"`;
 select that same environment in your IDE. Reinstall after updating SDK source.
+Add the interfaces you need: `python -m pip install ".[modbus,can]"` installs both extras.
 
 Help starts with `hihost 0.1.0`. If your shell cannot find `hihost`, use
 `python -m hipnuc` with the same arguments in that environment.
@@ -82,16 +83,23 @@ the baudrate of the device's currently connected port, then reconnects.
 Use `hihost scan -p PORT` for an unknown baudrate, `reboot` to restart, and append
 `--help` for options. Configuration commands require an explicit port.
 
+Environment variables `HIHOST_PORT`, `HIHOST_BAUDRATE`, `HIHOST_MODBUS_ID`,
+`HIHOST_CAN_INTERFACE` and `HIHOST_CAN_ID` supply defaults for the matching
+options, so repeated commands need no `-p`/`-b`; options on the command line win.
+`hihost -v COMMAND` shows SDK debug logs (command exchange, CAN register frames)
+on stderr. Shell completion is Click's:
+`eval "$(_HIHOST_COMPLETE=bash_source hihost)"` (`zsh_source`, `fish_source`).
+
 Command files contain one product command per line; `#` and `;` start comments.
 Execution stops on failure. `--save` saves once after all commands succeed;
 add `--reboot` only when the settings require it. Use the managed `baudrate`
 and `reboot` commands for connection changes. Command names and applicability
 come from the product's command and programming manual.
 
-`LOG HI91 ONMARK ONCE` (also HI81/HI83/GGA/RMC) has no command ACK; the SDK
-waits for a matching sample. Receiving one does not prove the command executed,
-because that message may already be streaming. An explicit destination such as
-`LOG COM2 HI91 ONMARK ONCE` requires `--no-reply` (Python: `response="none"`).
+`LOG HI91 ONMARK ONCE` (also HI81/HI83/GGA/RMC, with or without a `COMn`
+destination) has no command ACK and requires `--no-reply` (Python:
+`response="none"`). Send-only writes one command and closes the connection;
+multi-command files cannot use it. Use periodic output and `read` to collect samples.
 
 MATLAB reads **HI91** JSONL recordings; see [matlab/](../matlab/README.md).
 Recording keeps all decoded samples independently of the display's five
@@ -99,6 +107,10 @@ readings/second limit per message type. Add `--record-raw capture.bin` for
 received bytes, `--quiet` to hide readings or `--jsonl` for machine output.
 Files use the current directory; existing files are protected unless
 `--overwrite` is explicit. Finite reads finish the current receive batch.
+The stop summary reports the measured rate of each message type.
+`hihost decode capture.bin` decodes a `--record-raw` file offline and prints
+every sample; add `--jsonl` or `--record out.jsonl` (records carry no host time).
+The input and output must be different files, even with `--overwrite`.
 Diagnostics go to stderr. Exit codes: 0 success, 1 failure, 2 usage error, 130 Ctrl-C.
 
 ## Python API and examples
@@ -135,20 +147,24 @@ The SDK does not change the device's coordinate configuration.
 `complete`, `issues` and `metadata` retain parsing and source information.
 Managed reboot clears old queued samples before waiting for the restarted device;
 samples already delivered to recording callbacks remain recorded.
+If identity queries had to be repeated, reboot returns the identity and closes
+the session to keep late replies out of subsequent commands; check `device.is_open`.
 
 Communication errors derive from `HipnucError`: `TransportError`,
 `ResponseTimeout`, `DeviceError` and `VerificationError` (readback mismatch).
 Invalid arguments raise `ValueError`; recording I/O failures raise `OSError`.
 `command()` returns `CommandResult` with `command`, `text` and `acknowledged`;
-an ACK is not configuration readback. Send-only calls and ONCE samples without an
-ACK return `acknowledged=False`; a missing expected reply raises `ResponseTimeout`.
+an ACK is not configuration readback. Send-only calls return `acknowledged=False`
+and close the session; a missing expected reply raises `ResponseTimeout`.
 
 Serial commands use `CommandTimeout`, a `ResponseTimeout` subclass. Its `sent`
 flag is false when the command was not written, and true when execution is
-unconfirmed. After corrupted input, the SDK waits for a valid frame within the
-command timeout. If synchronization still fails, it reopens the same port and
-baudrate once for the next call; a failed reopen leaves it closed. The command
-is never automatically retried. `response="none"` remains send-only.
+unconfirmed. Commands are never automatically retried. A sent command that times
+out closes the connection; closing cannot cancel an operation on the device.
+Wait for that operation to finish before reconnecting. Corrupted input must
+recover within the command timeout; a failure before sending does not reopen
+the port. Managed baudrate changes require an ACK before switching the host;
+if it is missing, use `scan` to establish the device's current baudrate.
 
 For recording, connect before creating files, then attach callbacks before reading:
 
@@ -184,6 +200,7 @@ Edit constants at the top of these scripts, then run `python examples/read_sampl
 
 ## Modbus RTU
 
+Install the optional dependency with `python -m pip install ".[modbus]"`.
 Use an explicit port and node ID. Defaults are 115200 baud, 8N1 and ID 80;
 unicast IDs are 1–247. Prepare each device's RTU port, output mode, baudrate and
 unique ID before joining a bus. Never run ASCII `scan` or `command` on a multi-node
@@ -226,26 +243,59 @@ See [modbus_multinode.py](examples/modbus_multinode.py) for multi-device polling
 ## CAN
 
 The CAN CLI requires Linux SocketCAN. Install the optional dependency from this
-directory and configure your interface at the device's bitrate:
+directory and configure your interface at the device's bitrate; CAN FD products
+also need the data bitrate and `fd on`:
 
 ```sh
 python -m pip install ".[can]"
 sudo ip link set can0 type can bitrate 500000
+sudo ip link set can0 type can bitrate 1000000 dbitrate 4000000 fd on   # CAN FD product
 sudo ip link set can0 up
+hihost can scan -i can0 --identify
 hihost can read -i can0
 hihost can read -i can0 --id 8 --record samples.jsonl
 ```
 
-For CAN FD, configure the arbitration/data bitrates first, then add `--fd` to
-`can read`. `--id` filters one source; omitting it receives all sources.
-Recording uses the same JSONL format and file protection as serial. Each record
-keeps `node_id`, CAN identifier and host receive time; separate PGNs are never merged.
-Use system tools such as `ip` and `candump` for interface status and raw captures.
+`scan` lists the nodes seen on the bus with the rate of each PGN; `--identify`
+adds their identity. `--id` filters one source; omitting it receives all sources.
+CAN FD frames require `--fd`. Recording uses the same JSONL format and file
+protection as serial. Each record keeps `node_id`, CAN identifier and host receive
+time; separate PGNs are never merged. The stop summary reports rates and lost
+CANFD83 frames. Use system tools such as `ip` and `candump` for interface status
+and raw captures.
 
-Raw register access requires a target: `hihost can reg read ADDRESS -i can0 --id 8`
-or `hihost can reg write ADDRESS VALUE -i can0 --id 8`. Addresses and values accept
-decimal or `0x` notation. A write checks the reply; it does not automatically
-save, reboot or prove that a setting took effect. Unsupported requests may time out.
+Configuration commands address one node (`--id`, 1–127). Writes persist
+immediately; `--save` is an acknowledged no-op. The node ID
+and bitrates take effect after a reboot, which the device performs before it can
+acknowledge, so `reboot` waits for the identity instead of a reply:
+
+```sh
+hihost can info -i can0 --id 8
+hihost can period acc 10 -i can0 --id 8            # ms, off, or sync (SYNC_IN triggered)
+hihost can output off -i can0 --id 8               # all periodic PGNs
+hihost can period canfd83 10 -i can0 --id 8        # CANFD83, same period control
+hihost can trigger quat -i can0 --all              # one frame from every node, no ACK
+hihost can set-id 9 -i can0 --id 8 --reboot
+hihost can bitrate 1000000 -i can0 --id 8 --reboot
+hihost can reboot -i can0 --id 8
+```
+
+PGNs accept numbers or names: acc, gyr, mag, roll_pitch, yaw, quat, temp,
+inclination, time, position, altitude, gnss_status, velocity, canfd83. After
+`bitrate --reboot`, reconfigure the interface before the next command. A classic
+CAN product never answers the CAN FD registers; the timeout message says so.
+`reboot --factory-reset` preserves the node ID and restores the default bitrate,
+so it sends the request without waiting for the node to return. Every `hihost read`
+variant stops cleanly on Ctrl-C or SIGTERM. A closed output pipe (for example
+`| head`) only ends display; acquisition and recording continue.
+
+Raw register access: `hihost can reg read ADDRESS -i can0 --id 8` or
+`hihost can reg write ADDRESS VALUE -i can0 --id 8`. Addresses and values accept
+decimal or `0x` notation. A write checks the echo; it does not prove that a
+setting took effect, and resets must use `can reboot`. Unsupported requests time out.
+Configure CAN FD fields separately: register `0x180` holds the CANFD83 bitmap
+(for example `0x12B`), and `0x9B` holds the data-bitrate code (`11` for 4 Mbit/s).
+Confirm each write before the next; the data bitrate takes effect after reboot.
 
 For direct integration, use the standard `python-can` bus with SDK functions:
 
@@ -266,12 +316,21 @@ bitrate=500000, ignore_config=True)`, and use the same SDK functions. CAN FD
 timing parameters depend on the adapter.
 
 `decode_message()` returns `None` for unrelated traffic and raises `ValueError`
-for a malformed supported frame. `read_register(bus, node_id, address)` returns
+for a malformed supported frame. It keeps the adapter's original timestamp in
+`metadata["can_timestamp_s"]`, with a backend-defined time reference, and leaves
+`received_time_ns` unset. A receiving application can assign its own host time;
+the CLI does this immediately after receiving each frame.
+`read_register(bus, node_id, address)` returns
 the raw integer; `write_register(bus, node_id, address, value)` checks its echo.
-Both use a two-second default timeout. Use one receive consumer per bus;
-register transactions consume intervening traffic and must not run alongside a reader.
-`make_trigger(node_id, pgn)` creates a message for `bus.send()` or
-`bus.send_periodic()`; it does not wait for an acknowledgement.
+The managed operations `read_info`, `reboot`, `request_reboot`, `wait_for_node`,
+`factory_reset`, `set_node_id`, `set_bitrate`, `set_pgn_period`, `set_output_enabled`,
+`send_trigger` and `scan` take the same caller-owned bus and node ID;
+writes return `WriteResult` and only store the setting. `read_info` shares its
+timeout across the entire identity read, rather than restarting it for each register.
+Use one receive consumer per bus; register transactions consume intervening
+traffic and must not run alongside a reader. `make_trigger(node_id, pgn)` creates
+a message for `bus.send()` or `bus.send_periodic()`; node 255 broadcasts, and
+no acknowledgement is expected.
 
 ## Firmware update
 
@@ -282,6 +341,9 @@ application firmware for the **exact device model** and specify the target:
 hihost update firmware.hex -p /dev/ttyUSB0 -b 115200
 hihost can update firmware.hex -i can0 --id 8
 ```
+
+Serial update requires 9600–2000000 baud; change a slower connection's baudrate
+before starting an update.
 
 Use `COM3` or the actual port on Windows. CAN update requires the optional CAN
 dependency and a node ID from 1 to 127; `--bin` explicitly selects a raw binary.
@@ -303,6 +365,7 @@ it cancels the operation. No CAN dependency is needed for serial updates.
 | Missing Python / venv / pip | Use Python 3.10+. Ubuntu 22.04's default 3.10 works; 20.04's default 3.8 does not. On Ubuntu/Debian/Pi OS, install `python3-venv`. |
 | APT waits for a lock | Wait for the OS updater; do not delete its lock or kill the updater. |
 | `UNKNOWN-0.0.0` / `No module named hipnuc` | Activate the correct environment, upgrade pip, then reinstall from this `python/` directory. |
+| `Modbus support requires` / `CAN support requires` | Install the named extra in the same environment: `python -m pip install ".[modbus]"` or `".[can]"`. |
 | PowerShell blocks activation | Use `.\.venv\Scripts\python.exe` for pip and run `.\.venv\Scripts\hihost.exe` directly. |
 | No port / busy port | Check USB passthrough in a VM, cable/driver and other serial applications. Use `hihost list --all` for non-USB ports. |
 | Port opens, no valid samples | Check actual baudrate, wiring, output mode and rate. Give slow output enough `--timeout`. |

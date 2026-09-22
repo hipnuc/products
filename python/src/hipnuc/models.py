@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, time
 import math
 from typing import Any, cast
@@ -184,6 +184,49 @@ class DeviceInfo:
 
     def to_dict(self) -> dict[str, Any]:
         return _json_value(vars(self))
+
+
+def identity_from_registers(words: list[int]) -> DeviceInfo:
+    """Decode the 19-word identity block at register 0x70 (Modbus and J1939).
+
+    Words are big-endian 16-bit values: product name 0x70–0x77, firmware and
+    bootloader versions 0x78–0x79, reserved 0x7A–0x7E and serial number
+    0x7F–0x82. Unavailable words may be zero.
+    """
+    if len(words) != 19 or not all(
+        isinstance(word, int) and not isinstance(word, bool) and 0 <= word <= 0xFFFF
+        for word in words
+    ):
+        raise ValueError("identity block must contain 19 unsigned 16-bit words")
+    raw = b"".join(word.to_bytes(2, "big") for word in words)
+
+    def version(value: int) -> str | None:
+        return f"{value // 100}.{value // 10 % 10}.{value % 10}" if value else None
+
+    product_name = raw[:16].split(b"\0", 1)[0].decode("ascii", errors="replace").strip()
+    serial = raw[30:38]
+    return DeviceInfo(
+        product_name=product_name or None,
+        firmware_version=version(int.from_bytes(raw[16:18], "big")),
+        bootloader_version=version(int.from_bytes(raw[18:20], "big")),
+        serial_number=serial.hex().upper() if any(serial) else None,
+        build=None,
+        raw_response=raw.hex(),
+    )
+
+
+@dataclass(frozen=True)
+class WriteResult:
+    """A register write: an echo acknowledges receipt; only a readback verifies it."""
+
+    address: int
+    value: int
+    acknowledged: bool
+    verified: bool = False
+    readback: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass

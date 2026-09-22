@@ -3,11 +3,12 @@
 [English](README.md) | [中文](README_zh.md)
 
 在命令行或自己的 Python 程序中读取、配置和录制 HiPNUC IMU/AHRS/MRU 与 INS。
-支持 HI91/HI81/HI83、NMEA GGA/RMC 和 Modbus RTU，适用于 **Python 3.10–3.14**、
+支持 HI91/HI81/HI83 和 NMEA GGA/RMC，适用于 **Python 3.10–3.14**、
 Windows、Linux（含 Ubuntu 和树莓派系统）及 macOS。
 
-可选 CAN 支持（J1939/CANFD83）基于 python-can。CAN 命令行使用 Linux SocketCAN；
-Python 程序可以使用其他适配器。固件升级支持串口和 CAN。
+Modbus RTU（`[modbus]`，PyModbus）和 CAN J1939/CANFD83（`[can]`，python-can）
+为可选依赖。CAN 命令行使用 Linux SocketCAN；Python 程序可以使用其他适配器。
+固件升级支持串口和 CAN。
 
 支持设备：HI01–HI06、HI12–HI18、HI32、HI70/HI71、CH0X0。
 
@@ -44,7 +45,8 @@ hihost --help
 
 新开终端后重新激活环境。集成到已有程序时，激活该程序的环境并运行
 `python -m pip install "/path/to/products/python"`，IDE 也选择同一环境。
-更新 SDK 源码后重新安装。
+更新 SDK 源码后重新安装。按需加装接口依赖：`python -m pip install ".[modbus,can]"`
+同时安装两者。
 
 `hihost --help` 的开头显示 `hihost 0.1.0`。如果终端找不到 `hihost`，
 可在同一环境中使用 `python -m hipnuc`，后面的参数相同。
@@ -79,21 +81,28 @@ hihost command --file commands.txt -p COM3 -b 115200 --save
 未知波特率用 `hihost scan -p PORT`，重启用 `reboot`，具体选项在最终命令后加
 `--help` 查看。配置命令要求明确指定端口。
 
+环境变量 `HIHOST_PORT`、`HIHOST_BAUDRATE`、`HIHOST_MODBUS_ID`、`HIHOST_CAN_INTERFACE`、
+`HIHOST_CAN_ID` 为对应选项提供默认值，反复操作时无需再写 `-p`/`-b`；命令行选项优先。
+`hihost -v 命令` 在 stderr 显示 SDK 调试日志（指令收发、CAN 寄存器帧）。Shell 补全沿用 Click：
+`eval "$(_HIHOST_COMPLETE=bash_source hihost)"`（`zsh_source`、`fish_source`）。
+
 指令文件每行一条产品指令，`#` 和 `;` 开始注释。遇到失败停止执行；
 `--save` 在全部成功后保存一次，设置需要重启时再加 `--reboot`。
 连接变化使用 SDK 管理的 `baudrate` 和 `reboot` 命令。
 指令名称及适用范围以产品的指令与编程手册为准。
 
-`LOG HI91 ONMARK ONCE`（也支持 HI81/HI83/GGA/RMC）没有命令 ACK，SDK 等待对应类型的
-样本。该报文可能本就在周期输出，因此收到样本不证明命令执行成功。
-显式指定目标的命令，如 `LOG COM2 HI91 ONMARK ONCE`，需使用 `--no-reply`
-（Python：`response="none"`）。
+`LOG HI91 ONMARK ONCE`（也支持 HI81/HI83/GGA/RMC，无论是否指定 `COMn`）
+没有命令 ACK，需使用 `--no-reply`（Python：`response="none"`）。
+仅发送模式写出一条命令后关闭连接，不能用于多条命令文件；采集样本请使用周期输出和 `read`。
 
 MATLAB 可读取 **HI91** JSONL 录制，见 [matlab/](../matlab/README_zh.md)。
 录制保留全部已解码样本，与屏幕每种报文每秒最多五次的显示限速独立。
 加 `--record-raw capture.bin` 保存原始接收字节，`--quiet` 隐藏读数，
 `--jsonl` 输出机器数据。文件默认位于当前目录，明确加 `--overwrite` 才覆盖已有文件。
-有限采集会完成当前接收批次。诊断输出到 stderr；
+有限采集会完成当前接收批次。停止时的统计给出每种报文的实测速率。
+`hihost decode capture.bin` 离线解码 `--record-raw` 文件并打印全部样本，
+可加 `--jsonl` 或 `--record out.jsonl`（记录不含主机时间）。
+输入与输出必须是不同文件，即使使用 `--overwrite`。诊断输出到 stderr；
 退出码：0 成功、1 失败、2 参数错误、130 Ctrl-C。
 
 ## Python API 与例程
@@ -126,17 +135,20 @@ heading 从北顺时针计算，与 Euler yaw 区分；SDK 不修改设备坐标
 `received_time_ns` 为主机接收时间，设备时间与 UTC 为独立字段。
 `complete`、`issues`、`metadata` 保留解析和来源信息。
 受管理的重启在等待设备恢复前清空旧样本队列；已经交给录制回调的样本保留。
+如果身份查询发生过重试，重启返回身份后会关闭会话，避免迟到回复混入后续命令；
+可检查 `device.is_open`。
 
 通信异常继承 `HipnucError`：`TransportError`、`ResponseTimeout`、`DeviceError`、
 `VerificationError`（读回不一致）。无效参数抛出 `ValueError`，录制 I/O 错误抛出 `OSError`。
 `command()` 返回 `CommandResult`，包含 `command`、`text` 和 `acknowledged`；
-ACK 不代表配置读回验证。仅发送，或 ONCE 收到样本但没有 ACK 时，返回
-`acknowledged=False`；等待的回复未收到时，抛出 `ResponseTimeout`。
+ACK 不代表配置读回验证。仅发送返回 `acknowledged=False` 并关闭会话；
+等待的回复未收到时，抛出 `ResponseTimeout`。
 
 串口命令使用 `ResponseTimeout` 的子类 `CommandTimeout`：`sent=False` 表示命令
-未写出，`sent=True` 表示是否执行尚未确认。遇到损坏输入时，SDK 在命令超时内等待
-合法帧恢复同步；仍无法恢复时，仅重新打开一次原端口和波特率，供下一次调用使用。
-重开失败则保持关闭。原命令不会自动重发，`response="none"` 仍为仅发送。
+未写出，`sent=True` 表示是否执行尚未确认。命令不会自动重发。
+已发送的命令超时会关闭连接，但关闭不能取消设备上的操作；等待操作结束后再重连。
+损坏输入必须在命令超时内恢复同步；发送前失败不会自动重开端口。
+受管理的换速只有收到 ACK 后才切换主机速率；缺少 ACK 时用 `scan` 确认设备当前速率。
 
 录制时先连接，再创建文件；开始读取前设置回调：
 
@@ -171,6 +183,7 @@ with (
 
 ## Modbus RTU
 
+先安装可选依赖：`python -m pip install ".[modbus]"`。
 明确指定端口和站号。默认 115200、8N1、站号 80，单播站号范围 1–247。
 多机合并总线前，逐台准备 RTU 端口、输出方式、波特率及唯一站号；
 多站 Modbus 总线上不要运行 ASCII `scan` 或 `command`。
@@ -207,24 +220,53 @@ Python 录制时先打开总线，再打开 `Recorder`，写入每次返回的�
 
 ## CAN
 
-CAN 命令行需要 Linux SocketCAN。在本目录安装可选依赖，并按设备波特率配置接口：
+CAN 命令行需要 Linux SocketCAN。在本目录安装可选依赖，并按设备波特率配置接口；
+CAN FD 产品还要设置数据段波特率并打开 `fd on`：
 
 ```sh
 python -m pip install ".[can]"
 sudo ip link set can0 type can bitrate 500000
+sudo ip link set can0 type can bitrate 1000000 dbitrate 4000000 fd on   # CAN FD 产品
 sudo ip link set can0 up
+hihost can scan -i can0 --identify
 hihost can read -i can0
 hihost can read -i can0 --id 8 --record samples.jsonl
 ```
 
-使用 CAN FD 时先配置仲裁段／数据段波特率，再给 `can read` 加上 `--fd`。
-`--id` 筛选一个来源，省略则接收所有来源。录制沿用串口的 JSONL 格式和
-文件保护；每条记录保留 `node_id`、CAN 标识符和主机接收时间，不合并不同 PGN。
+`scan` 列出总线上看到的节点及各 PGN 的速率，`--identify` 再查询身份。
+`--id` 筛选一个来源，省略则接收所有来源；接收 CAN FD 帧需要 `--fd`。
+录制沿用串口的 JSONL 格式和文件保护；每条记录保留 `node_id`、CAN 标识符和
+主机接收时间，不合并不同 PGN。停止统计给出速率和 CANFD83 丢帧数。
 接口状态和原始抓包使用 `ip`、`candump` 等系统工具。
 
-原始寄存器操作必须指定目标：`hihost can reg read ADDRESS -i can0 --id 8`
+配置命令针对一个节点（`--id`，1–127）。写入即持久化，`--save` 仅返回确认、不再写入。
+节点地址和波特率在重启后生效；设备在应答之前就已复位，
+因此 `reboot` 不等待回显，而是等待身份信息：
+
+```sh
+hihost can info -i can0 --id 8
+hihost can period acc 10 -i can0 --id 8            # 毫秒、off 或 sync（SYNC_IN 触发）
+hihost can output off -i can0 --id 8               # 全部周期 PGN
+hihost can period canfd83 10 -i can0 --id 8        # CANFD83，使用相同的周期控制
+hihost can trigger quat -i can0 --all              # 每个节点发一帧，无应答
+hihost can set-id 9 -i can0 --id 8 --reboot
+hihost can bitrate 1000000 -i can0 --id 8 --reboot
+hihost can reboot -i can0 --id 8
+```
+
+PGN 接受编号或名称：acc、gyr、mag、roll_pitch、yaw、quat、temp、inclination、
+time、position、altitude、gnss_status、velocity、canfd83。`bitrate --reboot`
+之后先重新配置接口再执行下一条命令。经典 CAN 产品不会应答 CAN FD 寄存器，
+超时信息会说明这一点。`reboot --factory-reset` 保留节点地址、恢复默认波特率，
+仅发送请求，不等待节点恢复。各类 `hihost read` 在 Ctrl-C 或 SIGTERM 时正常收尾；
+输出管道关闭（例如 `| head`）仅停止显示，采集和录制继续。
+
+原始寄存器操作：`hihost can reg read ADDRESS -i can0 --id 8`
 或 `hihost can reg write ADDRESS VALUE -i can0 --id 8`。地址和值支持十进制或 `0x`。
-写入只检查回复，不自动保存、重启，也不证明配置已经生效。不支持的请求可能超时。
+写入只检查回显，不证明配置已经生效；复位请使用 `can reboot`。不支持的请求会超时。
+CAN FD 设置分别写入：`0x180` 为 CANFD83 bitmap（例如 `0x12B`），
+`0x9B` 为 data bitrate 编码（`11` 表示 4 Mbit/s）。每次确认成功后再执行下一项；
+data bitrate 在重启后生效。
 
 集成时直接使用标准 `python-can` 总线和 SDK 函数：
 
@@ -244,11 +286,17 @@ with can.Bus(interface="socketcan", channel="can0", ignore_config=True) as bus:
 再使用同一套 SDK 函数。CAN FD 的 timing 参数由适配器决定。
 
 `decode_message()` 对无关报文返回 `None`，对格式错误的已支持报文抛出 `ValueError`。
+它将适配器原始时间保留到 `metadata["can_timestamp_s"]`，时间基准由后端定义，
+不填充 `received_time_ns`。接收程序可自行赋主机时间；CLI 在收到帧后立即记录该时间。
 `read_register(bus, node_id, address)` 返回原始整数；
-`write_register(bus, node_id, address, value)` 检查写入回显，默认超时均为 2 秒。
+`write_register(bus, node_id, address, value)` 检查写入回显。托管操作
+`read_info`、`reboot`、`request_reboot`、`wait_for_node`、`factory_reset`、
+`set_node_id`、`set_bitrate`、`set_pgn_period`、`set_output_enabled`、
+`send_trigger`、`scan` 同样使用调用方持有的总线和节点 ID；写操作返回 `WriteResult`，
+只负责存储设置。`read_info` 的超时约束整个身份读取，不会在每个寄存器上重新计时。
 每条总线只由一个接收者使用；寄存器事务会消费期间收到的其他报文，不能与读取并行。
 `make_trigger(node_id, pgn)` 生成报文，交给 `bus.send()` 或 `bus.send_periodic()`
-发送，不等待确认回复。
+发送；节点 255 为广播，均不等待确认回复。
 
 ## 固件升级
 
@@ -259,6 +307,8 @@ with can.Bus(interface="socketcan", channel="can0", ignore_config=True) as bus:
 hihost update firmware.hex -p /dev/ttyUSB0 -b 115200
 hihost can update firmware.hex -i can0 --id 8
 ```
+
+串口升级要求 9600–2000000 baud；较慢的连接请先换速，再开始升级。
 
 Windows 将端口换成 `COM3` 或实际端口。CAN 升级需要可选 CAN 依赖，节点 ID
 为 1–127；`--bin` 显式选择原始二进制文件。升级前关闭其他读取程序并停止周期发送。
@@ -277,6 +327,7 @@ bootloader 无法验证固件型号。传输和启动请求成功不代表新应
 | 缺少 Python / venv / pip | 使用 Python 3.10+。支持 Ubuntu 22.04 默认的 3.10，不支持 20.04 默认的 3.8；Ubuntu/Debian/Pi OS 安装 `python3-venv`。 |
 | APT 等待锁 | 等系统更新完成，不删除锁或强杀更新程序。 |
 | `UNKNOWN-0.0.0` / `No module named hipnuc` | 激活正确环境、升级 pip，再从当前 `python/` 目录重新安装。 |
+| `Modbus support requires` / `CAN support requires` | 在同一环境安装对应可选依赖：`python -m pip install ".[modbus]"` 或 `".[can]"`。 |
 | PowerShell 阻止激活 | 用 `.\.venv\Scripts\python.exe` 安装依赖，直接运行 `.\.venv\Scripts\hihost.exe`。 |
 | 没有串口 / 串口占用 | 检查虚拟机 USB 透传、线缆/驱动和其它串口程序；非 USB 端口用 `hihost list --all`。 |
 | 串口打开但无有效样本 | 检查实际波特率、接线、输出方式和频率，低频输出需足够的 `--timeout`。 |

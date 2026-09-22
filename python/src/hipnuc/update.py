@@ -153,9 +153,19 @@ def update_serial(
     rejected requests DeviceError, malformed replies VerificationError. Invalid
     images raise ValueError; file errors propagate as OSError before connection.
     The image start and size must be four-byte aligned for flash programming.
+    The connection must already use a baudrate supported by the bootloader.
     """
-    if not port or not isinstance(baudrate, int) or isinstance(baudrate, bool) or baudrate <= 0:
-        raise ValueError("Specify a port and a positive integer baudrate")
+    if not port:
+        raise ValueError("Specify a serial port")
+    if (
+        not isinstance(baudrate, int)
+        or isinstance(baudrate, bool)
+        or not 9600 <= baudrate <= 2000000
+    ):
+        raise ValueError(
+            "Serial firmware update requires an integer baudrate in 9600..2000000. "
+            "Switch the device and connection to a supported baudrate before updating."
+        )
     image = load_image(image_path)
     if image.address % 4 or len(image.data) % 4:
         raise ValueError("Serial firmware start and size must be four-byte aligned")

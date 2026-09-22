@@ -1,4 +1,4 @@
-"""HiPNUC SDK. Importing never opens a connection or requires CAN support."""
+"""HiPNUC SDK. Importing never opens a connection or requires the CAN/Modbus extras."""
 
 from .decoder import Decoder
 from .errors import (
@@ -9,8 +9,8 @@ from .errors import (
     TransportError,
     VerificationError,
 )
-from .models import CommandResult, DeviceInfo, Sample
-from .modbus import ModbusBus, ModbusDevice, WriteResult
+from .models import CommandResult, DeviceInfo, Sample, WriteResult
+from .modbus import ModbusBus, ModbusDevice
 from .recording import Recorder
 from .serial_device import DiscoveredDevice, DiscoveryResult, SerialDevice, discover
 from .update import UpdateResult, update_can, update_serial
