@@ -2,7 +2,8 @@ function data = read_hi91_csv(filename)
 %READ_HI91_CSV Read a single-device CHCenter HI91 recording into a table.
 % Columns retain their CSV names and units: sys_time in ms, acceleration
 % in G, angular velocity in deg/s, magnetic field in uT, angles in degrees.
-% Other message types are skipped. Repeated HI91 headers are supported.
+% Other message types are skipped. Repeated HI91 headers are supported, and
+% a later header may add columns; the first header's columns are returned.
 % The CSV does not identify devices; record one device per file.
 
 fid = fopen(filename, 'rt');
@@ -12,6 +13,7 @@ end
 cleanup = onCleanup(@() fclose(fid));
 names = {};
 order = [];
+width = 0;
 rows = [];
 count = 0;
 line_number = 0;
@@ -54,16 +56,19 @@ while true
             names = fields;
             rows = zeros(16384, numel(names));
         end
+        % A later header may add columns (CHCenter adds utc_tod once UTC is
+        % synchronised); rows keep the first header's columns, by name.
         [found, order] = ismember(names, fields);
-        if numel(fields) ~= numel(names) || ~all(found)
-            error('hipnuc:ChangedHeader', 'HI91 columns changed at line %d.', line_number);
+        if ~all(found)
+            error('hipnuc:ChangedHeader', 'HI91 header at line %d lacks columns of the first header.', line_number);
         end
+        width = numel(fields);
         continue;
     end
     if isempty(names)
         error('hipnuc:MissingHeader', 'HI91 data precedes its header at line %d.', line_number);
     end
-    if parsed ~= numel(names) || sum(body == ',') ~= parsed - 1 || ...
+    if parsed ~= width || sum(body == ',') ~= parsed - 1 || ...
             any(~isfinite(values)) || any(~isspace(body(next:end)))
         error('hipnuc:InvalidRow', 'Invalid HI91 numeric data at line %d.', line_number);
     end

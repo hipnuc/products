@@ -44,7 +44,8 @@ CSV columns keep CHCenter's units: `sys_time` in ms, `acc_x/y/z` in G,
 The JSONL reader converts the SDK's SI fields to those same columns and units.
 For these products, acceleration in G converts to m/s² by multiplying by 9.8.
 Other message types are skipped; a file without HI91 samples cannot be analyzed.
-Repeated HI91 headers are accepted in CSV. Record one device per file.
+Repeated HI91 headers are accepted in CSV, and a later header may add columns
+(CHCenter adds `utc_tod` once UTC is synchronised). Record one device per file.
 
 The reader reports missing headers, invalid numbers and non-increasing time.
 Analysis also checks regular sampling, allowing the 1 ms timestamp resolution;
