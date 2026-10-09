@@ -107,6 +107,7 @@ Windows/Linux 串口应用在 `add_subdirectory()` 前将 `HIPNUC_BUILD_SERIAL`
 不代表定位有效或姿态收敛。每个样本只代表当前报文，CAN 不混入旧 PGN 数据。
 Roll/pitch、yaw、heading 相互独立；INS 与原始 GNSS 位置分别保留。
 HI83 倾角字段中的 yaw 使用独立字段及有效位，与欧拉角 yaw 分别保留。
+HI83 的 `att_std`（姿态 1σ，单位 deg，绕导航轴，按输出坐标系表达；9 轴 ROS 下仍为东-北-天）只在 `hi83_t` 中提供。
 
 NMEA 原始 GGA/RMC 结构体改用整数 `second_ms`，替代原来的 `second`。
 需要浮点秒时使用 `second_ms / 1000.0`；SI 样本的时间字段不变。

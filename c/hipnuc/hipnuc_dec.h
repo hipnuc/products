@@ -118,9 +118,9 @@ typedef struct HIPNUC_PACKED {
     uint8_t  reserved_tail[14]; /* always zero on current firmware */
 } hi81_t;
 
-/* HI83 data_bitmap bits decoded by this SDK. Bits 25..29 are internal and
- * are not decoded; a frame containing them is rejected. On the wire bits
- * 30 and 31 follow bit 27 and precede bits 28 and 29. */
+/* HI83 data_bitmap bits decoded by this SDK. Bits 20 and 22..29 are reserved
+ * or internal and are not decoded; a frame containing them is rejected. On the
+ * wire bits 30 and 31 follow bit 27 and precede bits 28 and 29. */
 #define HI83_BMAP_ACC_B              (UINT32_C(1) << 0)   /* acc_b, m/s^2 */
 #define HI83_BMAP_GYR_B              (UINT32_C(1) << 1)   /* gyr_b, rad/s */
 #define HI83_BMAP_MAG_B              (UINT32_C(1) << 2)   /* mag_b, uT */
@@ -141,9 +141,10 @@ typedef struct HIPNUC_PACKED {
 #define HI83_BMAP_UNDULATION         (UINT32_C(1) << 17)  /* m */
 #define HI83_BMAP_DIFF_AGE           (UINT32_C(1) << 18)  /* s */
 #define HI83_BMAP_NODE_ID            (UINT32_C(1) << 19)
+#define HI83_BMAP_ATT_STD            (UINT32_C(1) << 21)  /* deg, 1-sigma about navigation axes */
 #define HI83_BMAP_GNSS_LON_LAT_MSL   (UINT32_C(1) << 30)  /* deg, deg, m */
 #define HI83_BMAP_GNSS_VEL           (UINT32_C(1) << 31)  /* m/s, ENU */
-#define HI83_BMAP_SUPPORTED          UINT32_C(0xC00FFFFF)
+#define HI83_BMAP_SUPPORTED          UINT32_C(0xC02FFFFF)
 
 /**
  * Packet 0x83: INS data, float, bitmap selected fields. Variable length.
@@ -190,6 +191,7 @@ typedef struct HIPNUC_PACKED {
         uint8_t node_id;
         uint8_t reserved[3];
     } node;
+    float    att_std[3];     /* deg, 1-sigma about the navigation axes in the output coordinate (9-axis ROS stays ENU); tilt, tilt, heading */
     double   gnss_lon_lat_msl[3]; /* deg, deg, m */
     float    gnss_vel[3];    /* m/s, ENU */
 } hi83_t;

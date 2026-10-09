@@ -329,7 +329,7 @@ def can_save(interface, node_id, timeout, as_json):
     "--factory-reset",
     "restore",
     is_flag=True,
-    help="Restore factory settings; the node keeps its ID and restores default bitrates.",
+    help="Restore factory settings; the node may come back with the factory node ID and bitrate.",
 )
 @recovery_option
 @can_options(require_node=True)
@@ -346,8 +346,8 @@ def can_reboot(save, restore, recovery_timeout, interface, node_id, timeout, as_
             report(
                 result,
                 as_json,
-                f"Node {node_id}: factory reset sent; it keeps its node ID and "
-                "restarts with default bitrates.",
+                f"Node {node_id}: factory reset sent. Reconnect with the previous node ID and bitrate first; "
+                "if it does not answer, retry with node 8 at 500 kbit/s.",
             )
             return
         click.echo("Resetting and waiting for the node...", err=True)

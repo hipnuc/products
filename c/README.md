@@ -114,6 +114,7 @@ Read a field only when its `HIPNUC_VALID_*` bit is set. These bits mean
 describes one packet; different CAN PGNs are never combined with old values.
 Roll/pitch, yaw and heading are independent; INS and raw GNSS positions stay separate.
 HI83 inclination yaw has its own field and availability bit, separate from Euler yaw.
+HI83 `att_std` (attitude 1-sigma, deg, about the navigation axes in the output coordinate; 9-axis ROS stays ENU) is available in `hi83_t` only.
 
 NMEA raw GGA/RMC structures now use integer `second_ms` in place of `second`.
 For floating-point seconds, use `second_ms / 1000.0`; the SI sample time fields are unchanged.

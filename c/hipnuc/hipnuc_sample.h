@@ -34,6 +34,7 @@ extern "C" {
 #define HIPNUC_KNOT2MPS         0.514444444f
 
 /* Product MAIN_STATUS bits; a set convergence bit is a warning. */
+#define HIPNUC_STATUS_COORD_MASK   (7U << 0)   /* output coordinate value, 0 ENU, 4 ROS (every frame) */
 #define HIPNUC_STATUS_WB_CONV      (1U << 3)
 #define HIPNUC_STATUS_MAG_DIST     (1U << 4)
 #define HIPNUC_STATUS_ACC_SAT      (1U << 5)

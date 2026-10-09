@@ -257,8 +257,8 @@ hihost can reboot -i can0 --id 8
 PGN 接受编号或名称：acc、gyr、mag、roll_pitch、yaw、quat、temp、inclination、
 time、position、altitude、gnss_status、velocity、canfd83。`bitrate --reboot`
 之后先重新配置接口再执行下一条命令。经典 CAN 产品不会应答 CAN FD 寄存器，
-超时信息会说明这一点。`reboot --factory-reset` 保留节点地址、恢复默认波特率，
-仅发送请求，不等待节点恢复。各类 `hihost read` 在 Ctrl-C 或 SIGTERM 时正常收尾；
+超时信息会说明这一点。`reboot --factory-reset` 仅发送请求，
+不等待节点恢复。先用原节点地址和波特率重新连接；无应答时，改用节点 8、500 kbit/s 重试。各类 `hihost read` 在 Ctrl-C 或 SIGTERM 时正常收尾；
 输出管道关闭（例如 `| head`）仅停止显示，采集和录制继续。
 
 原始寄存器操作：`hihost can reg read ADDRESS -i can0 --id 8`

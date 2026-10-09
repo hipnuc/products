@@ -18,9 +18,10 @@ GRAVITY = 9.8
 _SYNC = b"\x5a\xa5"
 _UTC_UNSYNC = 1 << 11
 
-# MAIN_STATUS bits shared by HI91/HI81/HI83 (IMU manual, "MAIN_STATUS").
+# MAIN_STATUS bits shared by every frame that carries it (IMU manual, "MAIN_STATUS").
 # The names follow the manual; WB_CONV and ATT_CONV mean "NOT converged"
-# when set. Other bits describe operating state rather than faults.
+# when set. Other bits describe operating state rather than faults. Bits 0-2
+# are not flags: they carry the output coordinate (0 ENU, 4 ROS).
 MAIN_STATUS_FLAGS = {
     3: "WB_CONV",  # set: gyro bias NOT yet converged (keep still for a few seconds)
     4: "MAG_DIST",  # set: magnetic disturbance detected
@@ -34,9 +35,9 @@ MAIN_STATUS_FLAGS = {
 }
 INS_STATUS_NAMES = {0: "invalid", 1: "aligning", 3: "navigating", 6: "dead_reckoning"}
 
-# HI83 bitmap fields decoded by this SDK. Bits 0-11 are the public IMU/MRU
-# fields; 12-19, 30 and 31 are INS delivery extensions. Bits 25-29 are
-# internal diagnostics and are not decoded. On the wire, bits 30/31 follow
+# HI83 bitmap fields decoded by this SDK. Bits 0-11 and 21 are the public
+# IMU/MRU fields; 12-19, 30 and 31 are INS delivery extensions. Bits 20, 22-29 are
+# reserved or internal and are not decoded. On the wire, bits 30/31 follow
 # bit 27 and precede bits 28/29, so ascending decoding is only valid while
 # no undecoded bit is present. Unknown layouts are rejected as a whole.
 _HI83_SIZES = {
@@ -60,6 +61,7 @@ _HI83_SIZES = {
     17: 4,
     18: 4,
     19: 4,
+    21: 12,
     30: 24,
     31: 12,
 }
@@ -614,6 +616,8 @@ def _decode_hi83(data: bytes, frame: bytes, offset: int) -> Sample:
             )
         elif bit == 19:
             values["node_id"] = data[cursor]
+        elif bit == 21:
+            values["att_std_deg"] = list(struct.unpack_from("<3f", data, cursor))
         cursor += size
     if bitmap & _HI83_EXTENSION_MASK:
         metadata["hi83_extension_bits"] = "bits 12-19, 30, 31 are INS delivery extensions"

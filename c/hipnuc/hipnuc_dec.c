@@ -86,7 +86,7 @@ static int hi83_packet_size(uint32_t bitmap)
 {
     static const uint8_t field_sizes[32] = {
         12, 12, 12, 12, 16, 8, 8, 4, 4, 12, 12, 12, 12, 12, 24, 4,
-        4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 12
+        4, 4, 4, 4, 0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 24, 12
     };
     int size = 8;
     unsigned bit;
@@ -241,6 +241,7 @@ static int parse_hi83(hi83_t *out, const uint8_t *p, int avail)
         out->node.reserved[2] = p[idx + 3];
         idx += 4;
     }
+    if (bm & HI83_BMAP_ATT_STD)    { RD_F32_ARRAY(out->att_std, p + idx, 3); idx += 12; }
     if (bm & HI83_BMAP_GNSS_LON_LAT_MSL) {
         out->gnss_lon_lat_msl[0] = rd_f64(p + idx);
         out->gnss_lon_lat_msl[1] = rd_f64(p + idx + 8);

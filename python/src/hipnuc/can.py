@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 
 _logger = logging.getLogger(__name__)
-_HOST_ADDRESS = 0x55  # Product firmware always addresses configuration replies here.
+_HOST_ADDRESS = 0x55  # Requests are sent from here; the firmware replies to the requester's address.
 _CONFIG_ID = 0x0CEF0000
 _PGNS = {
     0xFF10: ("POSITION", 8),
@@ -458,7 +458,7 @@ def request_reboot(bus: can.BusABC, node_id: int, timeout: float = 2.0) -> Write
 
 
 def factory_reset(bus: can.BusABC, node_id: int, timeout: float = 2.0) -> WriteResult:
-    """Restore factory settings; the node ID is retained and bitrates return to defaults."""
+    """Restore factory settings; the node may come back with the factory node ID and bitrate."""
     return _request_reset(bus, _node(node_id), _CONTROL_FACTORY_RESET, timeout)
 
 

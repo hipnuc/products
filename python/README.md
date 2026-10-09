@@ -284,8 +284,9 @@ PGNs accept numbers or names: acc, gyr, mag, roll_pitch, yaw, quat, temp,
 inclination, time, position, altitude, gnss_status, velocity, canfd83. After
 `bitrate --reboot`, reconfigure the interface before the next command. A classic
 CAN product never answers the CAN FD registers; the timeout message says so.
-`reboot --factory-reset` preserves the node ID and restores the default bitrate,
-so it sends the request without waiting for the node to return. Every `hihost read`
+`reboot --factory-reset` sends the request without waiting for the node to
+return. Reconnect with the previous node ID and bitrate first; if the node does
+not answer, retry with node 8 at 500 kbit/s. Every `hihost read`
 variant stops cleanly on Ctrl-C or SIGTERM. A closed output pipe (for example
 `| head`) only ends display; acquisition and recording continue.
 
