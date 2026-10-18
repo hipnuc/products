@@ -37,8 +37,9 @@ xlabel('Time (s)'); ylabel('Angular velocity (deg/s)')
 summary = batch_analyze('recordings');
 ```
 
-CSV 字段保留 CHCenter 的单位：`sys_time` 为 ms，`acc_x/y/z` 为 G，`gyr_x/y/z`
-为 °/s，`mag_x/y/z` 为 μT，`roll/pitch/imu_yaw` 为 °。JSONL 读取函数把 SDK 的 SI
+CHCenter 在每列表头的方括号里写明单位，如 `acc_x[g]`；读取函数返回不带单位的
+列名（`acc_x`），单位不变：`sys_time` 为 ms，`acc_x/y/z` 为 G，`gyr_x/y/z` 为
+°/s，`mag_x/y/z` 为 μT，`roll/pitch/imu_yaw` 为 °。JSONL 读取函数把 SDK 的 SI
 字段换算为同样的列和单位。这些产品的加速度 G 值
 乘以 9.8 即为 m/s²。其他报文会跳过，没有 HI91 样本的文件无法分析。
 CSV 允许重复 HI91 表头，后出现的表头可以多出列（UTC 同步后 CHCenter 会加上

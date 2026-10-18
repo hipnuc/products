@@ -39,8 +39,10 @@ xlabel('Time (s)'); ylabel('Angular velocity (deg/s)')
 summary = batch_analyze('recordings');
 ```
 
-CSV columns keep CHCenter's units: `sys_time` in ms, `acc_x/y/z` in G,
-`gyr_x/y/z` in deg/s, `mag_x/y/z` in uT, and `roll/pitch/imu_yaw` in degrees.
+CHCenter writes each column's unit in brackets, such as `acc_x[g]`. The readers
+return the bare names (`acc_x`) and keep those units: `sys_time` in ms,
+`acc_x/y/z` in G, `gyr_x/y/z` in deg/s, `mag_x/y/z` in uT, and
+`roll/pitch/imu_yaw` in degrees.
 The JSONL reader converts the SDK's SI fields to those same columns and units.
 For these products, acceleration in G converts to m/s² by multiplying by 9.8.
 Other message types are skipped; a file without HI91 samples cannot be analyzed.

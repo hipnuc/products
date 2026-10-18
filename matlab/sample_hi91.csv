@@ -1,4 +1,4 @@
-HI91,pc_counter,sys_time,acc_x,acc_y,acc_z,gyr_x,gyr_y,gyr_z,mag_x,mag_y,mag_z,roll,pitch,imu_yaw
+HI91,pc_counter,sys_time[ms],acc_x[g],acc_y[g],acc_z[g],gyr_x[deg/s],gyr_y[deg/s],gyr_z[deg/s],mag_x[uT],mag_y[uT],mag_z[uT],roll[deg],pitch[deg],imu_yaw[deg]
 HI91,1,0,0.000,0,1,0.00,0,0,20,0,40,0,0,0.0
 HI91,2,1000,0.001,0,1,0.01,0,0,20,0,40,0,0,0.1
 HI91,3,2000,0.002,0,1,0.02,0,0,20,0,40,0,0,0.2

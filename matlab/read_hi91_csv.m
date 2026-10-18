@@ -1,7 +1,8 @@
 function data = read_hi91_csv(filename)
 %READ_HI91_CSV Read a single-device CHCenter HI91 recording into a table.
-% Columns retain their CSV names and units: sys_time in ms, acceleration
-% in G, angular velocity in deg/s, magnetic field in uT, angles in degrees.
+% CHCenter writes each column's unit in brackets ("acc_x[g]"); the table
+% keeps the bare names and those units: sys_time in ms, acceleration in G,
+% angular velocity in deg/s, magnetic field in uT, angles in degrees.
 % Other message types are skipped. Repeated HI91 headers are supported, and
 % a later header may add columns; the first header's columns are returned.
 % The CSV does not identify devices; record one device per file.
@@ -42,6 +43,7 @@ while true
     [values, parsed, ~, next] = sscanf(body, '%f,');
     if parsed == 0
         fields = strtrim(strsplit(body, ',', 'CollapseDelimiters', false));
+        fields = regexprep(fields, '\[[^\]]*\]$', '');
     else
         fields = {};
     end
