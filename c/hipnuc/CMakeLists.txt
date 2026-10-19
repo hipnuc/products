@@ -31,6 +31,10 @@ add_library(hipnuc_json STATIC hipnuc_json.c)
 hipnuc_configure(hipnuc_json)
 target_link_libraries(hipnuc_json PUBLIC hipnuc_sample)
 
+# I2C host link of the HI05 I2C models (register access and the newest HI83 frame).
+add_library(hipnuc_i2c STATIC hipnuc_i2c.c)
+hipnuc_configure(hipnuc_i2c)
+
 # CAN: J1939 measurement PGNs and CANFD83.
 add_library(hipnuc_j1939 STATIC hipnuc_j1939.c)
 hipnuc_configure(hipnuc_j1939)

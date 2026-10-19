@@ -16,6 +16,7 @@
 | 串口二进制 HI91/HI81/HI83 | `hipnuc_dec.c/.h`、`hipnuc_sample.c/.h` |
 | NMEA GGA/RMC | `nmea_dec.c/.h`、`hipnuc_sample.c/.h` |
 | CAN J1939/CANFD83 | `hipnuc_j1939.c/.h`、`hipnuc_can_frame.h`、`hipnuc_sample.c/.h` |
+| I2C 主机接口（HI05 I2C 型号）：寄存器与最新 HI83 帧 | `hipnuc_i2c.c/.h`；帧的解码用“串口二进制”一行的文件 |
 | 可选 JSON 格式化 | `hipnuc_json.c/.h`、`hipnuc_sample.c/.h` |
 
 把串口收到的字节送入解码器：

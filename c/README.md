@@ -16,6 +16,7 @@ all required files. Add its `.c` files and include directory to your project.
 | Serial binary HI91/HI81/HI83 | `hipnuc_dec.c/.h`, `hipnuc_sample.c/.h` |
 | NMEA GGA/RMC | `nmea_dec.c/.h`, `hipnuc_sample.c/.h` |
 | CAN J1939/CANFD83 | `hipnuc_j1939.c/.h`, `hipnuc_can_frame.h`, `hipnuc_sample.c/.h` |
+| I2C host link (HI05 I2C models): registers and the newest HI83 frame | `hipnuc_i2c.c/.h`; decode the frames with the serial binary row |
 | Optional JSON formatting | `hipnuc_json.c/.h`, `hipnuc_sample.c/.h` |
 
 Feed the bytes received from your UART:
