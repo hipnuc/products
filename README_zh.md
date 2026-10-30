@@ -16,7 +16,6 @@
 | [python/](python/README_zh.md) | Python SDK 与 `hihost` 命令行：串口、Modbus RTU、CAN、录制和固件升级 |
 
 其他资源：[HI15 EtherCAT](ethercat/README_zh.md)、
-[MATLAB 分析 HI91 CSV/JSONL 录制](matlab/README_zh.md)、
 [Classic CAN J1939 数据库](dbc/README_zh.md)。
 
 ## 工具与文档

@@ -16,8 +16,7 @@ HiPNUC IMU/AHRS/MRU and INS devices.
 | [c/](c/README.md) | Copyable serial/CAN decoders, Windows/Linux serial API and C/C++ examples |
 | [python/](python/README.md) | Python SDK and `hihost` CLI: serial, Modbus RTU, CAN, recording and firmware update |
 
-Also available: [EtherCAT for HI15](ethercat/README.md),
-[MATLAB analysis of HI91 CSV/JSONL recordings](matlab/README.md)
+Also available: [EtherCAT for HI15](ethercat/README.md)
 and the [Classic CAN J1939 database](dbc/README.md).
 
 ## Tools and documentation

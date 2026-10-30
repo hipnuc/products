@@ -101,7 +101,6 @@ destination) has no command ACK and requires `--no-reply` (Python:
 `response="none"`). Send-only writes one command and closes the connection;
 multi-command files cannot use it. Use periodic output and `read` to collect samples.
 
-MATLAB reads **HI91** JSONL recordings; see [matlab/](../matlab/README.md).
 Recording keeps all decoded samples independently of the display's five
 readings/second limit per message type. Add `--record-raw capture.bin` for
 received bytes, `--quiet` to hide readings or `--jsonl` for machine output.

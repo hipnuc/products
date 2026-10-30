@@ -95,7 +95,6 @@ hihost command --file commands.txt -p COM3 -b 115200 --save
 没有命令 ACK，需使用 `--no-reply`（Python：`response="none"`）。
 仅发送模式写出一条命令后关闭连接，不能用于多条命令文件；采集样本请使用周期输出和 `read`。
 
-MATLAB 可读取 **HI91** JSONL 录制，见 [matlab/](../matlab/README_zh.md)。
 录制保留全部已解码样本，与屏幕每种报文每秒最多五次的显示限速独立。
 加 `--record-raw capture.bin` 保存原始接收字节，`--quiet` 隐藏读数，
 `--jsonl` 输出机器数据。文件默认位于当前目录，明确加 `--overwrite` 才覆盖已有文件。
