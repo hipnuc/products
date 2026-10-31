@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 import logging
 import math
+import os
 import re
 import threading
 import time
@@ -22,6 +23,7 @@ from ._connection import (
     is_baudrate_error,
     is_usb_port,
     open_error,
+    reset_line_coding,
 )
 from .decoder import Decoder
 from .errors import CommandTimeout, DeviceError, ResponseTimeout, TransportError, VerificationError
@@ -152,8 +154,11 @@ class SerialDevice:
                             f"and baudrate. Candidates: {candidates or 'none'}"
                         )
                     if not result.devices:
+                        # One named port keeps its own reason, such as a permission hint.
+                        reason = result.errors.get(self.port) if self.port is not None else None
                         raise TransportError(
-                            "No HiPNUC device found. " + discovery_error_summary(result.errors)
+                            "No HiPNUC device found. "
+                            + (reason or discovery_error_summary(result.errors))
                         )
                     if len(result.devices) > 1:
                         raise TransportError(
@@ -161,11 +166,15 @@ class SerialDevice:
                         )
                     selected = result.devices[0]
                     self.port, self.baudrate = selected.port, selected.baudrate
+                # POSIX does not lock ports; exclusive mode makes a second reader fail.
+                options = {"exclusive": True} if os.name == "posix" else {}
                 try:
                     self._serial = serial.Serial(
-                        self.port, self.baudrate, timeout=0, write_timeout=self.timeout
+                        self.port, self.baudrate, timeout=0, write_timeout=self.timeout, **options
                     )
+                    reset_line_coding(self._serial)
                 except SERIAL_OPEN_ERRORS as exc:
+                    self._close_after_error()
                     raise open_error(self.port, exc) from exc
                 self.decoder.reset()
                 self._samples.clear()
@@ -496,7 +505,7 @@ class SerialDevice:
                     time.sleep(min(0.05, remaining))
             raise ResponseTimeout(
                 f"Device did not answer on {self.port} at {self.baudrate} baud within "
-                f"{timeout:g}s; reconnect with `hihost scan` if it moved."
+                f"{timeout:g}s; search again (hihost scan) if it moved."
             ) from last_error
         except BaseException:
             self._close_after_error()

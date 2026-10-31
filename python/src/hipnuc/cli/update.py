@@ -1,17 +1,25 @@
-"""Serial firmware update subcommand and progress helpers shared with CAN."""
+"""Serial firmware update subcommand and helpers shared with CAN."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import asdict
+import logging
 from pathlib import Path
+import time
 
 import click
 
-from ._common import errors, json_option, to_json
+from ._common import errors, json_option, sdk_messages, to_json
 
 
-def update_progress() -> Callable[[int, int], None]:
+def update_options(func):
+    return click.option(
+        "--no-verify", is_flag=True, help="Do not reconnect to confirm the new firmware."
+    )(func)
+
+
+def update_progress(verify: bool) -> Callable[[int, int], None]:
     last_percent = -1
 
     def report(written: int, total: int) -> None:
@@ -20,20 +28,41 @@ def update_progress() -> Callable[[int, int], None]:
         if (percent in (0, 100) and percent != last_percent) or percent >= last_percent + 10:
             click.echo(f"Writing: {percent}%", err=True)
             last_percent = percent
+            if percent == 100 and verify:
+                click.echo("Waiting for the new firmware to start...", err=True)
 
     return report
 
 
-def show_update(result, as_json: bool) -> None:
+def run_update(image: Path, as_json: bool, update: Callable) -> None:
+    """Print the image, run ``update(path)`` and summarize the result."""
+    from .._firmware_image import load_image
+
+    loaded = load_image(image)
+    built = f", built {loaded.build}" if loaded.build else ""
+    click.echo(
+        f"Image {image.name}: version {loaded.version or 'unknown'}{built}, "
+        f"{len(loaded.data)} bytes.",
+        err=True,
+    )
+    started = time.monotonic()
+    with sdk_messages("hipnuc.update", logging.WARNING):  # The power-cycle request.
+        result = update(image)
+    elapsed = time.monotonic() - started
     if as_json:
-        click.echo(to_json(asdict(result)))
+        click.echo(to_json({**asdict(result), "elapsed_s": round(elapsed, 1)}))
+        return
+    previous = f" from {result.previous_version}" if result.previous_version else ""
+    if result.verified_version:
+        click.echo(
+            f"Updated{previous} to {result.verified_version} in {elapsed:.0f} s; "
+            "the new firmware is running."
+        )
     else:
         click.echo(
-            f"Transfer acknowledged: {result.bytes_written} bytes. Application start requested."
+            f"Transferred {result.bytes_written} bytes in {elapsed:.0f} s. "
+            "Reconnect and read the identity to confirm the new firmware."
         )
-        if not result.start_acknowledged:
-            click.echo("No start acknowledgement; the bootloader may already have reset.", err=True)
-        click.echo("Reconnect and read the identity to confirm the new application.", err=True)
 
 
 @click.command("update")
@@ -50,18 +79,31 @@ def show_update(result, as_json: bool) -> None:
     "-b",
     "--baudrate",
     type=click.IntRange(min=1),
-    required=True,
     envvar="HIHOST_BAUDRATE",
     show_envvar=True,
-    help="Baudrate of the target port.",
+    help="Current baudrate of the device; detected when omitted.",
 )
+@update_options
 @json_option
 @errors
-def serial_update(image, port, baudrate, as_json):
-    """Update one device using its model-specific Intel HEX application image."""
+def serial_update(image, port, baudrate, no_verify, as_json):
+    """Update one device from its model-specific Intel HEX application image.
+
+    Keep the device still until the update finishes. If the device does not
+    answer, for example after an interrupted update, run the same command
+    again and power-cycle the device when asked.
+    """
     from ..update import update_serial
 
-    click.echo(f"Updating {port} at {baudrate} baud from {image}.", err=True)
-    show_update(
-        update_serial(image, port=port, baudrate=baudrate, progress=update_progress()), as_json
+    click.echo(f"Updating the device on {port}; keep it still until the update finishes.", err=True)
+    run_update(
+        image,
+        as_json,
+        lambda path: update_serial(
+            path,
+            port=port,
+            baudrate=baudrate,
+            verify=not no_verify,
+            progress=update_progress(not no_verify),
+        ),
     )

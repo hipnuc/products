@@ -13,6 +13,7 @@ waits for the identity block instead of an acknowledgement.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import errno
 import logging
 import math
 import struct
@@ -28,7 +29,9 @@ if TYPE_CHECKING:
 
 
 _logger = logging.getLogger(__name__)
-_HOST_ADDRESS = 0x55  # Requests are sent from here; the firmware replies to the requester's address.
+_HOST_ADDRESS = (
+    0x55  # Requests are sent from here; the firmware replies to the requester's address.
+)
 _CONFIG_ID = 0x0CEF0000
 _PGNS = {
     0xFF10: ("POSITION", 8),
@@ -54,9 +57,9 @@ PERIOD_SYNC_IN = 0x8000  # Period value: send the PGN once per SYNC_IN edge.
 CANFD83_MAP_SUPPORTED = 0x17F
 CANFD83_MAP_DEFAULT = 0x12B
 # Register codes for the nominal and CAN FD data bitrates (bit/s -> code).
+# Codes 1 and 9 are reserved; firmware V1.7.2 and older store them as 0.
 BITRATES = {
     1_000_000: 0,
-    800_000: 1,
     500_000: 2,
     250_000: 3,
     125_000: 4,
@@ -65,7 +68,7 @@ BITRATES = {
     20_000: 7,
     10_000: 8,
 }
-DATA_BITRATES = {1_000_000: 0, 2_000_000: 10, 4_000_000: 11, 5_000_000: 12, 8_000_000: 13}
+DATA_BITRATES = {1_000_000: 0, 2_000_000: 10, 4_000_000: 11, 5_000_000: 12}
 
 _REG_CONTROL = 0x0000
 _REG_TRIGGER = 0x0096
@@ -77,6 +80,31 @@ _CONTROL_FACTORY_RESET = 0x01
 _CONTROL_REBOOT = 0xFF
 _IDENTITY_SLOTS = (*range(0x70, 0x7C), *range(0x7F, 0x83))  # 0x7C-0x7E are unmapped.
 _FD_HINT = " CANFD83 registers exist only on CAN FD products."
+
+
+_ERROR_FRAME_HINTS = (
+    (
+        0x40,
+        "the CAN controller is bus-off: check the bitrate and wiring, then restart the interface",
+    ),
+    (0x20, "no node acknowledges the frames: check the bitrate, wiring and termination"),
+)
+_ERRNO_HINTS = {
+    errno.ENETDOWN: "the CAN interface is down",
+    errno.ENOBUFS: "the transmit queue is full because no node acknowledges the frames: "
+    "check the bitrate, wiring and termination",
+    errno.ENODEV: "the CAN interface does not exist",
+}
+
+
+def _bus_hint(error_class: int = 0, code: int | None = None) -> str:
+    """Explain error frames seen (SocketCAN error classes) or a send errno."""
+    for bit, reason in _ERROR_FRAME_HINTS:
+        if error_class & bit:
+            return reason
+    if error_class:
+        return "the CAN bus reports errors: check the bitrate, wiring and termination"
+    return _ERRNO_HINTS.get(code, "")
 
 
 def _pgn(identifier: int) -> int:
@@ -369,12 +397,16 @@ def _register_transaction(
     sent_time = time.time()
     expected_id = _CONFIG_ID | (_HOST_ADDRESS << 8) | node_id
     _logger.debug("CAN request 0x%08X %s", request.arbitration_id, bytes(request.data).hex(" "))
+    error_class = 0
     try:
         bus.send(request, timeout=timeout)
         while (remaining := deadline - time.monotonic()) > 0:
             reply = bus.recv(timeout=remaining)
             if reply is None or time.monotonic() >= deadline:
                 break
+            if reply.is_error_frame:
+                error_class |= reply.arbitration_id
+                continue
             # A reply stamped on the host clock before this request was queued
             # earlier. Adapter-relative timestamps (seconds since power-up) are
             # far below the epoch and are not judged.
@@ -403,11 +435,20 @@ def _register_transaction(
                 )
             return result
     except can.CanError as exc:
-        raise TransportError(f"CAN register transaction failed: {exc}") from exc
+        hint = _bus_hint(error_class, getattr(exc, "error_code", None))
+        raise TransportError(
+            f"CAN register transaction failed: {exc}" + (f"; {hint}" if hint else "")
+        ) from exc
+    hint = _bus_hint(error_class)
     raise ResponseTimeout(
         f"No matching CAN response from node {node_id} for register 0x{address:04X} "
-        f"within {timeout:g}s; the device may not support the address or may have "
-        "changed its communication settings"
+        f"within {timeout:.3g}s; "
+        + (
+            hint
+            # Many adapters report no error frames for a bitrate mismatch.
+            or "check the bitrate and node ID, which the device may have changed; "
+            "or the device does not support the address"
+        )
     )
 
 
@@ -458,7 +499,11 @@ def request_reboot(bus: can.BusABC, node_id: int, timeout: float = 2.0) -> Write
 
 
 def factory_reset(bus: can.BusABC, node_id: int, timeout: float = 2.0) -> WriteResult:
-    """Restore factory settings; the node may come back with the factory node ID and bitrate."""
+    """Restore factory settings without waiting; the request is never acknowledged.
+
+    Current firmware keeps the CAN bitrate and node ID when the request arrives
+    over CAN; older firmware returns at 500 kbit/s and node 8.
+    """
     return _request_reset(bus, _node(node_id), _CONTROL_FACTORY_RESET, timeout)
 
 
@@ -531,8 +576,7 @@ def set_pgn_period(
 ) -> WriteResult:
     """Set one PGN's broadcast period: 0 disables, ``PERIOD_SYNC_IN`` follows SYNC_IN.
 
-    Periods apply immediately and persist. The firmware does not check the
-    value; keep it within 1..32767 ms.
+    Periods apply immediately and persist; the firmware rejects other values.
     """
     address = _period_address(pgn)
     if (

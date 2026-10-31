@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import errno
 from functools import partial, wraps
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -63,6 +64,27 @@ def verbose_enabled() -> bool:
     """True when the running command was started with ``hihost -v``."""
     ctx = click.get_current_context(silent=True)
     return bool(ctx is not None and ctx.find_root().params.get("verbose"))
+
+
+@contextmanager
+def sdk_messages(name: str, level: int = logging.INFO) -> Iterator[None]:
+    """Show one SDK logger on stderr unless -v already routes every SDK log there."""
+    if verbose_enabled():
+        yield
+        return
+    logger = logging.getLogger(name)
+    handler = logging.StreamHandler(sys.stderr)
+    previous_level, previous_propagate = logger.level, logger.propagate
+    logger.addHandler(handler)
+    logger.setLevel(level)
+    logger.propagate = False
+    try:
+        yield
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
+        logger.setLevel(previous_level)
+        logger.propagate = previous_propagate
 
 
 def finite(_ctx, param, value):

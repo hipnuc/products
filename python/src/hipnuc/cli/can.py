@@ -6,6 +6,8 @@ from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from functools import partial
 from pathlib import Path
+import logging
+import re
 import sys
 import time
 
@@ -49,36 +51,76 @@ from ._common import (
     stop_summary,
     timeout_option,
 )
-from .update import show_update, update_progress
+from .update import run_update, update_options, update_progress
 
 _HOST_ADDRESS = 0x55
 
 
+_LINK_PROBLEM = re.compile(
+    r"acknowledge|bus-off|reports errors|interface is down|does not exist|No such device|"
+    r"Network is down"
+)
+
+
+def _socketcan_setup(interface: str) -> str:
+    return (
+        f"Set up {interface} at the node's bitrate (root required):\n"
+        f"  sudo ip link set {interface} down\n"
+        f"  sudo ip link set {interface} type can bitrate 500000 restart-ms 100\n"
+        f"  sudo ip link set {interface} up\n"
+        f"Inspect it with: ip -details -statistics link show {interface}"
+    )
+
+
 @contextmanager
 def can_connection(interface: str, *, fd: bool = False) -> Iterator:
-    """Own one python-can bus; never load python-can configuration files."""
-    if not sys.platform.startswith("linux"):
-        raise TransportError("SocketCAN requires Linux; use the Python CAN API for other adapters.")
+    """Own one python-can bus; never load python-can configuration files.
+
+    Channels named ``PCAN_...`` open PCAN-Basic for Classic CAN at ``--bitrate``;
+    any other name is a SocketCAN interface configured with ip link.
+    """
+    pcan = interface.upper().startswith("PCAN_")
+    if not pcan and not sys.platform.startswith("linux"):
+        raise TransportError(
+            "SocketCAN requires Linux; on Windows use a PCAN channel, "
+            "for example -i PCAN_USBBUS1 --bitrate 500000."
+        )
     try:
         import can
     except ModuleNotFoundError as exc:
         if exc.name != "can":
             raise
         raise TransportError('CAN support requires: python -m pip install ".[can]"') from exc
-    hint = (
-        "Check the SocketCAN interface, link state and bitrate "
-        f"with 'ip -details link show {interface}'."
-    )
+    if pcan:
+        # Replies are matched by content, so the PCAN timestamp base does not matter.
+        logging.getLogger("can.pcan").addFilter(
+            lambda record: not record.getMessage().startswith("uptime library")
+        )
+        bitrate = click.get_current_context().meta.get("can_bitrate")
+        if bitrate is None:
+            raise click.UsageError("A PCAN channel needs --bitrate, the node's current bitrate.")
+        if fd:
+            raise click.UsageError("PCAN channels are opened for Classic CAN only.")
+        options = {"interface": "pcan", "channel": interface.upper(), "bitrate": bitrate}
+        hint = "Check the PCAN driver, the channel name and the bitrate."
+    else:
+        options = {"interface": "socketcan", "channel": interface, "fd": fd}
+        hint = f"Check the interface, link state and bitrate: ip -details link show {interface}"
     try:
-        bus = can.Bus(interface="socketcan", channel=interface, ignore_config=True, fd=fd)
+        bus = can.Bus(ignore_config=True, **options)
     except (can.CanError, OSError, ValueError) as exc:
-        raise TransportError(f"Cannot open {interface}: {exc}. {hint}") from exc
+        setup = "" if pcan else "\n" + _socketcan_setup(interface)
+        raise TransportError(f"Cannot open {interface}: {exc}. {hint}{setup}") from exc
     try:
         with bus:
-            click.echo(f"Connected to SocketCAN {interface}.", err=True)
+            click.echo(f"Connected to {'PCAN' if pcan else 'SocketCAN'} {interface}.", err=True)
             yield bus
     except can.CanError as exc:
         raise TransportError(f"{interface}: {exc}. {hint}") from exc
+    except TransportError as exc:
+        if pcan or not _LINK_PROBLEM.search(str(exc)):
+            raise
+        raise TransportError(f"{exc}\n{_socketcan_setup(interface)}") from exc
 
 
 def _node_id(_ctx, param, value):
@@ -87,14 +129,29 @@ def _node_id(_ctx, param, value):
     return value
 
 
+def _keep_bitrate(ctx, _param, value):
+    ctx.meta["can_bitrate"] = value
+
+
 def interface_option(func):
+    func = click.option(
+        "--bitrate",
+        "host_bitrate",
+        type=_bitrate(BITRATES),
+        metavar="BIT/S",
+        expose_value=False,
+        callback=_keep_bitrate,
+        envvar="HIHOST_CAN_BITRATE",
+        show_envvar=True,
+        help="PCAN only: the node's current bitrate (SocketCAN is set with ip link).",
+    )(func)
     return click.option(
         "-i",
         "--interface",
         required=True,
         envvar="HIHOST_CAN_INTERFACE",
         show_envvar=True,
-        help="SocketCAN interface, e.g. can0.",
+        help="SocketCAN interface (can0) or PCAN channel (PCAN_USBBUS1).",
     )(func)
 
 
@@ -174,7 +231,7 @@ def recovery_option(func):
 @click.group("can", invoke_without_command=True)
 @click.pass_context
 def can_group(ctx):
-    """Linux SocketCAN: read, configure, access registers and update firmware."""
+    """CAN on Linux SocketCAN or Windows PCAN: read, configure, update firmware."""
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
@@ -317,7 +374,7 @@ def can_info(interface, node_id, timeout, as_json):
 @json_option
 @errors
 def can_save(interface, node_id, timeout, as_json):
-    """Send an explicit save; current firmware already persists every write."""
+    """Send an explicit save; settings are already stored when written."""
     with can_connection(interface) as bus:
         result = save_config(bus, node_id, timeout)
     report(result, as_json, f"Node {node_id}: save acknowledged.")
@@ -329,7 +386,7 @@ def can_save(interface, node_id, timeout, as_json):
     "--factory-reset",
     "restore",
     is_flag=True,
-    help="Restore factory settings; the node may come back with the factory node ID and bitrate.",
+    help="Restore factory settings; the node may return at 500 kbit/s as node 8.",
 )
 @recovery_option
 @can_options(require_node=True)
@@ -410,7 +467,10 @@ def can_bitrate(bitrate, save, restart, interface, node_id, timeout, as_json):
         f"Node {node_id}: bitrate {bitrate} stored; "
         + ("the node is restarting." if restart else "reboot to apply."),
     )
-    click.echo(f"Reconfigure {interface} for the new bitrate before the next command.", err=True)
+    if restart:
+        click.echo(
+            f"Reconfigure {interface} for the new bitrate before the next command.", err=True
+        )
 
 
 @can_group.command("period")
@@ -506,9 +566,10 @@ def can_reg_read(address, interface, node_id, timeout, as_json):
 def can_reg_write(address, value, interface, node_id, timeout, as_json):
     """Write one raw register and check its echo; does not save or reboot."""
     check_register(address, value)
-    if address == 0 and value in (0x01, 0xFF):
+    if address == 0 and value in (0x01, 0xFE, 0xFF):
         raise click.UsageError(
-            "Resets are never acknowledged; use 'can reboot' (or --factory-reset) instead."
+            "Restarts are never acknowledged; use 'can reboot' (or --factory-reset) "
+            "or 'can update' instead."
         )
     with can_connection(interface) as bus:
         result = write_register(bus, node_id, address, value, timeout=timeout)
@@ -521,14 +582,28 @@ def can_reg_write(address, value, interface, node_id, timeout, as_json):
 @can_group.command("update")
 @click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @can_options(require_node=True)
-@click.option("--bin", "raw_binary", is_flag=True, help="Use a raw binary instead of Intel HEX.")
+@update_options
 @json_option
 @errors
-def can_update(image, interface, node_id, raw_binary, as_json):
-    """Update one node using its model-specific application image (CAN SDO)."""
+def can_update(image, interface, node_id, no_verify, as_json):
+    """Update one node from its model-specific Intel HEX application image.
+
+    Only one device may use the node ID. A node left in the bootloader by an
+    interrupted update answers at 500 kbit/s as node 8: run the same command
+    again on an interface set to 500 kbit/s with --id 8.
+    """
     from ..update import update_can
 
     with can_connection(interface) as bus:
-        click.echo(f"Updating node {node_id} from {image}.", err=True)
-        result = update_can(bus, node_id, image, raw_binary=raw_binary, progress=update_progress())
-    show_update(result, as_json)
+        click.echo(f"Updating node {node_id} on {interface}.", err=True)
+        run_update(
+            image,
+            as_json,
+            lambda path: update_can(
+                bus,
+                node_id,
+                path,
+                verify=not no_verify,
+                progress=update_progress(not no_verify),
+            ),
+        )

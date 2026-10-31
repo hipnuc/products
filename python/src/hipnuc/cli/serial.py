@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from functools import partial, wraps
-import logging
 from pathlib import Path
 import sys
 import time
@@ -25,13 +24,13 @@ from ._common import (
     finite,
     json_option,
     record_options,
+    sdk_messages,
     show,
     status,
     stop_on_interrupt,
     stop_summary,
     timeout_option,
     to_json,
-    verbose_enabled,
 )
 
 
@@ -70,27 +69,6 @@ def serial_options(func=None, *, require_port=False):
 
 
 @contextmanager
-def discovery_progress() -> Iterator[None]:
-    """Show SDK discovery progress unless -v already routes every SDK log to stderr."""
-    if verbose_enabled():
-        yield
-        return
-    logger = logging.getLogger("hipnuc.serial_device")
-    handler = logging.StreamHandler(sys.stderr)
-    previous_level, previous_propagate = logger.level, logger.propagate
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-    try:
-        yield
-    finally:
-        logger.removeHandler(handler)
-        handler.close()
-        logger.setLevel(previous_level)
-        logger.propagate = previous_propagate
-
-
-@contextmanager
 def serial_connection(
     port: str | None,
     baudrate: int | None,
@@ -106,7 +84,7 @@ def serial_connection(
         )
         click.echo(f"{message} (Ctrl-C to cancel)...", err=True)
     with (
-        discovery_progress(),
+        sdk_messages("hipnuc.serial_device"),
         SerialDevice(
             port,
             baudrate,
@@ -196,6 +174,8 @@ def list_command(show_all, as_json):
         click.echo(f"{port.device}  {port.description or ''}")
     if not ports or (not usb and not show_all):
         message = "No serial ports found." if not ports else "No USB serial ports found."
+        if sys.platform.startswith("linux"):
+            message += " On-board UARTs may not be listed: use -p, e.g. -p /dev/ttyS3."
         click.echo(
             message + " Check the USB connection and driver. In a virtual machine, "
             "connect the USB device to the guest system.",
@@ -217,7 +197,7 @@ def scan_command(port, baudrate, timeout, scan_timeout, as_json):
     """Find HiPNUC devices on USB serial ports, or on the port selected with -p."""
     scope = port if port is not None else "USB serial ports"
     click.echo(f"Searching {scope} for HiPNUC devices (Ctrl-C to cancel)...", err=True)
-    with discovery_progress():
+    with sdk_messages("hipnuc.serial_device"):
         result = discover(
             [port] if port is not None else None,
             baudrates=(baudrate,) if baudrate is not None else BAUDRATES,

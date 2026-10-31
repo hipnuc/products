@@ -520,7 +520,6 @@ def _decode_hi81(data: bytes, frame: bytes, offset: int) -> Sample:
         "heading_satellites": data[73],
         "differential_age_s": data[74],
         "geoid_separation_m": struct.unpack_from("<h", data, 75)[0] * 0.01,
-        "antenna_status": data[77],
         "velocity_enu_m_s": _scaled(struct.unpack_from("<3h", data, 78), 0.01),
         "acceleration_enu_m_s2": _scaled(struct.unpack_from("<3h", data, 84), 0.0048828),
     }

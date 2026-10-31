@@ -26,8 +26,8 @@ def _use_utf8(stream) -> None:
         f"hihost {__version__}\n\n"
         "HiPNUC IMU/INS tools. Start with list, info, or read.\n\n"
         "Connection options follow the final command: read -p COM3 -b 115200. "
-        "HIHOST_PORT, HIHOST_BAUDRATE, HIHOST_MODBUS_ID, HIHOST_CAN_INTERFACE and "
-        "HIHOST_CAN_ID supply defaults."
+        "HIHOST_PORT, HIHOST_BAUDRATE, HIHOST_MODBUS_ID, HIHOST_CAN_INTERFACE, "
+        "HIHOST_CAN_ID and HIHOST_CAN_BITRATE supply defaults."
     ),
 )
 @click.version_option(__version__, prog_name="hihost", message="%(prog)s %(version)s")

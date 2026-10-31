@@ -9,13 +9,16 @@ this module never requires the optional ``modbus`` extra; opening a bus does.
 from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version as _package_version
+import logging
 import math
 import struct
 import threading
 import time
 from typing import Any
 
-from ._connection import SERIAL_OPEN_ERRORS, open_error
+import serial
+
+from ._connection import SERIAL_OPEN_ERRORS, open_error, reset_line_coding
 from .decoder import GRAVITY, status_flags
 from .errors import DeviceError, ResponseTimeout, TransportError, VerificationError
 from .models import DeviceInfo, Sample, WriteResult, identity_from_registers
@@ -35,6 +38,9 @@ except ImportError as _missing:  # Absent, or an incompatible layout such as PyM
         pass
 else:
     _import_error = None
+    # PyModbus logs failures that this module raises anyway; without an
+    # application handler, Python would print each one a second time.
+    logging.getLogger("pymodbus").addHandler(logging.NullHandler())
 
 
 def _require_pymodbus() -> None:
@@ -124,12 +130,25 @@ class ModbusBus:
         )
 
     def open(self) -> ModbusBus:
-        """Open the shared port, returning self; raise TransportError on failure."""
+        """Open the shared port, returning self; raise TransportError on failure.
+
+        A timeout or an invalid response closes the port and the next request
+        opens it again: RTU has no transaction ID, so a late reply could
+        otherwise be taken as the answer to the next request.
+        """
         with self._lock:
             try:
+                opening = self._client.socket is None
                 if not self._client.connect():
-                    # PyModbus can return False after logging the OS exception.
+                    # PyModbus logs the OS exception and returns False; open
+                    # the port once more to report the cause.
+                    try:
+                        serial.Serial(self.port).close()
+                    except SERIAL_OPEN_ERRORS as error:
+                        raise open_error(self.port, error) from error
                     raise open_error(self.port)
+                if opening:
+                    reset_line_coding(self._client.socket)
             except BaseException as exc:
                 # __exit__ is not called if __enter__/open fails partway through.
                 try:
@@ -165,6 +184,13 @@ class ModbusBus:
             self._client = self._make_client()
             self.open()
 
+    def _lose_sync(self, error: Exception) -> Exception:
+        try:
+            self._client.close()
+        except OSError:
+            pass  # Report the communication failure, not the close.
+        return error
+
     def _request(
         self,
         device_id: int,
@@ -188,6 +214,9 @@ class ModbusBus:
             self._client.transaction.comm_params.timeout_connect = budget
             self._client.socket.timeout = budget
             self._client.socket.write_timeout = budget
+            # Input that does not start with this address is dropped at once;
+            # PyModbus would otherwise search it for a frame in quadratic time.
+            self._client.transaction.framer.setMultidrop([device_id])
             if function == 3:
                 response = self._client.read_holding_registers(
                     address,
@@ -198,19 +227,23 @@ class ModbusBus:
                 response = self._client.write_register(address, argument, device_id=device_id)
         except (TimeoutError, ModbusIOException) as exc:
             if isinstance(exc, TimeoutError) or "no response received" in str(exc).lower():
-                raise ResponseTimeout(
-                    f"No Modbus response from node {device_id}: {exc}. Check the node ID, "
-                    "baudrate and RS-485 wiring (A/B)."
+                raise self._lose_sync(
+                    ResponseTimeout(
+                        f"No Modbus response from node {device_id}: {exc}. Check the node ID, "
+                        "baudrate and RS-485 wiring (A/B)."
+                    )
                 ) from exc
-            raise TransportError(f"Invalid Modbus response from node {device_id}: {exc}") from exc
+            raise self._lose_sync(
+                TransportError(f"Invalid Modbus response from node {device_id}: {exc}")
+            ) from exc
         except (OSError, ModbusException) as exc:
-            raise TransportError(
-                f"Modbus communication with node {device_id} failed: {exc}"
+            raise self._lose_sync(
+                TransportError(f"Modbus communication with node {device_id} failed: {exc}")
             ) from exc
         if deadline is not None and time.monotonic() >= deadline:
-            raise ResponseTimeout("Modbus response deadline expired")
+            raise self._lose_sync(ResponseTimeout("Modbus response deadline expired"))
         if response is None:
-            raise ResponseTimeout(f"No Modbus response from node {device_id}")
+            raise self._lose_sync(ResponseTimeout(f"No Modbus response from node {device_id}"))
         if response.isError():
             raise DeviceError(
                 f"Node {device_id} rejected FC{function:02d} at 0x{address:04X}",
@@ -218,7 +251,9 @@ class ModbusBus:
                 response=str(response),
             )
         if response.dev_id != device_id or response.function_code != function:
-            raise VerificationError("Modbus response does not match the requested node/function")
+            raise self._lose_sync(
+                VerificationError("Modbus response does not match the requested node/function")
+            )
         return response
 
 
@@ -245,15 +280,19 @@ class ModbusDevice:
         # The caller holds the bus lock and has validated the register range.
         response = self.bus._request(self.device_id, 3, address, count, deadline=deadline)
         if len(response.registers) != count:
-            raise VerificationError(
-                f"FC03 returned {len(response.registers)} registers; expected {count}"
+            raise self.bus._lose_sync(
+                VerificationError(
+                    f"FC03 returned {len(response.registers)} registers; expected {count}"
+                )
             )
         return list(response.registers)
 
     def _write_ack(self, address: int, value: int) -> WriteResult:
         response = self.bus._request(self.device_id, 6, address, value)
         if response.address != address or response.registers != [value]:
-            raise VerificationError("FC06 echo does not match the requested address/value")
+            raise self.bus._lose_sync(
+                VerificationError("FC06 echo does not match the requested address/value")
+            )
         return WriteResult(address, value, True)
 
     def write_register(self, address: int, value: int, *, verify: bool = True) -> WriteResult:
@@ -266,12 +305,7 @@ class ModbusDevice:
         address = _integer(address, 0, 0xFFFF, "address")
         value = _integer(value, 0, 0xFFFF, "value")
         with self.bus._lock:
-            try:
-                result = self._write_ack(address, value)
-            except ResponseTimeout:
-                if not verify:
-                    raise
-                result = WriteResult(address, value, False)
+            result = self._write_ack(address, value)
             if not verify:
                 return result
             actual = self.read_registers(address)[0]
@@ -382,11 +416,8 @@ class ModbusDevice:
         device_id = _integer(device_id, 1, 247, "device_id")
         with self.bus._lock:
             previous = self.device_id
-            acknowledged = True
-            try:
-                self._write_ack(0x05, device_id)
-            except ResponseTimeout:
-                acknowledged = False
+            # The device switches IDs after it has echoed from the previous one.
+            self._write_ack(0x05, device_id)
             self.device_id = device_id
             try:
                 actual = self.read_registers(0x05)[0]
@@ -398,7 +429,7 @@ class ModbusDevice:
                 raise VerificationError(f"Node ID read back {actual}, expected {device_id}")
             if save:
                 self.save_config()
-            return WriteResult(0x05, device_id, acknowledged, True, actual)
+            return WriteResult(0x05, device_id, True, True, actual)
 
     def set_baudrate(
         self,

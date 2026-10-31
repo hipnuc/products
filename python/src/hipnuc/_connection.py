@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from collections import Counter
 import errno
+import os
 import re
 import sys
+
+import serial
 
 from .errors import TransportError
 
@@ -18,6 +21,22 @@ except ImportError:
     pass
 else:
     SERIAL_OPEN_ERRORS += (termios.error,)
+
+
+def reset_line_coding(connection: serial.Serial) -> None:
+    """Send the line settings to the adapter, as Windows does on every open.
+
+    Linux cdc_acm sends them only when they change. A CH347 reopened at the
+    same baudrate then keeps the input queued while the port was closed and
+    delivers everything seconds late for the whole session, or holds back one
+    byte until more data follows. Switching away and back sends them; input
+    that arrived before is stale and is discarded.
+    """
+    if os.name == "posix":
+        rate = connection.baudrate
+        connection.baudrate = 9600 if rate != 9600 else 19200
+        connection.baudrate = rate
+        connection.reset_input_buffer()
 
 
 def is_usb_port(port: object) -> bool:
@@ -53,7 +72,8 @@ def _error_kind(error: BaseException | str) -> str:
             winerror = int(match[1]) if match else None
         if code in (errno.EACCES, errno.EPERM) or winerror == 5:
             return "permission"
-        if code == errno.EBUSY or winerror == 32:
+        # pySerial reports another process's exclusive lock as EAGAIN.
+        if code in (errno.EBUSY, errno.EAGAIN) or winerror == 32:
             return "busy"
         if code in (errno.ENOENT, errno.ENODEV) or winerror in (2, 3):
             return "missing"
@@ -93,8 +113,13 @@ def open_error(port: str, error: BaseException | None = None) -> TransportError:
         hint = _permission_hint()
     elif kind == "busy":
         hint = "Close CHCenter or other programs using this port."
+        if sys.platform.startswith("linux"):
+            hint += (
+                " Just after plugging in, ModemManager may hold it for a few seconds; "
+                "wait and retry, or check with: sudo fuser -v " + port
+            )
     elif kind == "missing":
-        hint = "The port does not exist. Check its name with list --all."
+        hint = "The port does not exist; check its name (hihost list --all)."
     elif kind == "baudrate":
         hint = "The adapter or driver rejected the serial settings; try a supported baudrate."
     else:
@@ -108,7 +133,7 @@ def discovery_error_summary(errors: dict[str, str]) -> str:
     if not errors:
         return (
             "No USB serial ports found. Check the USB connection (including VM passthrough). "
-            "Use list --all and specify -p for other serial ports."
+            "Specify any other port, such as an on-board UART, by name (-p in the CLI)."
         )
     counts = Counter(_error_kind(error) for error in errors.values())
     labels = {
