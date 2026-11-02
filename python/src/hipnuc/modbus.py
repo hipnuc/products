@@ -326,15 +326,10 @@ class ModbusDevice:
         return self._info
 
     def read_status(self) -> dict[str, Any]:
-        """Read main status (with flag names), calibration status and progress."""
+        """Read main status with flag names."""
         with self.bus._lock:
-            status, calibration, progress = self.read_registers(0x09, 3)
-            return {
-                "main_status": status,
-                "status_flags": status_flags(status),
-                "calibration_status": calibration,
-                "calibration_progress_percent": progress,
-            }
+            (status,) = self.read_registers(0x09, 1)
+            return {"main_status": status, "status_flags": status_flags(status)}
 
     def read_sample(self, *, include_status: bool = True, include_mru: bool = False) -> Sample:
         """Read the public IMU/AHRS block in SI units (temperature in degrees C).

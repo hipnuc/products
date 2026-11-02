@@ -62,7 +62,7 @@ def finish(port: str, baudrate: int) -> None:
             with SerialDevice(port, baudrate, timeout=1.0) as device:
                 if not _cleared(device.command("LOG IMUCONFIG", timeout=1.0).text):
                     return
-                _prompt.warning("Keep the module still: verifying the device for a few seconds...")
+                _prompt.warning("Completing the update; keep the module still...")
                 device.command("FCAL WB AUTO 2", timeout=6.0)
                 restarted = True  # Applied at the next start.
                 device.reboot(recovery_timeout=_RESTART_S)

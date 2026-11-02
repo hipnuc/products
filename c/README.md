@@ -85,7 +85,8 @@ sudo ip link set can0 type can bitrate 500000
 sudo ip link set can0 up
 ```
 
-CAN FD additionally requires a capable adapter and the matching data bitrate.
+CAN FD additionally requires a capable adapter and the matching data phase, for
+example `bitrate 500000 sample-point 0.8 dbitrate 4000000 dsample-point 0.8 fd on`.
 
 ## CMake integration
 

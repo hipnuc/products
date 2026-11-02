@@ -20,7 +20,6 @@ from ..can import (
     PERIOD_SYNC_IN,
     PGN_NAMES,
     decode_message,
-    factory_reset,
     read_info,
     read_register,
     reboot,
@@ -382,31 +381,16 @@ def can_save(interface, node_id, timeout, as_json):
 
 @can_group.command("reboot")
 @click.option("--save", is_flag=True, help="Save current settings before rebooting.")
-@click.option(
-    "--factory-reset",
-    "restore",
-    is_flag=True,
-    help="Restore factory settings; the node may return at 500 kbit/s as node 8.",
-)
 @recovery_option
 @can_options(require_node=True)
 @timeout_option
 @json_option
 @errors
-def can_reboot(save, restore, recovery_timeout, interface, node_id, timeout, as_json):
+def can_reboot(save, recovery_timeout, interface, node_id, timeout, as_json):
     """Reset the node and verify its identity; the reset itself is never acknowledged."""
     with can_connection(interface) as bus:
         if save:
             save_config(bus, node_id, timeout)
-        if restore:
-            result = factory_reset(bus, node_id, timeout)
-            report(
-                result,
-                as_json,
-                f"Node {node_id}: factory reset sent. Reconnect with the previous node ID and bitrate first; "
-                "if it does not answer, retry with node 8 at 500 kbit/s.",
-            )
-            return
         click.echo("Resetting and waiting for the node...", err=True)
         info = reboot(bus, node_id, recovery_timeout=recovery_timeout, timeout=timeout)
     show(info, as_json)
@@ -568,8 +552,7 @@ def can_reg_write(address, value, interface, node_id, timeout, as_json):
     check_register(address, value)
     if address == 0 and value in (0x01, 0xFE, 0xFF):
         raise click.UsageError(
-            "Restarts are never acknowledged; use 'can reboot' (or --factory-reset) "
-            "or 'can update' instead."
+            "Restarts are never acknowledged; use 'can reboot' or 'can update' instead."
         )
     with can_connection(interface) as bus:
         result = write_register(bus, node_id, address, value, timeout=timeout)

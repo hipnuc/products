@@ -82,7 +82,8 @@ sudo ip link set can0 type can bitrate 500000
 sudo ip link set can0 up
 ```
 
-CAN FD 还需要支持它的适配器及匹配的数据段波特率。
+CAN FD 还需要支持它的适配器及匹配的数据段，例如
+`bitrate 500000 sample-point 0.8 dbitrate 4000000 dsample-point 0.8 fd on`。
 
 ## CMake 集成
 

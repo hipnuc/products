@@ -1,18 +1,18 @@
-// Conversion from hipnuc_sample_t to ROS messages. Shared by the ROS 1 and
-// ROS 2 packages: the message types are template parameters because the
-// field names are identical in both generations.
+// Conversion from hipnuc_sample_t to ROS messages, shared by the ROS 1 and
+// ROS 2 nodes: the message types are template parameters because the field
+// names are identical in both generations.
 //
-// Conventions (REP 103 / sensor_msgs):
-//   * Imu: orientation is the device quaternion (body -> navigation, WXYZ on
-//     the wire, xyzw here); angular_velocity rad/s; linear_acceleration is
-//     specific force in m/s^2 (gravity not removed). A covariance whose first
-//     element is -1 means "not provided"; all zeros means "unknown".
-//   * Standard orientation requires ENU device configuration.
-//   * The node stamps each decoded sample with its ROS clock before publishing;
-//     this is neither a kernel receive timestamp nor the device sampling time.
+// Conventions (REP 103/145, sensor_msgs):
+//   * Vectors and orientation keep the device's output axes; frame_id names
+//     them and TF describes how they sit on the robot.
+//   * orientation is the device quaternion (body to navigation, WXYZ on the
+//     wire, xyzw here); angular_velocity rad/s; linear_acceleration is
+//     specific force in m/s^2 (gravity not removed).
+//   * A covariance whose first element is -1 means "not provided"; all zeros
+//     means "unknown".
 
-#ifndef HIPNUC_ROS_CONVERT_HPP
-#define HIPNUC_ROS_CONVERT_HPP
+#ifndef HIPNUC_IMU_CONVERT_HPP
+#define HIPNUC_IMU_CONVERT_HPP
 
 #include <algorithm>
 #include <cmath>
@@ -20,7 +20,7 @@
 
 #include "hipnuc_sample.h"
 
-namespace hipnuc_ros {
+namespace hipnuc_imu {
 
 inline bool finite_vector(const float values[3])
 {
@@ -40,24 +40,28 @@ inline double quaternion_norm(const hipnuc_sample_t &s)
     return std::sqrt(squared);
 }
 
-// Measurements belong to this sample only; heading cannot supply orientation.
-// sensor_msgs/Imu permits partial measurements; fill_imu marks missing quantities
-// with -1 covariance. Consumers must support those markers or require full input.
+// An Imu message needs both acceleration and angular velocity of this sample:
+// SLAM front ends integrate them without looking at covariance markers, and
+// Cartographer rejects a -1 marker on either. Orientation may be absent.
 inline bool has_imu(const hipnuc_sample_t &s)
 {
-    const bool acc = (s.valid & HIPNUC_VALID_ACC) && finite_vector(s.acc);
-    const bool gyr = (s.valid & HIPNUC_VALID_GYR) && finite_vector(s.gyr);
-    return acc || gyr || quaternion_norm(s) > 0.0;
+    return (s.valid & HIPNUC_VALID_ACC) && finite_vector(s.acc) &&
+           (s.valid & HIPNUC_VALID_GYR) && finite_vector(s.gyr);
 }
 
+// For a sample that has_imu().
 template <class Imu>
 void fill_imu(const hipnuc_sample_t &s, Imu &m)
 {
     std::fill(m.orientation_covariance.begin(), m.orientation_covariance.end(), 0.0);
     std::fill(m.angular_velocity_covariance.begin(), m.angular_velocity_covariance.end(), 0.0);
     std::fill(m.linear_acceleration_covariance.begin(), m.linear_acceleration_covariance.end(), 0.0);
-    m.angular_velocity.x = m.angular_velocity.y = m.angular_velocity.z = 0.0;
-    m.linear_acceleration.x = m.linear_acceleration.y = m.linear_acceleration.z = 0.0;
+    m.angular_velocity.x = s.gyr[0];
+    m.angular_velocity.y = s.gyr[1];
+    m.angular_velocity.z = s.gyr[2];
+    m.linear_acceleration.x = s.acc[0];
+    m.linear_acceleration.y = s.acc[1];
+    m.linear_acceleration.z = s.acc[2];
     const double norm = quaternion_norm(s);
     if (norm > 0.0) {
         m.orientation.w = s.quat[0] / norm;
@@ -70,22 +74,16 @@ void fill_imu(const hipnuc_sample_t &s, Imu &m)
         m.orientation.x = m.orientation.y = m.orientation.z = 0.0;
         m.orientation_covariance[0] = -1.0;
     }
-    if ((s.valid & HIPNUC_VALID_GYR) && finite_vector(s.gyr)) {
-        m.angular_velocity.x = s.gyr[0];
-        m.angular_velocity.y = s.gyr[1];
-        m.angular_velocity.z = s.gyr[2];
-        m.angular_velocity_covariance[0] = 0.0;
-    } else {
-        m.angular_velocity_covariance[0] = -1.0;
-    }
-    if ((s.valid & HIPNUC_VALID_ACC) && finite_vector(s.acc)) {
-        m.linear_acceleration.x = s.acc[0];
-        m.linear_acceleration.y = s.acc[1];
-        m.linear_acceleration.z = s.acc[2];
-        m.linear_acceleration_covariance[0] = 0.0;
-    } else {
-        m.linear_acceleration_covariance[0] = -1.0;
-    }
+}
+
+// imu/data_raw carries no orientation (REP 145).
+template <class Imu>
+void clear_orientation(Imu &m)
+{
+    m.orientation.w = 1.0;
+    m.orientation.x = m.orientation.y = m.orientation.z = 0.0;
+    std::fill(m.orientation_covariance.begin(), m.orientation_covariance.end(), 0.0);
+    m.orientation_covariance[0] = -1.0;
 }
 
 template <class MagneticField>
@@ -171,6 +169,6 @@ void fill_hipnuc(const hipnuc_sample_t &s, HipnucImu &m)
     m.nmea_mode = static_cast<uint8_t>(s.nmea_mode);
 }
 
-}  // namespace hipnuc_ros
+}  // namespace hipnuc_imu
 
-#endif  // HIPNUC_ROS_CONVERT_HPP
+#endif  // HIPNUC_IMU_CONVERT_HPP

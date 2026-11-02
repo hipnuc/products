@@ -43,10 +43,10 @@ uint64 VALID_NMEA_MODE=137438953472
 uint64 VALID_UTC_TIME_OF_DAY=274877906944
 uint64 VALID_INCLINATION_YAW=549755813888
 
-std_msgs/Header header         # host ROS time after decoding, before publishing; body-axis frame_id
-uint8 source                 # 1 HI91, 2 HI81, 3 HI83, 4 GGA, 5 RMC, 6 J1939, 7 CANFD83
+std_msgs/Header header         # time the device began sending the frame; body-axis frame_id
+uint8 source                 # 1 HI91, 2 HI81, 3 HI83, 4 GGA, 5 RMC
 uint64 valid
-uint8 node_id                # CAN source address or HI83 node id
+uint8 node_id                # HI83 node id
 
 uint16 main_status           # raw status bits (a set WB_CONV/ATT_CONV bit means NOT converged)
 bool gyro_bias_converged
@@ -62,7 +62,7 @@ float32[3] magnetic_field    # T
 float32 roll                 # rad, device Euler convention
 float32 pitch
 float32 yaw
-float32 heading              # rad, clockwise from north (INS / J1939)
+float32 heading              # rad, clockwise from north (INS)
 float32[4] quaternion_wxyz   # body to navigation
 float32[2] inclination       # rad
 float32 inclination_yaw      # rad, HI83 inclinometer yaw, VALID_INCLINATION_YAW

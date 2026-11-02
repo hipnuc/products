@@ -1,36 +1,32 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(hipnuc_imu)
+project(hipnuc_imu C CXX)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp std_msgs sensor_msgs diagnostic_msgs message_generation)
 
+# The ROS 2 package holds the shared driver and the C core; msg/ is a copy of
+# its message (ros/sync_copies.sh).
+set(HIPNUC_SHARED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../hipnuc_imu")
+if(NOT EXISTS "${HIPNUC_SHARED_DIR}/src/driver.cpp")
+  message(FATAL_ERROR "Shared sources not found at ${HIPNUC_SHARED_DIR}; build from a complete SDK checkout.")
+endif()
+
 add_message_files(FILES HipnucImu.msg)
 generate_messages(DEPENDENCIES std_msgs)
-
 catkin_package(CATKIN_DEPENDS roscpp std_msgs sensor_msgs diagnostic_msgs message_runtime)
 
-# Build from a full SDK checkout placed in the workspace's src directory.
-set(HIPNUC_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../c/hipnuc" CACHE PATH "HiPNUC C core directory")
-set(HIPNUC_ROS_COMMON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../common" CACHE PATH "Shared ROS helpers")
-if(NOT EXISTS "${HIPNUC_CORE_DIR}/CMakeLists.txt")
-  message(FATAL_ERROR
-    "HiPNUC C core not found at ${HIPNUC_CORE_DIR}. Keep the complete SDK checkout "
-    "in your workspace, or configure with -DHIPNUC_CORE_DIR=<path>/c/hipnuc. "
-    "See ros/README.md.")
-endif()
-add_subdirectory("${HIPNUC_CORE_DIR}" hipnuc_core EXCLUDE_FROM_ALL)
-add_subdirectory("${HIPNUC_CORE_DIR}/../serial" hipnuc_serial EXCLUDE_FROM_ALL)
+set(core "${HIPNUC_SHARED_DIR}/hipnuc")
+add_library(hipnuc_c STATIC
+  ${core}/hipnuc_dec.c ${core}/nmea_dec.c ${core}/hipnuc_sample.c
+  ${core}/hipnuc_serial.c ${core}/serial_io.c)
+target_include_directories(hipnuc_c PUBLIC ${core})
+set_target_properties(hipnuc_c PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED YES)
 
-include_directories(${catkin_INCLUDE_DIRS} ${HIPNUC_ROS_COMMON_DIR})
+add_executable(hipnuc_imu_node src/imu_node.cpp "${HIPNUC_SHARED_DIR}/src/driver.cpp")
+target_include_directories(hipnuc_imu_node PRIVATE ${catkin_INCLUDE_DIRS} "${HIPNUC_SHARED_DIR}/src")
+target_link_libraries(hipnuc_imu_node hipnuc_c ${catkin_LIBRARIES})
+add_dependencies(hipnuc_imu_node ${PROJECT_NAME}_generate_messages_cpp)
+set_target_properties(hipnuc_imu_node PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
 
-add_executable(serial_node src/serial_node.cpp)
-add_dependencies(serial_node ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(serial_node hipnuc_serial ${catkin_LIBRARIES})
-
-add_executable(can_node src/can_node.cpp)
-add_dependencies(can_node ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(can_node hipnuc_j1939 ${catkin_LIBRARIES})
-
-set_target_properties(serial_node can_node PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES)
-install(TARGETS serial_node can_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(TARGETS hipnuc_imu_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(DIRECTORY launch config DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})

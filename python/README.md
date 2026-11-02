@@ -225,7 +225,7 @@ and saved only on request (`--save` or `save_config()`).
 python -m pip install ".[can]"
 sudo ip link set can0 down
 sudo ip link set can0 type can bitrate 500000 restart-ms 100
-# CAN FD products: ... bitrate 500000 dbitrate 4000000 fd on restart-ms 100
+# CAN FD products: ... bitrate 500000 sample-point 0.8 dbitrate 4000000 dsample-point 0.8 fd on restart-ms 100
 sudo ip link set can0 up
 hihost can scan -i can0 --identify
 hihost can read -i can0 --id 8 --record samples.jsonl
@@ -281,8 +281,7 @@ hihost can reboot -i can0 --id 8
 ```
 
 PGN names are acc, gyr, mag, roll_pitch, yaw, quat, temp, inclination, time,
-position, altitude, gnss_status, velocity and canfd83; numbers work too. After
-`can reboot --factory-reset` the node may return at 500 kbit/s as node 8.
+position, altitude, gnss_status, velocity and canfd83; numbers work too.
 
 Raw registers: `hihost can reg read ADDRESS -i can0 --id 8` and
 `hihost can reg write ADDRESS VALUE -i can0 --id 8` (decimal or `0x`). A write
@@ -317,7 +316,7 @@ interface for CAN FD and create the bus with `fd=True`.
 for a malformed HiPNUC frame. It keeps the adapter timestamp in
 `metadata["can_timestamp_s"]` and leaves `received_time_ns` for the caller to
 set. `read_register` and `write_register` give raw access; `read_info`,
-`reboot`, `request_reboot`, `wait_for_node`, `factory_reset`, `save_config`,
+`reboot`, `request_reboot`, `wait_for_node`, `save_config`,
 `set_node_id`, `set_bitrate`, `set_pgn_period`, `set_output_enabled` and
 `send_trigger` cover the managed operations. They take the caller's bus and a
 node ID; `scan(bus, duration)` finds the nodes itself.

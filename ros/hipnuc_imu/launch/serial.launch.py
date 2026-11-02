@@ -9,23 +9,23 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-    config = os.path.join(get_package_share_directory("hipnuc_imu"), "config", "can.yaml")
+    config = os.path.join(get_package_share_directory("hipnuc_imu"), "config", "serial.yaml")
     return LaunchDescription(
         [
-            DeclareLaunchArgument("interface", default_value="can0"),
-            DeclareLaunchArgument("node_id", default_value="8"),
+            DeclareLaunchArgument("port", default_value="/dev/ttyUSB0"),
+            DeclareLaunchArgument("baudrate", default_value="115200"),
             DeclareLaunchArgument("frame_id", default_value="imu_link"),
             DeclareLaunchArgument("params_file", default_value=config),
             Node(
                 package="hipnuc_imu",
-                executable="can_node",
-                name="hipnuc_can",
+                executable="hipnuc_imu_node",
+                name="hipnuc_serial",
                 output="screen",
                 parameters=[
                     LaunchConfiguration("params_file"),
                     {
-                        "interface": LaunchConfiguration("interface"),
-                        "node_id": ParameterValue(LaunchConfiguration("node_id"), value_type=int),
+                        "port": LaunchConfiguration("port"),
+                        "baudrate": ParameterValue(LaunchConfiguration("baudrate"), value_type=int),
                         "frame_id": ParameterValue(LaunchConfiguration("frame_id"), value_type=str),
                     },
                 ],

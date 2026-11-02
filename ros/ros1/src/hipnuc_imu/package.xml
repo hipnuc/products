@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>hipnuc_imu</name>
-  <version>2.0.0</version>
-  <description>ROS 1 driver for HiPNUC IMU/AHRS/INS devices over serial and CAN (J1939).</description>
+  <version>3.0.0</version>
+  <description>ROS 1 serial driver for HiPNUC IMU/AHRS/INS devices.</description>
   <maintainer email="support@hipnuc.com">HiPNUC</maintainer>
   <license>Apache-2.0</license>
 

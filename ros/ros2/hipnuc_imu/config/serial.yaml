@@ -1,7 +1,0 @@
-# Configure the device for ENU output before starting; no automatic verification.
-/**:
-  ros__parameters:
-    publish_imu: true
-    publish_mag: true
-    publish_temperature: true
-    publish_hipnuc: true

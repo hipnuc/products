@@ -1,5 +1,6 @@
-# Configure the device for ENU output before starting; no automatic verification.
+# Topic switches; /diagnostics is always published.
 publish_imu: true
-publish_mag: true
-publish_temperature: true
-publish_hipnuc: true
+publish_data_raw: false
+publish_mag: false
+publish_temperature: false
+publish_hipnuc: false

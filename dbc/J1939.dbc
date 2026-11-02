@@ -36,28 +36,27 @@ BS_:
 BU_: HIPNUC_J1939
 
 
-BO_ 2365526024 PGN65296_FF10_LonLat: 8 HIPNUC_J1939
+BO_ 2365526024 PGN65296_FF10_LatLon: 8 HIPNUC_J1939
  SG_ Latitude : 0|32@1- (1E-007,0) [-90|90] "deg" Vector__XXX
  SG_ Longitude : 32|32@1- (1E-007,0) [-180|180] "deg" Vector__XXX
 
 BO_ 2365527048 PGN65300_FF14_AltUnduDiffAge: 8 HIPNUC_J1939
- SG_ Altitude : 0|32@1- (0.01,0) [0|0] "m" Vector__XXX
- SG_ Undulation : 32|16@1- (0.01,0) [0|0] "m" Vector__XXX
- SG_ Diff_Age : 48|16@1- (0.01,0) [0|0] "s" Vector__XXX
+ SG_ Altitude : 0|32@1- (0.01,0) [-21474836.48|21474836.47] "m" Vector__XXX
+ SG_ Undulation : 32|16@1- (0.01,0) [-327.68|327.67] "m" Vector__XXX
+ SG_ Diff_Age : 48|16@1- (0.01,0) [-327.68|327.67] "s" Vector__XXX
 
 BO_ 2365528072 PGN65304_FF18_StatusSats: 8 HIPNUC_J1939
- SG_ GNSS_Pos_Quality : 0|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ GNSS_Heading_Quality : 8|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ Sat_Pos_Count : 16|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ Sat_Heading_Count : 24|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ INS_Status : 32|8@1+ (1,0) [0|0] "" Vector__XXX
- SG_ Reserved_FF18 : 40|24@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ GNSS_Pos_Quality : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ GNSS_Heading_Quality : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Sat_Pos_Count : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Sat_Heading_Count : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ INS_Status : 32|8@1+ (1,0) [0|255] "" Vector__XXX
 
 BO_ 2365531656 PGN65318_FF26_Velocity: 8 HIPNUC_J1939
- SG_ Vel_East : 0|16@1- (0.01,0) [0|0] "m/s" Vector__XXX
- SG_ Vel_North : 16|16@1- (0.01,0) [0|0] "m/s" Vector__XXX
- SG_ Vel_Up : 32|16@1- (0.01,0) [0|0] "m/s" Vector__XXX
- SG_ Ground_Speed : 48|16@1- (0.01,0) [0|0] "m/s" Vector__XXX
+ SG_ Vel_East : 0|16@1- (0.01,0) [-327.68|327.67] "m/s" Vector__XXX
+ SG_ Vel_North : 16|16@1- (0.01,0) [-327.68|327.67] "m/s" Vector__XXX
+ SG_ Vel_Up : 32|16@1- (0.01,0) [-327.68|327.67] "m/s" Vector__XXX
+ SG_ Ground_Speed : 48|16@1- (0.01,0) [0|327.67] "m/s" Vector__XXX
 
 BO_ 2365533960 PGN65327_FF2F_Time: 8 HIPNUC_J1939
  SG_ Year_Offset_2000 : 0|8@1+ (1,0) [0|255] "" Vector__XXX
@@ -72,32 +71,27 @@ BO_ 2365535240 PGN65332_FF34_Accel: 8 HIPNUC_J1939
  SG_ Acc_X : 0|16@1- (0.00048828125,0) [-16|15.99951171875] "G" Vector__XXX
  SG_ Acc_Y : 16|16@1- (0.00048828125,0) [-16|15.99951171875] "G" Vector__XXX
  SG_ Acc_Z : 32|16@1- (0.00048828125,0) [-16|15.99951171875] "G" Vector__XXX
- SG_ Reserved_FF34 : 48|16@1+ (1,0) [0|0] "" Vector__XXX
 
 BO_ 2365536008 PGN65335_FF37_Gyro: 8 HIPNUC_J1939
  SG_ Gyr_X : 0|16@1- (0.06103515625,0) [-2000|1999.93896484375] "deg/s" Vector__XXX
  SG_ Gyr_Y : 16|16@1- (0.06103515625,0) [-2000|1999.93896484375] "deg/s" Vector__XXX
  SG_ Gyr_Z : 32|16@1- (0.06103515625,0) [-2000|1999.93896484375] "deg/s" Vector__XXX
- SG_ Reserved_FF37 : 48|16@1+ (1,0) [0|0] "" Vector__XXX
 
 BO_ 2365536776 PGN65338_FF3A_Mag: 8 HIPNUC_J1939
  SG_ Mag_X : 0|16@1- (0.030517578125,0) [-1000|999.969482421875] "uT" Vector__XXX
  SG_ Mag_Y : 16|16@1- (0.030517578125,0) [-1000|999.969482421875] "uT" Vector__XXX
  SG_ Mag_Z : 32|16@1- (0.030517578125,0) [-1000|999.969482421875] "uT" Vector__XXX
- SG_ Reserved_FF3A : 48|16@1+ (1,0) [0|0] "" Vector__XXX
 
 BO_ 2365537544 PGN65341_FF3D_RollPitch: 8 HIPNUC_J1939
- SG_ Roll : 0|32@1- (0.001,0) [0|0] "deg" Vector__XXX
- SG_ Pitch : 32|32@1- (0.001,0) [0|0] "deg" Vector__XXX
+ SG_ Roll : 0|32@1- (0.001,0) [-180|180] "deg" Vector__XXX
+ SG_ Pitch : 32|32@1- (0.001,0) [-90|90] "deg" Vector__XXX
 
 BO_ 2365538568 PGN65345_FF41_YawDual: 8 HIPNUC_J1939
  SG_ Heading_CW : 0|32@1- (0.001,0) [0|360] "deg" Vector__XXX
  SG_ Euler_Yaw : 32|32@1- (0.001,0) [-180|180] "deg" Vector__XXX
 
 BO_ 2365539080 PGN65347_FF43_Temperature: 8 HIPNUC_J1939
- SG_ Temperature : 0|16@1- (0.01,0) [0|0] "degC" Vector__XXX
- SG_ Reserved_FF43 : 16|16@1+ (1,0) [0|0] "" Vector__XXX
- SG_ Reserved_FF43_32 : 32|32@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ Temperature : 0|16@1- (0.01,0) [-327.68|327.67] "degC" Vector__XXX
 
 BO_ 2365539848 PGN65350_FF46_Quaternion: 8 HIPNUC_J1939
  SG_ Quat_W : 0|16@1- (0.0001,0) [-1|1] "" Vector__XXX
@@ -106,20 +100,51 @@ BO_ 2365539848 PGN65350_FF46_Quaternion: 8 HIPNUC_J1939
  SG_ Quat_Z : 48|16@1- (0.0001,0) [-1|1] "" Vector__XXX
 
 BO_ 2365540872 PGN65354_FF4A_Inclinometer: 8 HIPNUC_J1939
- SG_ Incli_X : 0|32@1- (0.001,0) [0|0] "deg" Vector__XXX
- SG_ Incli_Y : 32|32@1- (0.001,0) [0|0] "deg" Vector__XXX
+ SG_ Incli_X : 0|32@1- (0.001,0) [-180|360] "deg" Vector__XXX
+ SG_ Incli_Y : 32|32@1- (0.001,0) [-90|90] "deg" Vector__XXX
 
 
-CM_ "HiPNUC proprietary Classic CAN PGNs; priority 3, source address 0x08. Signals describe wire values, not a coherent multi-PGN snapshot. Reserved signals have no physical meaning.";
-CM_ BO_ 2365526024 "INS position. GNSS quality in PGN FF18 is not an INS position-valid flag.";
-CM_ SG_ 2365527048 Altitude "INS ellipsoid height minus GNSS undulation (mean sea level height).";
-CM_ BO_ 2365533960 "With UTC: year is an offset from 2000. Without UTC: year/month/day are zero; remaining fields are uptime modulo 24 hours. Do not interpret a zero date as UTC.";
-CM_ BO_ 2365535240 "Acceleration in device axes; the firmware uses 1 G = 9.8 m/s^2.";
-CM_ SG_ 2365538568 Heading_CW "Clockwise heading derived from Euler yaw, wrapped to [0,360); not Euler yaw.";
-CM_ SG_ 2365538568 Euler_Yaw "Device Euler yaw; coordinate configuration is not changed by this database.";
-CM_ SG_ 2365539080 Reserved_FF43_32 "Reserved placeholder (999 in current firmware), not a pressure measurement.";
-CM_ BO_ 2365539848 "Quaternion component order W, X, Y, Z; device coordinate configuration applies.";
+CM_ "HiPNUC J1939 data PGNs: Classic CAN, 8 bytes, little-endian. Identifiers carry priority 3 and the factory node address 0x08; J1939-aware tools match the PGN at any address. Different PGNs may carry different samples.";
+CM_ BO_ 2365526024 "INS models only. INS position; check INS_Status in PGN FF18.";
+CM_ BO_ 2365527048 "INS models only.";
+CM_ SG_ 2365527048 Altitude "Height above mean sea level: INS ellipsoid height minus Undulation.";
+CM_ BO_ 2365528072 "INS models only.";
+CM_ SG_ 2365528072 GNSS_Heading_Quality "Dual-antenna heading: 4 is fixed; other values mean no heading.";
+CM_ BO_ 2365531656 "INS models only. INS velocity, east-north-up.";
+CM_ SG_ 2365531656 Ground_Speed "Horizontal speed from Vel_East and Vel_North.";
+CM_ BO_ 2365533960 "With UTC: date and time, year minus 2000. Without UTC: year, month and day are 0 and the time is time since power-up modulo 24 hours.";
+CM_ BO_ 2365535240 "Acceleration; the firmware uses 1 G = 9.8 m/s^2.";
+CM_ BO_ 2365536776 "Models with a magnetometer.";
+CM_ SG_ 2365538568 Heading_CW "Heading, 0 to 360 deg, clockwise positive. With COORD 0 it is the clockwise form of Euler_Yaw.";
+CM_ SG_ 2365538568 Euler_Yaw "Euler yaw, -180 to 180 deg, in the output axes setting.";
+CM_ BO_ 2365539080 "Not sent by every model.";
+CM_ BO_ 2365539848 "Quaternion W, X, Y, Z.";
+CM_ SG_ 2365540872 Incli_X "Inclination from roll; single-axis inclinometer models report 0 to 360 deg.";
+CM_ SG_ 2365540872 Incli_Y "Inclination from pitch.";
 
 BA_DEF_  "BusType" STRING ;
+BA_DEF_  "ProtocolType" STRING ;
+BA_DEF_ BO_  "VFrameFormat" ENUM  "StandardCAN","ExtendedCAN","reserved","J1939PG";
 BA_DEF_DEF_  "BusType" "CAN";
+BA_DEF_DEF_  "ProtocolType" "J1939";
+BA_DEF_DEF_  "VFrameFormat" "J1939PG";
 BA_ "BusType" "CAN";
+BA_ "ProtocolType" "J1939";
+BA_ "VFrameFormat" BO_ 2365526024 3;
+BA_ "VFrameFormat" BO_ 2365527048 3;
+BA_ "VFrameFormat" BO_ 2365528072 3;
+BA_ "VFrameFormat" BO_ 2365531656 3;
+BA_ "VFrameFormat" BO_ 2365533960 3;
+BA_ "VFrameFormat" BO_ 2365535240 3;
+BA_ "VFrameFormat" BO_ 2365536008 3;
+BA_ "VFrameFormat" BO_ 2365536776 3;
+BA_ "VFrameFormat" BO_ 2365537544 3;
+BA_ "VFrameFormat" BO_ 2365538568 3;
+BA_ "VFrameFormat" BO_ 2365539080 3;
+BA_ "VFrameFormat" BO_ 2365539848 3;
+BA_ "VFrameFormat" BO_ 2365540872 3;
+
+VAL_ 2365528072 GNSS_Pos_Quality 0 "Invalid" 1 "Single point or PPP" 2 "Pseudorange differential" 4 "RTK fixed" 5 "RTK float" ;
+VAL_ 2365528072 GNSS_Heading_Quality 4 "Fixed" ;
+VAL_ 2365528072 INS_Status 0 "Invalid" 1 "Aligning" 3 "Integrated navigation" 6 "Inertial dead reckoning" ;
+

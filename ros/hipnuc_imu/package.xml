@@ -1,16 +1,22 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>hipnuc_msgs</name>
-  <version>2.0.0</version>
-  <description>Full-field measurement message for HiPNUC IMU/AHRS/INS devices.</description>
+  <name>hipnuc_imu</name>
+  <version>3.0.0</version>
+  <description>ROS 2 serial driver for HiPNUC IMU/AHRS/INS devices.</description>
   <maintainer email="support@hipnuc.com">HiPNUC</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>rcl_interfaces</depend>
   <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>diagnostic_msgs</depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
   <member_of_group>rosidl_interface_packages</member_of_group>
 
   <export>

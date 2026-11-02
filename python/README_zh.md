@@ -200,7 +200,7 @@ with ModbusBus("COM3") as bus:
 python -m pip install ".[can]"
 sudo ip link set can0 down
 sudo ip link set can0 type can bitrate 500000 restart-ms 100
-# CAN FD 产品：... bitrate 500000 dbitrate 4000000 fd on restart-ms 100
+# CAN FD 产品：... bitrate 500000 sample-point 0.8 dbitrate 4000000 dsample-point 0.8 fd on restart-ms 100
 sudo ip link set can0 up
 hihost can scan -i can0 --identify
 hihost can read -i can0 --id 8 --record samples.jsonl
@@ -248,8 +248,7 @@ hihost can reboot -i can0 --id 8
 ```
 
 PGN 名称：acc、gyr、mag、roll_pitch、yaw、quat、temp、inclination、time、position、altitude、
-gnss_status、velocity、canfd83，也可以写编号。执行 `can reboot --factory-reset` 后，
-节点可能以 500 kbit/s、节点号 8 重新上线。
+gnss_status、velocity、canfd83，也可以写编号。
 
 直接读写寄存器：`hihost can reg read ADDRESS -i can0 --id 8` 和
 `hihost can reg write ADDRESS VALUE -i can0 --id 8`（十进制或 `0x`）。写入只校验回显。
@@ -281,7 +280,7 @@ CANFD83 帧只在 FD 总线上收到：先把接口配置为 CAN FD，再用 `fd
 `decode_message()` 遇到无关报文返回 `None`，遇到格式错误的 HiPNUC 报文抛出 `ValueError`。
 适配器的时间戳保存在 `metadata["can_timestamp_s"]`，`received_time_ns` 留给调用方填写。
 `read_register` 和 `write_register` 直接读写寄存器；`read_info`、`reboot`、`request_reboot`、
-`wait_for_node`、`factory_reset`、`save_config`、`set_node_id`、`set_bitrate`、`set_pgn_period`、
+`wait_for_node`、`save_config`、`set_node_id`、`set_bitrate`、`set_pgn_period`、
 `set_output_enabled` 和 `send_trigger` 提供常用操作，参数为调用方的总线和节点号；
 `scan(bus, duration)` 自行查找节点。
 

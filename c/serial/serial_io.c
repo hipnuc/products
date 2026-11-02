@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/file.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
@@ -144,20 +145,43 @@ int hipnuc_serial_open(hipnuc_serial_t *device, const char *port, int baudrate)
 #else
     {
         struct termios2 config;
+        struct serial_struct serial;
+        unsigned rate = (unsigned)baudrate;
         int fd = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0) return io_error(device, "Cannot open port");
         device->handle = fd;
         device->is_open = 1;
+        /* TIOCEXCL stops later opens; flock also detects an earlier reader. */
+        if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+            /* Close without TIOCNXCL: the other owner's exclusivity stays. */
+            snprintf(device->error, sizeof(device->error), "Port is in use by another program");
+            close(fd);
+            device->is_open = 0;
+            return -1;
+        }
         if (ioctl(fd, TIOCEXCL) < 0 || ioctl(fd, TCGETS2, &config) < 0)
             goto configure_error;
         config.c_iflag = 0;
         config.c_oflag = 0;
         config.c_lflag = 0;
         config.c_cflag = BOTHER | CS8 | CREAD | CLOCAL;
-        config.c_ispeed = config.c_ospeed = (unsigned)baudrate;
         config.c_cc[VMIN] = 0;
         config.c_cc[VTIME] = 0;
+        /* Linux cdc_acm sends the line settings to the adapter only when they
+         * change. A CH347 reopened at the same rate then delivers its input
+         * seconds late for the whole session. Passing through another rate
+         * sends them; input that arrived before is stale. */
+        config.c_ispeed = config.c_ospeed = rate == 9600 ? 19200 : 9600;
         if (ioctl(fd, TCSETS2, &config) < 0) goto configure_error;
+        config.c_ispeed = config.c_ospeed = rate;
+        if (ioctl(fd, TCSETS2, &config) < 0) goto configure_error;
+        ioctl(fd, TCFLSH, TCIFLUSH);
+        /* FTDI adapters otherwise hold input for up to 16 ms; other drivers
+         * ignore the flag or refuse the request. */
+        if (ioctl(fd, TIOCGSERIAL, &serial) == 0) {
+            serial.flags |= ASYNC_LOW_LATENCY;
+            ioctl(fd, TIOCSSERIAL, &serial);
+        }
         /* Drivers may round the requested rate to a hardware divider. */
         receive_error_total(fd, &device->error_snapshot);
     }

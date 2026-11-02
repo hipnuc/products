@@ -1,5 +1,5 @@
 /* Linux SocketCAN: configure the interface with ip link, then run. */
-#define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
 #include "hipnuc_j1939.h"
 #include <errno.h>
 #include <inttypes.h>
@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
@@ -30,9 +31,18 @@ static uint64_t now_ms(void)
 int main(void)
 {
     struct sockaddr_can address = {0};
+    struct ifreq request = {0};
     int enabled = 1, result = 0, waiting = 0;
     int fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (fd < 0) { perror("CAN socket"); return 1; }
+    /* A down interface accepts the bind and then receives nothing. */
+    strncpy(request.ifr_name, INTERFACE, IFNAMSIZ - 1);
+    if (ioctl(fd, SIOCGIFFLAGS, &request) == 0 && !(request.ifr_flags & IFF_UP)) {
+        fprintf(stderr, "%s is down: sudo ip link set %s up type can bitrate 500000\n",
+                INTERFACE, INTERFACE);
+        close(fd);
+        return 1;
+    }
     address.can_family = AF_CAN;
     address.can_ifindex = (int)if_nametoindex(INTERFACE);
     /* CAN FD reception also accepts Classic CAN. */

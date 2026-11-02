@@ -1,0 +1,8 @@
+# Topic switches; /diagnostics is always published.
+/**:
+  ros__parameters:
+    publish_imu: true
+    publish_data_raw: false
+    publish_mag: false
+    publish_temperature: false
+    publish_hipnuc: false

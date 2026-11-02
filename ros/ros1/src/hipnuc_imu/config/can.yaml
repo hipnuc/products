@@ -1,5 +1,0 @@
-# Configure the device for ENU output before starting; no automatic verification.
-publish_hipnuc: true
-publish_imu: true
-publish_mag: true
-publish_temperature: true

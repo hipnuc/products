@@ -76,7 +76,6 @@ _REG_NOMINAL_BITRATE = 0x009A
 _REG_NODE_ID = 0x009C
 _REG_OUTPUT_ENABLE = 0x009D
 _CONTROL_SAVE = 0x00
-_CONTROL_FACTORY_RESET = 0x01
 _CONTROL_REBOOT = 0xFF
 _IDENTITY_SLOTS = (*range(0x70, 0x7C), *range(0x7F, 0x83))  # 0x7C-0x7E are unmapped.
 _FD_HINT = " CANFD83 registers exist only on CAN FD products."
@@ -479,32 +478,19 @@ def save_config(bus: can.BusABC, node_id: int, timeout: float = 2.0) -> WriteRes
     return write_register(bus, node_id, _REG_CONTROL, _CONTROL_SAVE, timeout)
 
 
-def _request_reset(bus: can.BusABC, node_id: int, value: int, timeout: float) -> WriteResult:
-    import can
-
-    request = _config_message(node_id, _REG_CONTROL, 6, value)
-    try:
-        bus.send(request, timeout=_timeout(timeout))
-    except can.CanError as exc:
-        raise TransportError(f"CAN reset request failed: {exc}") from exc
-    return WriteResult(_REG_CONTROL, value, False)
-
-
 def request_reboot(bus: can.BusABC, node_id: int, timeout: float = 2.0) -> WriteResult:
     """Send the reset request without waiting; it is never acknowledged.
 
     Use this before the host changes its own bitrate, then ``wait_for_node``.
     """
-    return _request_reset(bus, _node(node_id), _CONTROL_REBOOT, timeout)
+    import can
 
-
-def factory_reset(bus: can.BusABC, node_id: int, timeout: float = 2.0) -> WriteResult:
-    """Restore factory settings without waiting; the request is never acknowledged.
-
-    Current firmware keeps the CAN bitrate and node ID when the request arrives
-    over CAN; older firmware returns at 500 kbit/s and node 8.
-    """
-    return _request_reset(bus, _node(node_id), _CONTROL_FACTORY_RESET, timeout)
+    request = _config_message(_node(node_id), _REG_CONTROL, 6, _CONTROL_REBOOT)
+    try:
+        bus.send(request, timeout=_timeout(timeout))
+    except can.CanError as exc:
+        raise TransportError(f"CAN reset request failed: {exc}") from exc
+    return WriteResult(_REG_CONTROL, _CONTROL_REBOOT, False)
 
 
 def wait_for_node(
