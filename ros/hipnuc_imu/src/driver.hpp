@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "hipnuc_sample.h"
+#include "hipnuc_data.h"
 
 namespace hipnuc_imu {
 
@@ -38,7 +38,7 @@ public:
     virtual void log(Level level, const std::string &text) = 0;
     // Every decoded frame. imu is true when it carries acceleration and
     // angular velocity; the times of those frames always increase.
-    virtual void measurement(const hipnuc_sample_t &sample, Clock::time_point time, bool imu) = 0;
+    virtual void measurement(const hipnuc_data_t &sample, Clock::time_point time, bool imu) = 0;
     // Once per second.
     virtual void status(const Status &status) = 0;
 };

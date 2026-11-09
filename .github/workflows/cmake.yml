@@ -48,6 +48,24 @@ jobs:
       - name: Build the customer C SDK entry point
         run: cmake --build build/c-sdk --config Release
 
+  mcu-compile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the Arm GNU toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+          arm-none-eabi-gcc --version
+      - name: Compile c/hipnuc for Cortex-M0 and Cortex-M4F
+        run: |
+          set -eu
+          for cpu in "-mcpu=cortex-m0 -mthumb" "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard"; do
+            for source in c/hipnuc/*.c; do
+              arm-none-eabi-gcc $cpu -std=c99 -Wall -Wextra -Werror -Wdouble-promotion -Os -c "$source" -o /dev/null
+            done
+          done
+
   ros-c-core:
     runs-on: ubuntu-24.04
     steps:

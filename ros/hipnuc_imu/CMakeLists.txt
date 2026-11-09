@@ -15,8 +15,8 @@ rosidl_get_typesupport_target(hipnuc_imu_interfaces ${PROJECT_NAME} rosidl_types
 
 # Copy of the SDK's C decoder and serial port, kept identical by ros/sync_copies.sh.
 add_library(hipnuc_c STATIC
-  hipnuc/hipnuc_dec.c hipnuc/nmea_dec.c hipnuc/hipnuc_sample.c
-  hipnuc/hipnuc_serial.c hipnuc/serial_io.c)
+  hipnuc/hipnuc_data.c hipnuc/hipnuc_decoder.c hipnuc/hipnuc_nmea.c
+  hipnuc/hipnuc_serial.c hipnuc/hipnuc_serial_io.c)
 target_include_directories(hipnuc_c PUBLIC hipnuc)
 set_target_properties(hipnuc_c PROPERTIES
   C_STANDARD 99 C_STANDARD_REQUIRED YES POSITION_INDEPENDENT_CODE ON)

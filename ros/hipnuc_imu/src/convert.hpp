@@ -1,4 +1,4 @@
-// Conversion from hipnuc_sample_t to ROS messages, shared by the ROS 1 and
+// Conversion from hipnuc_data_t to ROS messages, shared by the ROS 1 and
 // ROS 2 nodes: the message types are template parameters because the field
 // names are identical in both generations.
 //
@@ -18,7 +18,7 @@
 #include <cmath>
 #include <cstdint>
 
-#include "hipnuc_sample.h"
+#include "hipnuc_data.h"
 
 namespace hipnuc_imu {
 
@@ -29,7 +29,7 @@ inline bool finite_vector(const float values[3])
 
 // A quaternion's scale does not change its rotation. Normalize finite nonzero
 // values for ROS; zero/nonfinite values cannot provide orientation.
-inline double quaternion_norm(const hipnuc_sample_t &s)
+inline double quaternion_norm(const hipnuc_data_t &s)
 {
     if (!(s.valid & HIPNUC_VALID_QUAT)) return 0.0;
     double squared = 0.0;
@@ -43,7 +43,7 @@ inline double quaternion_norm(const hipnuc_sample_t &s)
 // An Imu message needs both acceleration and angular velocity of this sample:
 // SLAM front ends integrate them without looking at covariance markers, and
 // Cartographer rejects a -1 marker on either. Orientation may be absent.
-inline bool has_imu(const hipnuc_sample_t &s)
+inline bool has_imu(const hipnuc_data_t &s)
 {
     return (s.valid & HIPNUC_VALID_ACC) && finite_vector(s.acc) &&
            (s.valid & HIPNUC_VALID_GYR) && finite_vector(s.gyr);
@@ -51,7 +51,7 @@ inline bool has_imu(const hipnuc_sample_t &s)
 
 // For a sample that has_imu().
 template <class Imu>
-void fill_imu(const hipnuc_sample_t &s, Imu &m)
+void fill_imu(const hipnuc_data_t &s, Imu &m)
 {
     std::fill(m.orientation_covariance.begin(), m.orientation_covariance.end(), 0.0);
     std::fill(m.angular_velocity_covariance.begin(), m.angular_velocity_covariance.end(), 0.0);
@@ -87,7 +87,7 @@ void clear_orientation(Imu &m)
 }
 
 template <class MagneticField>
-void fill_mag(const hipnuc_sample_t &s, MagneticField &m)
+void fill_mag(const hipnuc_data_t &s, MagneticField &m)
 {
     m.magnetic_field.x = s.mag[0];
     m.magnetic_field.y = s.mag[1];
@@ -96,7 +96,7 @@ void fill_mag(const hipnuc_sample_t &s, MagneticField &m)
 }
 
 template <class Temperature>
-void fill_temperature(const hipnuc_sample_t &s, Temperature &m)
+void fill_temperature(const hipnuc_data_t &s, Temperature &m)
 {
     m.temperature = s.temperature;
     m.variance = 0.0;
@@ -105,11 +105,12 @@ void fill_temperature(const hipnuc_sample_t &s, Temperature &m)
 // Product message: preserve the decoder's independent field-presence bits.
 // Values without their bit are placeholders, never measurements.
 template <class HipnucImu>
-void fill_hipnuc(const hipnuc_sample_t &s, HipnucImu &m)
+void fill_hipnuc(const hipnuc_data_t &s, HipnucImu &m)
 {
     m.source = static_cast<uint8_t>(s.source);
     m.valid = s.valid;
     m.node_id = s.node_id;
+    m.sequence = s.sequence;
     m.main_status = s.main_status;
     m.gyro_bias_converged = s.gyro_bias_converged != 0;
     m.attitude_converged = s.attitude_converged != 0;
@@ -135,6 +136,8 @@ void fill_hipnuc(const hipnuc_sample_t &s, HipnucImu &m)
     m.inclination[0] = s.inclination[0];
     m.inclination[1] = s.inclination[1];
     m.inclination_yaw = s.inclination_yaw;
+    for (int i = 0; i < 3; ++i) m.attitude_std[i] = s.att_std[i];
+    m.system_time_ms = s.system_time_ms;
     m.device_time_us = s.device_time_us;
     m.utc_valid = (s.valid & HIPNUC_VALID_UTC) != 0;
     m.utc_year = s.utc.year;
@@ -162,7 +165,6 @@ void fill_hipnuc(const hipnuc_sample_t &s, HipnucImu &m)
     m.pdop = s.pdop;
     m.hdop = s.hdop;
     m.differential_age = s.diff_age;
-    m.odometer_speed = s.odometer_speed;
     m.speed_over_ground = s.sog;
     m.course_over_ground = s.cog;
     m.nmea_status = static_cast<uint8_t>(s.nmea_status);

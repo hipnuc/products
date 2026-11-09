@@ -1,6 +1,6 @@
-// C++ calls the same C API; no additional device class is required.
+// The same as read.c from C++: the C API needs no wrapper class.
 #include <csignal>
-#include <iomanip>
+#include <cstdio>
 #include <iostream>
 #include "hipnuc_serial.h"
 
@@ -9,66 +9,55 @@ static const char *PORT = "COM3";
 #else
 static const char *PORT = "/dev/ttyUSB0";
 #endif
-static const int BAUDRATE = 115200;
+static const int BAUDRATE = 115200;   // the factory setting
 static const int TIMEOUT_MS = 2000;
+
 static volatile std::sig_atomic_t stopped;
 static void stop(int) { stopped = 1; }
 
-static void print_sample(const hipnuc_sample_t &sample)
+static void print_data(const hipnuc_data_t &imu)
 {
-    std::cout << "sample fields=0x" << std::hex << sample.valid << std::dec << std::setprecision(10);
-    if (sample.valid & HIPNUC_VALID_ACC)
-        std::cout << " acc(m/s^2)=" << sample.acc[0] << ' ' << sample.acc[1] << ' ' << sample.acc[2];
-    if (sample.valid & HIPNUC_VALID_GYR)
-        std::cout << " gyr(rad/s)=" << sample.gyr[0] << ' ' << sample.gyr[1] << ' ' << sample.gyr[2];
-    if (sample.valid & HIPNUC_VALID_ROLL_PITCH)
-        std::cout << " roll/pitch(rad)=" << sample.roll << ' ' << sample.pitch;
-    if (sample.valid & HIPNUC_VALID_YAW) std::cout << " yaw(rad)=" << sample.yaw;
-    if (sample.valid & HIPNUC_VALID_HEADING) std::cout << " heading(rad)=" << sample.heading;
-    if (sample.valid & HIPNUC_VALID_QUAT)
-        std::cout << " quat(wxyz)=" << sample.quat[0] << ' ' << sample.quat[1] << ' '
-                  << sample.quat[2] << ' ' << sample.quat[3];
-    if (sample.valid & HIPNUC_VALID_POSITION)
-        std::cout << " lon/lat(deg)=" << sample.longitude << ' ' << sample.latitude;
-    if (sample.valid & HIPNUC_VALID_TEMPERATURE) std::cout << " temp(C)=" << sample.temperature;
+    std::cout << "fields=0x" << std::hex << imu.valid << std::dec;
+    if (imu.valid & HIPNUC_VALID_ACC) std::cout << " acc(m/s^2)=" << imu.acc[0] << ' ' << imu.acc[1] << ' ' << imu.acc[2];
+    if (imu.valid & HIPNUC_VALID_GYR) std::cout << " gyr(rad/s)=" << imu.gyr[0] << ' ' << imu.gyr[1] << ' ' << imu.gyr[2];
+    if (imu.valid & HIPNUC_VALID_ROLL_PITCH)
+        std::cout << " roll/pitch(deg)=" << imu.roll * HIPNUC_RAD2DEG << ' ' << imu.pitch * HIPNUC_RAD2DEG;
+    if (imu.valid & HIPNUC_VALID_YAW) std::cout << " yaw(deg)=" << imu.yaw * HIPNUC_RAD2DEG;
+    if (imu.valid & HIPNUC_VALID_QUAT)
+        std::cout << " quat(wxyz)=" << imu.quat[0] << ' ' << imu.quat[1] << ' ' << imu.quat[2] << ' ' << imu.quat[3];
     std::cout << '\n' << std::flush;
 }
 
 int main()
 {
-    hipnuc_serial_t device = {};
-    hipnuc_sample_t sample;
-    int result = 0;
-    bool waiting = false;
+    hipnuc_serial_t dev = {};
+    hipnuc_data_t imu;
+    bool identified = false;
     std::signal(SIGINT, stop);
-    if (hipnuc_serial_open(&device, PORT, BAUDRATE) < 0) {
-        std::cerr << PORT << ": " << hipnuc_serial_last_error(&device) << '\n';
+    if (hipnuc_serial_open(&dev, PORT, BAUDRATE) < 0) {
+        std::cerr << PORT << ": " << hipnuc_serial_last_error(&dev) << '\n';
         return 1;
     }
-    std::cerr << "Connected to " << PORT << " at " << BAUDRATE << " baud. Ctrl-C stops.\n";
     while (!stopped) {
-        int received = hipnuc_serial_read_sample(&device, &sample, TIMEOUT_MS);
+        const int received = hipnuc_serial_read(&dev, &imu, TIMEOUT_MS);
         if (received < 0) {
-            std::cerr << hipnuc_serial_last_error(&device) << '\n';
-            result = 1;
+            std::cerr << hipnuc_serial_last_error(&dev) << '\n';
             break;
         }
         if (received == 0) {
-            if (!waiting && !stopped)
-                std::cerr << "No sample in " << TIMEOUT_MS << " ms: " << device.bytes_received
-                          << " bytes, " << device.binary.crc_error_count << " CRC errors, "
-                          << device.binary.invalid_count << " undecoded frames, "
-                          << device.receive_errors << " receive errors."
-                          << " Check baudrate and device output. Waiting...\n";
-            waiting = true;
+            std::cerr << "No data in " << TIMEOUT_MS << " ms (" << dev.bytes_read << " bytes, "
+                      << dev.decoder.frames << " frames)\n";
             continue;
         }
-        if (waiting) std::cerr << "Data resumed.\n";
-        waiting = false;
-        print_sample(sample);
-        // Process other valid fields here. Each sample describes one packet.
-        if (!std::cout) { std::cerr << "Output failed.\n"; result = 1; break; }
+        print_data(imu);
+        if (!identified) {
+            identified = true;
+            if (hipnuc_serial_command(&dev, "LOG VERSION", 0) == 0) {
+                const char *name = hipnuc_serial_reply_value(&dev, "PNAME");
+                std::cerr << "Device " << (name ? name : "(unknown)") << '\n';
+            }
+        }
     }
-    hipnuc_serial_close(&device);
-    return result ? result : stopped ? 130 : 0;
+    hipnuc_serial_close(&dev);
+    return stopped ? 130 : 1;
 }

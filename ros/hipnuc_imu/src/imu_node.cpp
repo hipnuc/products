@@ -83,7 +83,7 @@ private:
         else RCLCPP_ERROR(get_logger(), "%s", text.c_str());
     }
 
-    void measurement(const hipnuc_sample_t &s, Clock::time_point at, bool imu) override
+    void measurement(const hipnuc_data_t &s, Clock::time_point at, bool imu) override
     {
         rclcpp::Time time;
         if (!stamp(at, time)) return;

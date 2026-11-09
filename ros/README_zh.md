@@ -3,7 +3,7 @@
 [English](README.md) | [中文](README_zh.md)
 
 适用于 HiPNUC IMU、AHRS、INS 模块的 ROS 2（Humble、Jazzy、Lyrical）和 ROS 1（Noetic）串口驱动。
-驱动不会修改设备设置：连接时读取一次型号、固件版本和轴向设置，之后只接收数据。需要固件 1.6.9 及以上。
+驱动不会修改设备设置：连接时读取一次型号、固件版本和轴向设置，之后只接收数据。
 
 ## 快速开始（ROS 2）
 
@@ -48,8 +48,7 @@ ros2 topic echo /diagnostics
 | y 约 −9.8 | x 右、y 前、z 上（出厂） | 偏航 −90° |
 | x 约 −9.8 | x 前、y 左、z 上（ROS） | 无 |
 
-较新的固件还会在启动日志中给出轴向设置。设置 `COORD 4` 只在部分较新的固件上输出 ROS 轴向，
-其他固件的数据仍是出厂轴向，请按上面的方法确认。把这条变换和其他静态变换一起发布，例如：
+设备报告轴向设置时，驱动会在启动日志中给出。设置 `COORD 4` 后，请按上面的方法确认。把这条变换和其他静态变换一起发布，例如：
 
 ```sh
 ros2 run tf2_ros static_transform_publisher --yaw -1.5708 --frame-id base_link --child-frame-id imu_link

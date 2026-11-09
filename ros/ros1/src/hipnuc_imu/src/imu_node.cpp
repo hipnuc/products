@@ -69,7 +69,7 @@ private:
         else ROS_ERROR("%s", text.c_str());
     }
 
-    void measurement(const hipnuc_sample_t &s, Clock::time_point at, bool imu) override
+    void measurement(const hipnuc_data_t &s, Clock::time_point at, bool imu) override
     {
         ros::Time time;
         if (!stamp(at, time)) return;

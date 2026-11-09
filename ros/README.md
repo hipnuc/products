@@ -5,7 +5,7 @@
 ROS 2 (Humble, Jazzy, Lyrical) and ROS 1 (Noetic) driver for HiPNUC IMU, AHRS
 and INS modules on a serial port. The driver never changes the device's
 settings: on connecting it reads the model, firmware version and axes setting
-once, then only receives. Firmware 1.6.9 or later is required.
+once, then only receives.
 
 ## Quick start (ROS 2)
 
@@ -57,9 +57,8 @@ arrow points to (Y arrow down), and watch
 | y about −9.8 | x right, y forward, z up (factory) | yaw −90° |
 | x about −9.8 | x forward, y left, z up (ROS) | none |
 
-Recent firmware also logs the axes setting at startup. Setting `COORD 4` gives
-ROS axes only on some recent firmware; elsewhere the data keep the factory
-axes, so check the result as above.
+The driver also logs the axes setting at startup when the device reports it.
+After setting `COORD 4`, check the result as above.
 Publish the transform with your other static transforms, for example:
 
 ```sh

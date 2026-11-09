@@ -1,41 +1,22 @@
 # HiPNUC C core. Consume with add_subdirectory(<path>/c/hipnuc hipnuc) and
-# link the target you need; or simply copy the files listed in ../README.md.
-# Options are set per target, never globally, so a parent project's flags are
-# left alone. No install() rules: this is a source library.
+# link the target hipnuc, or copy the files listed in ../README.md. It is a
+# static library, so a program links only the parts it calls. Options are set
+# on the target, never globally. No install() rules: this is a source library.
 
 cmake_minimum_required(VERSION 3.10)
 project(hipnuc_core C)
 
-function(hipnuc_configure target)
-    target_include_directories(${target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-    target_compile_features(${target} PUBLIC c_std_99)
-    set_target_properties(${target} PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS OFF)
-    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-        target_compile_options(${target} PRIVATE -Wall -Wextra)
-    elseif(MSVC)
-        target_compile_options(${target} PRIVATE /W4)
-    endif()
-endfunction()
-
-# Common SI sample helpers. CAN and JSON need no serial decoder.
-add_library(hipnuc_sample STATIC hipnuc_sample.c)
-hipnuc_configure(hipnuc_sample)
-
-# Serial decoding: binary frames and NMEA. No stdio, no libm.
-add_library(hipnuc_core STATIC hipnuc_dec.c nmea_dec.c)
-hipnuc_configure(hipnuc_core)
-target_link_libraries(hipnuc_core PUBLIC hipnuc_sample)
-
-# JSON formatting of samples (stdio).
-add_library(hipnuc_json STATIC hipnuc_json.c)
-hipnuc_configure(hipnuc_json)
-target_link_libraries(hipnuc_json PUBLIC hipnuc_sample)
-
-# I2C host link of the HI05 I2C models (register access and the newest HI83 frame).
-add_library(hipnuc_i2c STATIC hipnuc_i2c.c)
-hipnuc_configure(hipnuc_i2c)
-
-# CAN: J1939 measurement PGNs and CANFD83.
-add_library(hipnuc_j1939 STATIC hipnuc_j1939.c)
-hipnuc_configure(hipnuc_j1939)
-target_link_libraries(hipnuc_j1939 PUBLIC hipnuc_sample)
+add_library(hipnuc STATIC
+    hipnuc_data.c
+    hipnuc_decoder.c
+    hipnuc_nmea.c
+    hipnuc_can.c
+    hipnuc_i2c.c)
+target_include_directories(hipnuc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(hipnuc PUBLIC c_std_99)
+set_target_properties(hipnuc PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS OFF)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(hipnuc PRIVATE -Wall -Wextra)
+elseif(MSVC)
+    target_compile_options(hipnuc PRIVATE /W4)
+endif()

@@ -11,9 +11,6 @@
 
 #include "convert.hpp"
 #include "hipnuc_serial.h"
-extern "C" {
-#include "serial_io.h"
-}
 
 namespace hipnuc_imu {
 namespace {
@@ -40,7 +37,7 @@ std::string text(double value)
     return buffer;
 }
 
-void add_device_status(Status &status, const hipnuc_sample_t &sample)
+void add_device_status(Status &status, const hipnuc_data_t &sample)
 {
     if (!(sample.valid & HIPNUC_VALID_STATUS)) return;
     auto flag = [&](const char *key, bool value) { status.values.emplace_back(key, value ? "true" : "false"); };
@@ -51,8 +48,8 @@ void add_device_status(Status &status, const hipnuc_sample_t &sample)
     flag("gyro_bias_converged", sample.gyro_bias_converged);
     flag("static", sample.device_static);
     flag("magnetic_disturbance", sample.magnetic_disturbance);
-    flag("accelerometer_saturated", sample.main_status & (1u << 5));
-    flag("gyroscope_saturated", sample.main_status & (1u << 6));
+    flag("accelerometer_saturated", sample.main_status & HIPNUC_STATUS_ACC_SAT);
+    flag("gyroscope_saturated", sample.main_status & HIPNUC_STATUS_GYR_SAT);
 }
 
 // Frame counting, the once-per-second status and its log line on each change.
@@ -60,7 +57,7 @@ class Report {
 public:
     explicit Report(Output &output) : output_(output) {}
 
-    void frame(const hipnuc_sample_t &sample, Clock::time_point now)
+    void frame(const hipnuc_data_t &sample, Clock::time_point now)
     {
         ++frames_;
         last_frame_ = now;
@@ -73,7 +70,7 @@ public:
         last_frame_ = {};
         last_ = Clock::now();
         frames_at_last_ = frames_;
-        hipnuc_sample_clear(&status_sample_);
+        status_sample_ = hipnuc_data_t{};
     }
 
     bool silent(Clock::time_point now) const
@@ -102,7 +99,7 @@ private:
     Output &output_;
     uint64_t frames_ = 0, frames_at_last_ = 0;
     Clock::time_point last_ = Clock::now(), last_frame_{};
-    hipnuc_sample_t status_sample_{};
+    hipnuc_data_t status_sample_{};
     std::string last_message_;
 };
 
@@ -131,13 +128,6 @@ Clock::duration line_time(size_t bytes, int baudrate)
     return std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(bytes * 10.0 / baudrate));
 }
 
-size_t frame_bytes(const hipnuc_serial_t &serial, const hipnuc_sample_t &sample)
-{
-    if (sample.source == HIPNUC_SOURCE_NMEA_GGA || sample.source == HIPNUC_SOURCE_NMEA_RMC)
-        return std::strlen(reinterpret_cast<const char *>(serial.nmea.buf)) + 2;  // and CR LF
-    return HIPNUC_HEADER_SIZE + static_cast<size_t>(serial.binary.len);
-}
-
 std::string open_hint(const std::string &port)
 {
     if (access(port.c_str(), F_OK) != 0) return " (check the cable and the port name: ls /dev/serial/by-id)";
@@ -145,9 +135,6 @@ std::string open_hint(const std::string &port)
         return " (run: sudo usermod -aG dialout $USER, then log out and back in)";
     return "";
 }
-
-// The byte reads below happen before the first read_sample() on a connection,
-// so no buffered input is skipped.
 
 // At least kWaitMs, and three of the longest frames (150 bytes) at low baud rates.
 int wait_ms(int baudrate) { return std::max(kWaitMs, 3 * 1500 * 1000 / baudrate); }
@@ -157,60 +144,33 @@ int wait_ms(int baudrate) { return std::max(kWaitMs, 3 * 1500 * 1000 / baudrate)
 // first bytes after opening prove nothing.
 bool frames_arrive(hipnuc_serial_t &serial, int baudrate)
 {
-    hipnuc_raw_t binary{};
-    nmea_raw_t nmea{};
-    uint8_t data[256];
+    hipnuc_data_t sample;
     int valid = 0;
-    const uint64_t start = hipnuc_serial_monotonic_ms(), deadline = start + kStaleMs + wait_ms(baudrate);
-    for (uint64_t now = start; now < deadline; now = hipnuc_serial_monotonic_ms()) {
-        const int count = hipnuc_serial_read_bytes(&serial, data, sizeof(data), static_cast<int>(deadline - now));
-        if (count < 0) return false;
-        if (hipnuc_serial_monotonic_ms() < start + kStaleMs) continue;
-        for (int i = 0; i < count; ++i)
-            if ((hipnuc_input(&binary, data[i]) > 0 || nmea_input(&nmea, data[i]) > 0) && ++valid == 2) return true;
+    const auto start = Clock::now();
+    const auto stale = start + std::chrono::milliseconds(kStaleMs);
+    const auto deadline = stale + std::chrono::milliseconds(wait_ms(baudrate));
+    for (auto now = start; now < deadline; now = Clock::now()) {
+        const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+        const int result = hipnuc_serial_read(&serial, &sample, static_cast<int>(left));
+        if (result < 0) return false;
+        if (result > 0 && Clock::now() >= stale && ++valid == 2) return true;
     }
     return false;
 }
 
-// Values of the given keys in the reply to a read-only query; none when the
-// device does not answer. Frames keep streaming meanwhile: valid ones are cut
-// out, and one the device cut short when the command arrived may leave bytes
-// in front of a reply line, so keys are searched for within lines. complete
-// turns false when the reply does not end with OK or ERR.
+// Values of the given keys in the reply to a read-only query, from the lines
+// that arrived even when OK or ERR did not. Frames keep streaming meanwhile
+// and are dropped. complete turns false when the reply does not end with OK
+// or ERR.
 std::map<std::string, std::string> query(hipnuc_serial_t &serial, int baudrate, const char *command,
                                          std::initializer_list<const char *> keys, bool &complete)
 {
     std::map<std::string, std::string> values;
-    bool ended = false;
-    // The leading line end ends any partial line the device holds.
-    const std::string line = std::string("\r\n") + command + "\r\n";
-    std::string text;
-    if (::write(static_cast<int>(serial.handle), line.data(), line.size()) == static_cast<ssize_t>(line.size())) {
-        hipnuc_raw_t binary{};
-        uint8_t data[256];
-        const uint64_t deadline = hipnuc_serial_monotonic_ms() + wait_ms(baudrate);
-        for (uint64_t now = hipnuc_serial_monotonic_ms(); !ended && now < deadline; now = hipnuc_serial_monotonic_ms()) {
-            const int count = hipnuc_serial_read_bytes(&serial, data, sizeof(data), static_cast<int>(deadline - now));
-            if (count < 0) break;
-            for (int i = 0; i < count; ++i) {
-                text += static_cast<char>(data[i]);
-                if (hipnuc_input(&binary, data[i]) > 0) text.resize(text.size() - (HIPNUC_HEADER_SIZE + binary.len));
-            }
-            ended = text.find("\nOK\r") != std::string::npos || text.find("\nERR") != std::string::npos;
-        }
-    }
-    complete = complete && ended;
-    for (size_t start = 0, end; start < text.size(); start = end + 1) {
-        end = std::min(text.find('\n', start), text.size());
-        const std::string reply = text.substr(start, end - start);
-        for (const char *key : keys) {
-            const auto at = reply.find(std::string(key) + "=");
-            if (at == std::string::npos) continue;
-            std::string value = reply.substr(at + std::strlen(key) + 1);
-            while (!value.empty() && (value.back() < 0x20 || value.back() > 0x7E)) value.pop_back();
-            values[key] = value;
-        }
-    }
+    const int status = hipnuc_serial_command(&serial, command, wait_ms(baudrate));
+    complete = complete && status >= 0;
+    // Copied now: the reply buffer is reused by the next command.
+    for (const char *key : keys)
+        if (const char *value = hipnuc_serial_reply_value(&serial, key)) values[key] = value;
     return values;
 }
 
@@ -228,24 +188,24 @@ Device identify(hipnuc_serial_t &serial, int baudrate)
     const std::string app = version["APP_VER"];  // 171 is 1.7.1
     if (app.size() == 3) device.firmware = std::string{app[0], '.', app[1], '.', app[2]};
     if (!version["BUILD"].empty()) device.firmware += " (" + version["BUILD"] + ")";
-    // Firmware built from late 2025 lists the saved axes setting. COORD 4 turns
-    // the vectors only on some recent firmware, and the version does not tell.
+    // Not every device lists the saved axes setting, and COORD 4 does not turn
+    // the vectors on every device: point the user at the check in the README.
     const std::string coord = query(serial, baudrate, "LOG USRCONFIG", {"COORD"}, device.complete)["COORD"];
     const std::string readme = "see \"Axes and TF\" in the README";
     if (coord == "0")
         device.axes = "device axes: x right, y forward, z up (COORD 0); " + readme;
     else if (coord == "4")
-        device.axes = "device axes setting COORD 4 gives x forward, y left, z up only on some recent firmware; "
+        device.axes = "device axes setting COORD 4 (x forward, y left, z up); "
                       "check them as described in \"Axes and TF\" in the README";
     else if (!coord.empty())
         device.axes = "device axes setting COORD " + coord + "; " + readme;
     else
-        device.axes = "this firmware does not report its axes; " + readme;
+        device.axes = "the device does not report its axes setting; " + readme;
     return device;
 }
 
 // Baud rate and output period that carry kSlamRate with 20% headroom.
-std::string rate_hint(const std::string &port, int baudrate, double rate, const hipnuc_sample_t &sample, size_t bytes)
+std::string rate_hint(const std::string &port, int baudrate, double rate, const hipnuc_data_t &sample, size_t bytes)
 {
     const char *frame = sample.source == HIPNUC_SOURCE_HI83 ? "HI83" : sample.source == HIPNUC_SOURCE_HI81 ? "HI81" : "HI91";
     const double needed = bytes * 10.0 * kSlamRate / 0.8;
@@ -279,13 +239,14 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
     // Frames decoded from bytes that an earlier frame's read already brought:
     // their stamps are spaced by line time, not by the output period.
     uint64_t bytes_at_report = 0, batched = 0, imu_count = 0;
-    bool scan_bytes = false, rate_noted = false, imu_hint = false;
+    bool scan_bytes = false, scan_unsupported = false, rate_noted = false, imu_hint = false;
     const std::string looking = "looking for the device's baud rate";
     std::string error, searching = looking, found, axes;
     while (running()) {
         auto now = Clock::now();
         if (!serial.is_open && now >= next_retry) {
             const int trying = candidates[candidate];
+            // This driver scans the baud rate itself, in its own order.
             if (hipnuc_serial_open(&serial, settings.port.c_str(), trying) != 0) {
                 error = hipnuc_serial_last_error(&serial);
                 next_retry = now + kRetry;
@@ -295,18 +256,21 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
                 }
             } else if (!frames_arrive(serial, trying)) {
                 error.clear();
-                scan_bytes = scan_bytes || serial.bytes_received > 0;
+                scan_bytes = scan_bytes || serial.bytes_read > 0;
+                scan_unsupported = scan_unsupported || serial.decoder.unsupported > 0;
                 hipnuc_serial_close(&serial);
                 if (++candidate == candidates.size()) {
                     candidate = 0;
-                    searching = scan_bytes ? "bytes but no valid frames at any baud rate: check that the device outputs "
-                                             "HI91, HI83 or HI81"
-                                           : "no data at any baud rate: check the wiring and that the device output is on";
-                    scan_bytes = false;
+                    searching = scan_unsupported ? "frames this driver does not decode: check the HI83 fields "
+                                                   "(LOG HI83 MAP) or the output frame"
+                                : scan_bytes ? "bytes but no valid frames at any baud rate: check that the device outputs "
+                                               "HI91, HI83 or HI81"
+                                             : "no data at any baud rate: check the wiring and that the device output is on";
+                    scan_bytes = scan_unsupported = false;
                 }
             } else {
                 error.clear();
-                scan_bytes = false;
+                scan_bytes = scan_unsupported = false;
                 searching = looking;
                 baudrate = trying;
                 // Replies cut short, say by another program probing the port,
@@ -322,23 +286,26 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
                 found = line;
                 axes = device.axes;
                 report.opened();
-                bytes_at_report = serial.bytes_received;
+                bytes_at_report = serial.bytes_read;
                 imu_count = 0;
                 opened_at = now;
             }
         }
         if (serial.is_open) {
-            hipnuc_sample_t sample;
-            const uint64_t bytes_before = serial.bytes_received;
-            const int result = hipnuc_serial_read_sample(&serial, &sample, kPollMs);
+            hipnuc_data_t sample;
+            const uint64_t bytes_before = serial.bytes_read;
+            const int result = hipnuc_serial_read(&serial, &sample, kPollMs);
             now = Clock::now();
-            if (serial.bytes_received != bytes_before) read_at = now;
+            const bool received = serial.bytes_read != bytes_before;
+            if (received) read_at = now;
             if (result > 0) {
-                if (serial.bytes_received == bytes_before) ++batched;
-                // The device began sending the frame at least the line time of
-                // its bytes and of the bytes read after it before that read.
-                const size_t bytes = frame_bytes(serial, sample);
-                const auto sent = read_at - line_time(bytes + serial.received_size - serial.received_offset, baudrate);
+                if (!received) ++batched;
+                // The device began sending the message at least the line time
+                // of its bytes and of the bytes read after it before that read.
+                const bool nmea = sample.source == HIPNUC_SOURCE_NMEA_GGA || sample.source == HIPNUC_SOURCE_NMEA_RMC;
+                const size_t bytes = nmea ? std::strlen(hipnuc_decoder_line(&serial.decoder)) + 2  // CR LF
+                                          : serial.decoder.frame_size;
+                const auto sent = read_at - line_time(bytes + hipnuc_serial_pending(&serial), baudrate);
                 report.frame(sample, now);
                 const bool imu = has_imu(sample);
                 output.measurement(sample, imu ? increasing(sent) : sent, imu);
@@ -376,7 +343,7 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
         } else if (!serial.is_open) {
             status.level = Level::warn;
             status.message = searching;
-        } else if (report.silent(now) && serial.bytes_received > bytes_at_report) {
+        } else if (report.silent(now) && serial.bytes_read != bytes_at_report) {
             // The connection opened on valid frames, so the line settings or the
             // device output changed: ModemManager, for one, probes a new ttyACM
             // port and leaves it at 57600 baud. Opening again finds them anew.
@@ -390,15 +357,16 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
             status.level = Level::info;
             status.message = "receiving";
         }
-        bytes_at_report = serial.bytes_received;
+        // The counters start again at each open and survive close.
+        bytes_at_report = serial.bytes_read;
         status.values = {{"baudrate", std::to_string(serial.is_open ? baudrate : 0)},
                          {"device", device.model},
                          {"firmware", device.firmware},
-                         {"bytes", std::to_string(serial.bytes_received)},
-                         {"crc_errors", std::to_string(serial.binary.crc_error_count)},
-                         {"invalid_frames", std::to_string(serial.binary.invalid_count)},
-                         {"receive_errors", std::to_string(serial.receive_errors)},
-                         {"nmea_checksum_errors", std::to_string(serial.nmea.checksum_error_count)},
+                         {"bytes", std::to_string(serial.bytes_read)},
+                         {"crc_errors", std::to_string(serial.decoder.crc_errors)},
+                         {"invalid_frames", std::to_string(serial.decoder.unsupported)},
+                         {"receive_errors", std::to_string(serial.rx_errors)},
+                         {"nmea_checksum_errors", std::to_string(serial.nmea_errors)},
                          {"batched_frames", std::to_string(batched)},
                          {"stamp_adjustments", std::to_string(increasing.adjusted())}};
         report.publish(status, now);

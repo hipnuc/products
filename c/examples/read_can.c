@@ -1,6 +1,6 @@
 /* Linux SocketCAN: configure the interface with ip link, then run. */
 #define _DEFAULT_SOURCE
-#include "hipnuc_j1939.h"
+#include "hipnuc_can.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <linux/can.h>
@@ -38,16 +38,14 @@ int main(void)
     /* A down interface accepts the bind and then receives nothing. */
     strncpy(request.ifr_name, INTERFACE, IFNAMSIZ - 1);
     if (ioctl(fd, SIOCGIFFLAGS, &request) == 0 && !(request.ifr_flags & IFF_UP)) {
-        fprintf(stderr, "%s is down: sudo ip link set %s up type can bitrate 500000\n",
-                INTERFACE, INTERFACE);
+        fprintf(stderr, "%s is down: sudo ip link set %s up type can bitrate 500000\n", INTERFACE, INTERFACE);
         close(fd);
         return 1;
     }
     address.can_family = AF_CAN;
     address.can_ifindex = (int)if_nametoindex(INTERFACE);
     /* CAN FD reception also accepts Classic CAN. */
-    if (!address.can_ifindex ||
-        setsockopt(fd, SOL_CAN_RAW, CAN_RAW_FD_FRAMES, &enabled, sizeof(enabled)) < 0 ||
+    if (!address.can_ifindex || setsockopt(fd, SOL_CAN_RAW, CAN_RAW_FD_FRAMES, &enabled, sizeof(enabled)) < 0 ||
         bind(fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
         perror(INTERFACE);
         close(fd);
@@ -55,12 +53,12 @@ int main(void)
     }
     signal(SIGINT, stop);
     fprintf(stderr, "Listening on %s. Ctrl-C stops.\n", INTERFACE);
-    uint64_t last_sample = now_ms();
+    uint64_t last_data = now_ms();
     while (!stopped) {
         struct pollfd input = {fd, POLLIN, 0};
         struct canfd_frame packet;
         hipnuc_can_frame_t frame = {0};
-        hipnuc_sample_t sample;
+        hipnuc_data_t imu;
         int ready = poll(&input, 1, 100);
         if (ready < 0 && errno == EINTR) continue;
         if (ready < 0 || (input.revents & (POLLERR | POLLHUP | POLLNVAL))) {
@@ -68,38 +66,34 @@ int main(void)
             result = 1;
             break;
         }
-        if (!waiting && now_ms() - last_sample >= (uint64_t)TIMEOUT_MS) {
-            fputs("No valid sample; check bitrate, source address and device output. Waiting...\n", stderr);
+        if (!waiting && now_ms() - last_data >= (uint64_t)TIMEOUT_MS) {
+            fputs("No HiPNUC data; check the bitrate, the source address and the device output. Waiting...\n", stderr);
             waiting = 1;
         }
         if (!ready) continue;
         ssize_t size = read(fd, &packet, sizeof(packet));
         if (size < 0 && errno == EINTR) continue;
         if (size < 0) { perror("CAN receive"); result = 1; break; }
-        if ((size != CAN_MTU && size != CANFD_MTU) || packet.len > (size == CAN_MTU ? 8 : 64))
-            continue;
-        frame.is_extended = (packet.can_id & CAN_EFF_FLAG) != 0;
-        frame.is_remote = (packet.can_id & CAN_RTR_FLAG) != 0;
-        frame.is_error = (packet.can_id & CAN_ERR_FLAG) != 0;
-        frame.id = packet.can_id & (frame.is_extended ? CAN_EFF_MASK : CAN_SFF_MASK);
+        if ((size != CAN_MTU && size != CANFD_MTU) || packet.len > (size == CAN_MTU ? 8 : 64)) continue;
+        if (packet.can_id & CAN_ERR_FLAG) continue;   /* driver error frames are not data */
+        frame.extended = (packet.can_id & CAN_EFF_FLAG) != 0;
+        frame.remote = (packet.can_id & CAN_RTR_FLAG) != 0;
+        frame.id = packet.can_id & (frame.extended ? CAN_EFF_MASK : CAN_SFF_MASK);
         frame.len = packet.len;
         memcpy(frame.data, packet.data, packet.len);
-        if (hipnuc_j1939_parse(&frame, &sample, NULL) <= 0 ||
-            (NODE_ID >= 0 && sample.node_id != NODE_ID)) continue;
+        if (hipnuc_can_decode(&frame, &imu) != 1 || (NODE_ID >= 0 && imu.node_id != NODE_ID)) continue;
         if (waiting) fputs("Data resumed.\n", stderr);
         waiting = 0;
-        last_sample = now_ms();
-        printf("node=%u pgn=0x%05X fields=0x%" PRIx64, (unsigned)sample.node_id,
-               (unsigned)hipnuc_j1939_pgn(frame.id), sample.valid);
-        if (sample.valid & HIPNUC_VALID_ACC)
-            printf(" acc(m/s^2)=%.3f %.3f %.3f", sample.acc[0], sample.acc[1], sample.acc[2]);
-        if (sample.valid & HIPNUC_VALID_GYR)
-            printf(" gyr(rad/s)=%.3f %.3f %.3f", sample.gyr[0], sample.gyr[1], sample.gyr[2]);
-        if (sample.valid & HIPNUC_VALID_ROLL_PITCH)
-            printf(" roll/pitch(rad)=%.3f %.3f", sample.roll, sample.pitch);
-        if (sample.valid & HIPNUC_VALID_YAW) printf(" yaw(rad)=%.3f", sample.yaw);
+        last_data = now_ms();
+        printf("node=%u pgn=0x%05X fields=0x%" PRIx64, (unsigned)imu.node_id, (unsigned)((frame.id >> 8) & 0x3FFFFU),
+               imu.valid);
+        if (imu.valid & HIPNUC_VALID_ACC) printf(" acc(m/s^2)=%.3f %.3f %.3f", imu.acc[0], imu.acc[1], imu.acc[2]);
+        if (imu.valid & HIPNUC_VALID_GYR) printf(" gyr(rad/s)=%.3f %.3f %.3f", imu.gyr[0], imu.gyr[1], imu.gyr[2]);
+        if (imu.valid & HIPNUC_VALID_ROLL_PITCH)
+            printf(" roll/pitch(deg)=%.2f %.2f", imu.roll * HIPNUC_RAD2DEG, imu.pitch * HIPNUC_RAD2DEG);
+        if (imu.valid & HIPNUC_VALID_YAW) printf(" yaw(deg)=%.2f", imu.yaw * HIPNUC_RAD2DEG);
         putchar('\n');
-        /* Process the other valid fields here; never reuse an older PGN. */
+        /* One message carries one quantity: hipnuc_data_merge() collects an epoch. */
         if (fflush(stdout) != 0) { perror("Output failed"); result = 1; break; }
     }
     close(fd);

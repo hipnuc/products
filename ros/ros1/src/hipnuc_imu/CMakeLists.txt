@@ -17,8 +17,8 @@ catkin_package(CATKIN_DEPENDS roscpp std_msgs sensor_msgs diagnostic_msgs messag
 
 set(core "${HIPNUC_SHARED_DIR}/hipnuc")
 add_library(hipnuc_c STATIC
-  ${core}/hipnuc_dec.c ${core}/nmea_dec.c ${core}/hipnuc_sample.c
-  ${core}/hipnuc_serial.c ${core}/serial_io.c)
+  ${core}/hipnuc_data.c ${core}/hipnuc_decoder.c ${core}/hipnuc_nmea.c
+  ${core}/hipnuc_serial.c ${core}/hipnuc_serial_io.c)
 target_include_directories(hipnuc_c PUBLIC ${core})
 set_target_properties(hipnuc_c PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED YES)
 
