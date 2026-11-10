@@ -53,12 +53,22 @@ public:
 private:
     // False while a simulated clock has not yet reached the measurement;
     // ros::Time cannot go below zero.
-    static bool stamp(Clock::time_point at, ros::Time &out)
+    bool stamp(Clock::time_point at, bool imu, ros::Time &out)
     {
-        const ros::Time clock = ros::Time::now();
-        const ros::Duration age(std::chrono::duration<double>(Clock::now() - at).count());
+        // A pause between the reads of the two clocks would move the stamp by
+        // its length: read again when one came between two reads of Clock.
+        ros::Time clock;
+        Clock::time_point read;
+        for (int i = 0; i < 3; ++i) {
+            const auto before = Clock::now();
+            clock = ros::Time::now();
+            read = Clock::now();
+            if (read - before < kClockRead) break;
+        }
+        const ros::Duration age(std::chrono::duration<double>(read - at).count());
         if (clock.toSec() <= age.toSec()) return false;
         out = clock - age;
+        if (imu) out.fromNSec(imu_order_(out.toNSec()));
         return true;
     }
 
@@ -72,7 +82,7 @@ private:
     void measurement(const hipnuc_data_t &s, Clock::time_point at, bool imu) override
     {
         ros::Time time;
-        if (!stamp(at, time)) return;
+        if (!stamp(at, imu, time)) return;
         if (imu && (imu_pub_ || raw_pub_)) {
             sensor_msgs::Imu m;
             m.header.stamp = time;
@@ -132,6 +142,7 @@ private:
     ros::NodeHandle pnh_;
     Settings settings_;
     std::string frame_id_, diag_name_;
+    ImuStampOrder imu_order_;
     ros::Publisher imu_pub_, raw_pub_, mag_pub_, temp_pub_, full_pub_, diag_pub_;
 };
 

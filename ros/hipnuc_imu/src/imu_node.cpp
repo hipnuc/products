@@ -67,12 +67,22 @@ public:
 
 private:
     // False while a simulated clock has not yet reached the measurement.
-    bool stamp(Clock::time_point at, rclcpp::Time &out)
+    bool stamp(Clock::time_point at, bool imu, rclcpp::Time &out)
     {
-        const rclcpp::Time clock = now();
-        const rclcpp::Duration age(Clock::now() - at);
+        // A pause between the reads of the two clocks would move the stamp by
+        // its length: read again when one came between two reads of Clock.
+        rclcpp::Time clock;
+        Clock::time_point read;
+        for (int i = 0; i < 3; ++i) {
+            const auto before = Clock::now();
+            clock = now();
+            read = Clock::now();
+            if (read - before < kClockRead) break;
+        }
+        const rclcpp::Duration age(read - at);
         if (clock.nanoseconds() <= age.nanoseconds()) return false;
         out = clock - age;
+        if (imu) out = rclcpp::Time(imu_order_(out.nanoseconds()), out.get_clock_type());
         return true;
     }
 
@@ -86,7 +96,7 @@ private:
     void measurement(const hipnuc_data_t &s, Clock::time_point at, bool imu) override
     {
         rclcpp::Time time;
-        if (!stamp(at, time)) return;
+        if (!stamp(at, imu, time)) return;
         if (imu && (imu_pub_ || raw_pub_)) {
             sensor_msgs::msg::Imu m;
             m.header.stamp = time;
@@ -145,6 +155,7 @@ private:
 
     Settings settings_;
     std::string frame_id_, diag_name_;
+    ImuStampOrder imu_order_;
     std::atomic<bool> stop_{false};
     std::thread worker_;
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_, raw_pub_;

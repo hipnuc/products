@@ -45,7 +45,7 @@ uint64 VALID_HDOP=549755813888
 uint64 VALID_DIFF_AGE=1099511627776
 uint64 VALID_UNDULATION=2199023255552
 
-std_msgs/Header header         # time the device began sending the frame; body-axis frame_id
+std_msgs/Header header         # the frame's device time on the host clock (README: Timestamps); body-axis frame_id
 uint8 source                 # 1 HI91, 2 HI81, 3 HI83, 4 GGA, 5 RMC, 6 J1939, 7 CANFD83
 uint64 valid
 uint8 node_id                # HI83 node id

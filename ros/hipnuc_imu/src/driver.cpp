@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <map>
 #include <thread>
 #include <vector>
@@ -221,13 +223,159 @@ std::string rate_hint(const std::string &port, int baudrate, double rate, const 
            " --save";
 }
 
+constexpr int64_t kWindowNs = 1000000000;  // one low per second of device time
+constexpr int64_t kJumpNs = 10000000;      // device time this far ahead of the line has jumped
+// Crystals differ by tens of ppm: a steeper fit is the burst of frames a host
+// stall leaves in the buffer, not a clock.
+constexpr double kSlopeMax = 1e-3;
+
+int64_t nanoseconds(Clock::time_point time)
+{
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(time.time_since_epoch()).count();
+}
+
+constexpr int64_t kMsNs = 1000000;
+constexpr int64_t kDayNs = 86400000 * kMsNs;
+constexpr int64_t kUtcEnterNs = 50 * kMsNs;   // the host clock keeps UTC this closely
+constexpr int64_t kUtcLeaveNs = 100 * kMsNs;  // no longer
+constexpr double kUtcSettleS = 10.0;
+
+// The UTC of an HI83 or HI91 frame's own sample since the epoch in ns, or 0:
+// HI83 carries the date, HI91 the time of day only, which takes the host's
+// nearest day. An RMC's UTC is its fix, not its frame's time.
+int64_t frame_utc(const hipnuc_data_t &s, int64_t host_utc)
+{
+    if (s.source == HIPNUC_SOURCE_HI83 && (s.valid & HIPNUC_VALID_UTC)) {
+        std::tm t{};
+        t.tm_year = s.utc.year - 1900;
+        t.tm_mon = s.utc.month - 1;
+        t.tm_mday = s.utc.day;
+        t.tm_hour = s.utc.hour;
+        t.tm_min = s.utc.minute;
+        t.tm_sec = s.utc.second;
+        return static_cast<int64_t>(timegm(&t)) * 1000000000 + s.utc.millisecond * kMsNs;
+    }
+    if (s.source != HIPNUC_SOURCE_HI91 || !(s.valid & HIPNUC_VALID_STATUS) || (s.main_status & HIPNUC_STATUS_UTC_UNSYNC))
+        return 0;
+    int64_t utc = host_utc / kDayNs * kDayNs + s.system_time_ms * kMsNs;
+    if (utc - host_utc > kDayNs / 2) utc -= kDayNs;
+    if (host_utc - utc > kDayNs / 2) utc += kDayNs;
+    return utc;
+}
+
+// A device synchronized to UTC (RMC and PPS) shares its time with GNSS-timed
+// sensors such as a lidar, a host clock only as closely as its own sync. Once
+// the host clock agrees with the device's UTC within kUtcEnterNs, frame times
+// move onto that UTC; when the device loses it, or the two clocks part by
+// kUtcLeaveNs, they move back. Either move approaches the other clock with time
+// constant kUtcSettleS instead of stepping, and the UTC fields, counting whole
+// milliseconds, are averaged.
+class Utc {
+public:
+    Clock::time_point operator()(const hipnuc_data_t &sample, Clock::time_point time)
+    {
+        const int64_t host_utc = nanoseconds_utc(), steady = nanoseconds(Clock::now());
+        const int64_t utc = frame_utc(sample, host_utc);
+        if ((sample.valid & HIPNUC_VALID_STATUS) && (sample.main_status & HIPNUC_STATUS_UTC_UNSYNC)) on_ = false;
+        if (utc) {
+            // The frame's UTC on Clock, half a millisecond after the whole one.
+            gap_ = utc + kMsNs / 2 - (host_utc - steady) - nanoseconds(time);
+            if (!on_ && std::llabs(gap_) < kUtcEnterNs) on_ = true;
+            else if (on_ && std::llabs(gap_) > kUtcLeaveNs) on_ = false;
+        }
+        const double share =
+            last_ == Clock::time_point{} ? 0 : std::max(0.0, std::min(1.0, seconds(time - last_) / kUtcSettleS));
+        last_ = time;
+        offset_ += (static_cast<double>(on_ ? gap_ : 0) - offset_) * share;
+        return time + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double, std::nano>(offset_));
+    }
+    bool on() const { return on_; }
+
+private:
+    static int64_t nanoseconds_utc()
+    {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
+    }
+    bool on_ = false;
+    int64_t gap_ = 0;    // ns
+    double offset_ = 0;  // ns
+    Clock::time_point last_{};
+};
+
 }  // namespace
+
+int64_t DeviceClock::line(int64_t device) const
+{
+    auto through = [&](const Low &low) {
+        return low.offset + static_cast<int64_t>(slope_ * static_cast<double>(device - low.device));
+    };
+    int64_t lowest = through(current_);
+    for (int i = 0; i < count_; ++i) lowest = std::min(lowest, through(lows_[i]));
+    return lowest;
+}
+
+void DeviceClock::fit()
+{
+    const Low *origin = nullptr;
+    int used = 0;
+    double mean_x = 0, mean_y = 0;
+    for (int i = 0; i < count_; ++i) {
+        if (lows_[i].held) continue;
+        if (!origin) origin = &lows_[i];
+        mean_x += static_cast<double>(lows_[i].device - origin->device);
+        mean_y += static_cast<double>(lows_[i].offset - origin->offset);
+        ++used;
+    }
+    if (used < 3) return;
+    mean_x /= used;
+    mean_y /= used;
+    double sxy = 0, sxx = 0;
+    for (int i = 0; i < count_; ++i) {
+        if (lows_[i].held) continue;
+        const double dx = static_cast<double>(lows_[i].device - origin->device) - mean_x;
+        sxy += dx * (static_cast<double>(lows_[i].offset - origin->offset) - mean_y);
+        sxx += dx * dx;
+    }
+    slope_ = sxx > 0 ? std::max(-kSlopeMax, std::min(kSlopeMax, sxy / sxx)) : 0;
+}
+
+Clock::time_point DeviceClock::operator()(int64_t device, Clock::time_point arrival)
+{
+    const int64_t offset = nanoseconds(arrival) - device;
+    if (started_ && (device < last_device_ || offset < line(device) - kJumpNs)) {
+        started_ = false;
+        count_ = next_ = 0;
+    }
+    if (!started_ || device - window_start_ >= kWindowNs) {
+        if (started_) {
+            current_.held = fitted() && current_.offset - line(current_.device) >= kJumpNs;
+            lows_[next_] = current_;
+            next_ = (next_ + 1) % kWindows;
+            if (count_ < kWindows) ++count_;
+            if (fitted()) fit();
+        }
+        current_ = {device, offset};
+        window_start_ = device;
+        started_ = true;
+    } else if (offset < current_.offset + static_cast<int64_t>(slope_ * static_cast<double>(device - current_.device))) {
+        // Lowest against the drift already known, not where the drift alone puts it.
+        current_ = {device, offset};
+    }
+    last_device_ = device;
+    const int64_t time = device + std::min(line(device), offset);
+    return Clock::time_point(std::chrono::duration_cast<Clock::duration>(std::chrono::nanoseconds(time)));
+}
 
 void run(const Settings &settings, Output &output, const std::function<bool()> &running)
 {
     hipnuc_serial_t serial{};
     Report report(output);
     Increasing increasing;
+    // HI83 device_time_us and HI91 system_time_ms count from different origins.
+    DeviceClock device_us, device_ms;
+    const DeviceClock *stamped = nullptr;  // the clock of the last Imu, if any
+    Utc utc;
     std::vector<int> candidates{settings.baudrate};
     for (int baudrate : kBaudrates)
         if (baudrate != settings.baudrate) candidates.push_back(baudrate);
@@ -237,7 +385,7 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
     auto next_retry = Clock::now(), next_log = next_retry, opened_at = next_retry;
     Clock::time_point read_at{}, first_imu{};
     // Frames decoded from bytes that an earlier frame's read already brought:
-    // their stamps are spaced by line time, not by the output period.
+    // their arrivals are spaced by line time, not by the output period.
     uint64_t bytes_at_report = 0, batched = 0, imu_count = 0;
     bool scan_bytes = false, scan_unsupported = false, rate_noted = false, imu_hint = false;
     const std::string looking = "looking for the device's baud rate";
@@ -289,6 +437,12 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
                 bytes_at_report = serial.bytes_read;
                 imu_count = 0;
                 opened_at = now;
+                // Frames left from the scan and the queries arrived before now.
+                read_at = Clock::now();
+                device_us.reset();
+                device_ms.reset();
+                stamped = nullptr;
+                utc = Utc();
             }
         }
         if (serial.is_open) {
@@ -306,10 +460,21 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
                 const size_t bytes = nmea ? std::strlen(hipnuc_decoder_line(&serial.decoder)) + 2  // CR LF
                                           : serial.decoder.frame_size;
                 const auto sent = read_at - line_time(bytes + hipnuc_serial_pending(&serial), baudrate);
+                DeviceClock *clock = nullptr;
+                int64_t device_ns = 0;
+                if (sample.valid & HIPNUC_VALID_DEVICE_TIME) {
+                    clock = &device_us;
+                    device_ns = static_cast<int64_t>(sample.device_time_us) * 1000;
+                } else if (sample.valid & HIPNUC_VALID_SYSTEM_TIME) {
+                    clock = &device_ms;
+                    device_ns = static_cast<int64_t>(sample.system_time_ms) * 1000000;
+                }
+                const auto time = utc(sample, clock ? (*clock)(device_ns, sent) : sent);
                 report.frame(sample, now);
                 const bool imu = has_imu(sample);
-                output.measurement(sample, imu ? increasing(sent) : sent, imu);
+                output.measurement(sample, imu ? increasing(time) : time, imu);
                 if (imu) {
+                    stamped = clock;
                     if (imu_count++ == 0) first_imu = now;
                     if (!rate_noted && now - first_imu >= kHint) {
                         rate_noted = true;
@@ -368,7 +533,9 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
                          {"receive_errors", std::to_string(serial.rx_errors)},
                          {"nmea_checksum_errors", std::to_string(serial.nmea_errors)},
                          {"batched_frames", std::to_string(batched)},
-                         {"stamp_adjustments", std::to_string(increasing.adjusted())}};
+                         {"stamp_adjustments", std::to_string(increasing.adjusted())},
+                         {"stamp_clock", utc.on() ? "utc" : stamped ? "device" : "host"},
+                         {"device_clock_ppm", stamped && stamped->fitted() ? text(stamped->ppm()) : ""}};
         report.publish(status, now);
         if (reconnect) hipnuc_serial_close(&serial);
     }

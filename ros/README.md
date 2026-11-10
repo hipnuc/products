@@ -91,11 +91,26 @@ hihost command "LOG HI91 ONTIME 0.005" -p /dev/ttyUSB0 -b 230400 --save
 The device keeps these settings after power-off. The driver finds the new baud
 rate, so the launch command stays the same.
 
-**Timestamps.** A message's header stamp is the moment the device began sending
-the frame: the host receive time minus the frame's time on the wire (7.1 ms for
-HI91 at 115200, 0.9 ms at 921600). Stamps on `imu/data` always increase. The
-USB adapter and the device itself add a small further delay; FAST-LIO and
-Point-LIO take a lidar-to-IMU time offset if you need to align more closely.
+**Timestamps.** A message's header stamp is the device's own time of the frame
+(`device_time_us` of HI83, else `system_time_ms` of HI91, as in `hipnuc/imu`)
+carried onto the host clock along the frames that arrived quickest, following
+the drift between the two clocks. Stamps therefore keep the device's spacing
+instead of the jitter of the USB adapter and the host, and are never later than
+the frame's arrival. A device synchronized to UTC (RMC and PPS) is followed
+instead once the host clock agrees with its UTC within 50 ms: stamps are then
+the device's UTC, which a GNSS-timed lidar shares, and may be earlier or later
+than the arrival by the host clock's error. They return to the host clock when
+the device loses its sync or the two clocks part by 100 ms. Either move is
+gradual: about 10 s for a few milliseconds, about 40 s for 50 ms. HI81
+frames, and HI83 frames without the system time field, carry no device time;
+their stamp is the moment the device began sending the frame: the host receive
+time minus the frame's time on the wire. Stamps on
+`imu/data` always increase unless the system clock is set back. The sensor
+filters and processing in the device add a small further delay; FAST-LIO and
+Point-LIO take a lidar-to-IMU time offset if you need to align more closely. On
+`/diagnostics`, `stamp_clock` tells which clock stamps the messages (`device`,
+`utc` or `host`) and `device_clock_ppm` how fast the device clock runs against
+the host's.
 
 **Extrinsics.** FAST-LIO, Point-LIO and LIO-SAM read the rotation between IMU
 and lidar from their own configuration, not from TF. FAST-LIO and Point-LIO
