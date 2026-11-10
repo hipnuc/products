@@ -141,13 +141,12 @@ std::string open_hint(const std::string &port)
 // At least kWaitMs, and three of the longest frames (150 bytes) at low baud rates.
 int wait_ms(int baudrate) { return std::max(kWaitMs, 3 * 1500 * 1000 / baudrate); }
 
-// True once two valid frames or NMEA sentences arrive: the baud rate is right.
+// True once a valid frame or NMEA sentence arrives: the baud rate is right.
 // A CH347 can still hold a frame it received at the previous baud rate, so the
 // first bytes after opening prove nothing.
 bool frames_arrive(hipnuc_serial_t &serial, int baudrate)
 {
     hipnuc_data_t sample;
-    int valid = 0;
     const auto start = Clock::now();
     const auto stale = start + std::chrono::milliseconds(kStaleMs);
     const auto deadline = stale + std::chrono::milliseconds(wait_ms(baudrate));
@@ -155,7 +154,7 @@ bool frames_arrive(hipnuc_serial_t &serial, int baudrate)
         const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
         const int result = hipnuc_serial_read(&serial, &sample, static_cast<int>(left));
         if (result < 0) return false;
-        if (result > 0 && Clock::now() >= stale && ++valid == 2) return true;
+        if (result > 0 && Clock::now() >= stale) return true;
     }
     return false;
 }
@@ -412,7 +411,7 @@ void run(const Settings &settings, Output &output, const std::function<bool()> &
                     searching = scan_unsupported ? "frames this driver does not decode: check the HI83 fields "
                                                    "(LOG HI83 MAP) or the output frame"
                                 : scan_bytes ? "bytes but no valid frames at any baud rate: check that the device outputs "
-                                               "HI91, HI83 or HI81"
+                                               "HI91, HI83 or HI81 at 2 Hz or more"
                                              : "no data at any baud rate: check the wiring and that the device output is on";
                     scan_bytes = scan_unsupported = false;
                 }
