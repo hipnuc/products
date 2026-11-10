@@ -180,14 +180,20 @@ int hipnuc_serial_io_open(hipnuc_serial_t *device, const char *port, int baudrat
         if (set_rate(fd, &config, rate == 9600 ? 19200 : 9600) < 0 ||
             set_rate(fd, &config, rate) < 0)
             goto configure_error;
-        ioctl(fd, TCFLSH, TCIFLUSH);
         /* FTDI adapters otherwise hold input for up to 16 ms; other drivers
          * ignore the flag or refuse the request. */
         if (ioctl(fd, TIOCGSERIAL, &serial) == 0) {
             serial.flags |= ASYNC_LOW_LATENCY;
             ioctl(fd, TIOCSSERIAL, &serial);
         }
-        /* Drivers may round the requested rate to a hardware divider. */
+        /* A CH347 that takes new line settings while bytes arrive reports a
+         * framing error a few ms later: wait for it before the error counters
+         * are baselined, and drop the input of that moment. */
+        {
+            const struct timespec settle = {0, 20000000L};
+            nanosleep(&settle, NULL);
+        }
+        ioctl(fd, TCFLSH, TCIFLUSH);
         receive_error_total(fd, &device->error_snapshot);
     }
 #endif
