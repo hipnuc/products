@@ -10,7 +10,7 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| [stm32/](stm32/README_zh.md) | STM32F103 Keil 工程：UART 和 J1939 接收 |
+| [stm32/](stm32/README_zh.md) | STM32F407 CubeMX/Keil 例程：UART 和 J1939 接收，以及移植方法 |
 | [ros/](ros/README_zh.md) | ROS 2 Humble/Jazzy/Lyrical 与 ROS 1 Noetic 驱动 |
 | [c/](c/README_zh.md) | 可复制的串口/CAN 解码器、Windows/Linux 串口 API 和 C/C++ 例程 |
 | [python/](python/README_zh.md) | Python SDK 与 `hihost` 命令行：串口、Modbus RTU、CAN、录制和固件升级 |

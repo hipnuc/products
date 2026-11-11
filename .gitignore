@@ -19,7 +19,8 @@ dist/
 .vscode/
 .trae/
 
-# Keil MDK artifacts
+# Keil MDK artifacts (in a CubeMX project, every folder under MDK-ARM/ is Keil output)
+/stm32/*/MDK-ARM/*/
 **/OBJ/
 **/DebugConfig/
 **/Listings/

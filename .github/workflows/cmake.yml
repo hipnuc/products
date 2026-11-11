@@ -66,6 +66,24 @@ jobs:
             done
           done
 
+  stm32-project:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: The STM32 project carries an identical copy of the C core
+        run: |
+          sh stm32/sync_copies.sh
+          git diff --exit-code -- stm32
+          test -z "$(git status --porcelain -- stm32)"
+      - name: The Keil project keeps Arm Compiler 6, MicroLIB and the app hooks
+        run: |
+          set -eu
+          p=stm32/hipnuc_f407
+          grep -q '<uAC6>1</uAC6>' $p/MDK-ARM/hipnuc_f407.uvprojx
+          grep -q '<useUlib>1</useUlib>' $p/MDK-ARM/hipnuc_f407.uvprojx
+          grep -q 'app_start();' $p/Core/Src/main.c
+          grep -q 'app_poll();' $p/Core/Src/main.c
+
   ros-c-core:
     runs-on: ubuntu-24.04
     steps:

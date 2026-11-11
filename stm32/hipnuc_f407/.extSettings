@@ -1,0 +1,8 @@
+[ProjectFiles]
+HeaderPath=../User;../User/hipnuc
+[Others]
+Define=
+HALModule=
+[Groups]
+HiPNUC=../User/app.c;../User/imu_uart.c;../User/imu_can.c;
+HiPNUC/decoder=../User/hipnuc/hipnuc_decoder.c;../User/hipnuc/hipnuc_data.c;../User/hipnuc/hipnuc_can.c;

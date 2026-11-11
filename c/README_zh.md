@@ -40,7 +40,7 @@ void on_byte(uint8_t byte)
 
 `hipnuc_input()` 返回 `1` 表示收到完整支持帧，`0` 表示继续等待，`-1` 表示无效帧。
 错误后继续送入后续字节即可。中断中只接收并缓存字节，主循环中调用解码器；
-[STM32 例程](../stm32/README_zh.md) 提供接线说明及完整 Keil 工程。
+[STM32 例程](../stm32/README_zh.md) 提供接线说明和完整的 Keil 工程。
 
 NMEA 使用 `nmea_input()` 和 `hipnuc_sample_from_nmea()`。
 CAN 将驱动收到的帧填入 `hipnuc_can_frame_t`，调用 `hipnuc_j1939_parse()`；

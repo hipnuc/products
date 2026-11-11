@@ -41,7 +41,7 @@ void on_byte(uint8_t byte)
 `hipnuc_input()` returns `1` for a complete supported frame, `0` while waiting,
 and `-1` for an invalid frame. Keep feeding after an error. Receive bytes into a
 buffer in the interrupt and call the decoder from the main loop; the
-[STM32 examples](../stm32/README.md) include wiring and complete Keil projects.
+[STM32 example](../stm32/README.md) has the wiring and a complete Keil project.
 
 NMEA uses `nmea_input()` and `hipnuc_sample_from_nmea()`. For CAN, copy your
 driver's frame into `hipnuc_can_frame_t` and call `hipnuc_j1939_parse()`; a

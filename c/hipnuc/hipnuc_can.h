@@ -25,7 +25,7 @@
 extern "C" {
 #endif
 
-#define HIPNUC_CAN_NODE_DEFAULT 0x08U     /* factory source address of the device */
+#define HIPNUC_CAN_NODE_DEFAULT 0x08U     /* default source address of the device */
 #define HIPNUC_CAN_HOST_DEFAULT 0x55U     /* host address used in the manual; any free address works */
 
 /* Register: write a PGN number and the device sends that message once */

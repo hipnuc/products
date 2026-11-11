@@ -11,7 +11,7 @@ HiPNUC IMU/AHRS/MRU and INS devices.
 
 | Directory | What it is |
 | --- | --- |
-| [stm32/](stm32/README.md) | STM32F103 Keil examples for UART and J1939 reception |
+| [stm32/](stm32/README.md) | STM32F407 CubeMX/Keil example for UART and J1939 reception, and how to port it |
 | [ros/](ros/README.md) | ROS 2 Humble/Jazzy/Lyrical and ROS 1 Noetic drivers |
 | [c/](c/README.md) | Copyable serial/CAN decoders, Windows/Linux serial API and C/C++ examples |
 | [python/](python/README.md) | Python SDK and `hihost` CLI: serial, Modbus RTU, CAN, recording and firmware update |
