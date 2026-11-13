@@ -11,7 +11,7 @@ settings and update firmware over serial, Modbus RTU or CAN.
 - Serial messages HI91, HI81, HI83, NMEA GGA and RMC
 - Optional interfaces: Modbus RTU (`[modbus]`, PyModbus) and CAN J1939 / CANFD83
   (`[can]`, python-can)
-- Devices: HI01–HI06, HI12–HI18, HI70/HI71 and CH0X0; `-I2C` models have no CAN
+- Devices: HI01–HI06, HI12–HI15, HI70/HI71 and CH0X0; `-I2C` models have no CAN
 
 ## Install
 

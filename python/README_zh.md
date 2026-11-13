@@ -8,7 +8,7 @@
 - 支持 Python 3.10–3.14，Windows、Linux（含树莓派系统等嵌入式板卡）和 macOS
 - 串口报文：HI91、HI81、HI83、NMEA GGA 和 RMC
 - 可选接口：Modbus RTU（`[modbus]`，PyModbus）、CAN J1939 / CANFD83（`[can]`，python-can）
-- 支持设备：HI01–HI06、HI12–HI18、HI70/HI71、CH0X0；`-I2C` 型号没有 CAN
+- 支持设备：HI01–HI06、HI12–HI15、HI70/HI71、CH0X0；`-I2C` 型号没有 CAN
 
 ## 安装
 
