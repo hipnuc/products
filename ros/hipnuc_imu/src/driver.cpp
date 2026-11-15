@@ -266,9 +266,10 @@ int64_t frame_utc(const hipnuc_data_t &s, int64_t host_utc)
 // sensors such as a lidar, a host clock only as closely as its own sync. Once
 // the host clock agrees with the device's UTC within kUtcEnterNs, frame times
 // move onto that UTC; when the device loses it, or the two clocks part by
-// kUtcLeaveNs, they move back. Either move approaches the other clock with time
-// constant kUtcSettleS instead of stepping, and the UTC fields, counting whole
-// milliseconds, are averaged.
+// kUtcLeaveNs, they move back. Either move blends the two clocks with time
+// constant kUtcSettleS instead of stepping. Once on, a frame's time is its own
+// UTC: when the device moves its UTC (it slews onto a new PPS phase), frame
+// times move with it, whatever the device clock's line does meanwhile.
 class Utc {
 public:
     Clock::time_point operator()(const hipnuc_data_t &sample, Clock::time_point time)
@@ -285,8 +286,9 @@ public:
         const double share =
             last_ == Clock::time_point{} ? 0 : std::max(0.0, std::min(1.0, seconds(time - last_) / kUtcSettleS));
         last_ = time;
-        offset_ += (static_cast<double>(on_ ? gap_ : 0) - offset_) * share;
-        return time + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double, std::nano>(offset_));
+        weight_ += ((on_ ? 1.0 : 0.0) - weight_) * share;
+        return time + std::chrono::duration_cast<Clock::duration>(
+                          std::chrono::duration<double, std::nano>(weight_ * static_cast<double>(gap_)));
     }
     bool on() const { return on_; }
 
@@ -297,8 +299,8 @@ private:
             .count();
     }
     bool on_ = false;
-    int64_t gap_ = 0;    // ns
-    double offset_ = 0;  // ns
+    int64_t gap_ = 0;     // ns
+    double weight_ = 0;   // of the UTC against the device clock
     Clock::time_point last_{};
 };
 

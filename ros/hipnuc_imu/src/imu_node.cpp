@@ -80,7 +80,9 @@ private:
             if (read - before < kClockRead) break;
         }
         const rclcpp::Duration age(read - at);
-        if (clock.nanoseconds() <= age.nanoseconds()) return false;
+        // A UTC frame time may lie ahead of the host clock: its age is then
+        // negative, and a simulated clock still at zero would pass.
+        if (clock.nanoseconds() == 0 || clock.nanoseconds() <= age.nanoseconds()) return false;
         out = clock - age;
         if (imu) out = rclcpp::Time(imu_order_(out.nanoseconds()), out.get_clock_type());
         return true;

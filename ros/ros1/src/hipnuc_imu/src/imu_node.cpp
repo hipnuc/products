@@ -66,7 +66,9 @@ private:
             if (read - before < kClockRead) break;
         }
         const ros::Duration age(std::chrono::duration<double>(read - at).count());
-        if (clock.toSec() <= age.toSec()) return false;
+        // A UTC frame time may lie ahead of the host clock: its age is then
+        // negative, and a simulated clock still at zero would pass.
+        if (clock.isZero() || clock.toSec() <= age.toSec()) return false;
         out = clock - age;
         if (imu) out.fromNSec(imu_order_(out.toNSec()));
         return true;
