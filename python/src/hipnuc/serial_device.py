@@ -541,6 +541,8 @@ class SerialDevice:
                     "Session closed; reconnect using an adapter that supports this speed."
                 ) from exc
             self.decoder.reset()
+            # At the new speed the stream can resume inside a frame whose start was lost.
+            self._command_prepared = False
             try:
                 info = self.read_info(timeout=recovery_timeout)
             except (TransportError, DeviceError):
